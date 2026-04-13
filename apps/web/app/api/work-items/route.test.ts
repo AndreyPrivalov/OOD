@@ -1,23 +1,23 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const repository = {
   listTree: vi.fn(),
   create: vi.fn(),
   update: vi.fn(),
   move: vi.fn(),
-  deleteCascade: vi.fn()
-};
+  deleteCascade: vi.fn(),
+}
 
 vi.mock("../../../lib/repository", () => ({
-  getRepository: () => repository
-}));
+  getRepository: () => repository,
+}))
 
-import { GET, POST } from "./route";
+import { GET, POST } from "./route"
 
 describe("GET /api/work-items contract", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-  });
+    vi.clearAllMocks()
+  })
 
   it("returns mandatory top-level score sums for every node", async () => {
     repository.listTree.mockResolvedValueOnce([
@@ -52,29 +52,29 @@ describe("GET /api/work-items contract", () => {
             blocksMoneySum: undefined,
             currentProblems: [],
             solutionVariants: [],
-            children: []
-          }
-        ]
-      }
-    ]);
+            children: [],
+          },
+        ],
+      },
+    ])
 
     const response = await GET(
-      new Request("http://localhost/api/work-items?workspaceId=ws")
-    );
-    const payload = await response.json();
+      new Request("http://localhost/api/work-items?workspaceId=ws"),
+    )
+    const payload = await response.json()
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(200)
     expect(payload.data[0]).toMatchObject({
       overcomplicationSum: 0,
       importanceSum: 0,
-      blocksMoneySum: 0
-    });
+      blocksMoneySum: 0,
+    })
     expect(payload.data[0].children[0]).toMatchObject({
       overcomplicationSum: 0,
       importanceSum: 3,
-      blocksMoneySum: 0
-    });
-  });
+      blocksMoneySum: 0,
+    })
+  })
 
   it("keeps legacy aggregate values instead of overriding them with zero", async () => {
     repository.listTree.mockResolvedValueOnce([
@@ -97,26 +97,26 @@ describe("GET /api/work-items contract", () => {
         aggregates: {
           overcomplicationSum: 4,
           importanceSum: 3,
-          blocksMoneySum: 2
+          blocksMoneySum: 2,
         },
         currentProblems: [],
         solutionVariants: [],
-        children: []
-      }
-    ]);
+        children: [],
+      },
+    ])
 
     const response = await GET(
-      new Request("http://localhost/api/work-items?workspaceId=ws")
-    );
-    const payload = await response.json();
+      new Request("http://localhost/api/work-items?workspaceId=ws"),
+    )
+    const payload = await response.json()
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(200)
     expect(payload.data[0]).toMatchObject({
       overcomplicationSum: 4,
       importanceSum: 3,
-      blocksMoneySum: 2
-    });
-  });
+      blocksMoneySum: 2,
+    })
+  })
 
   it("accepts and returns possiblyRemovable for create contract", async () => {
     repository.create.mockResolvedValueOnce({
@@ -131,8 +131,8 @@ describe("GET /api/work-items contract", () => {
       importance: null,
       blocksMoney: null,
       currentProblems: [],
-      solutionVariants: []
-    });
+      solutionVariants: [],
+    })
 
     const response = await POST(
       new Request("http://localhost/api/work-items", {
@@ -141,23 +141,23 @@ describe("GET /api/work-items contract", () => {
         body: JSON.stringify({
           workspaceId: "ws",
           title: "New",
-          possiblyRemovable: true
-        })
-      })
-    );
-    const payload = await response.json();
+          possiblyRemovable: true,
+        }),
+      }),
+    )
+    const payload = await response.json()
 
-    expect(response.status).toBe(201);
+    expect(response.status).toBe(201)
     expect(repository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceId: "ws",
         title: "New",
-        possiblyRemovable: true
-      })
-    );
+        possiblyRemovable: true,
+      }),
+    )
     expect(payload.data).toMatchObject({
       id: "new-item",
-      possiblyRemovable: true
-    });
-  });
-});
+      possiblyRemovable: true,
+    })
+  })
+})

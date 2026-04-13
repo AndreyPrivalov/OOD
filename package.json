@@ -3,10 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "packageManager": "pnpm@9.12.2",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
+  "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "dev": "pnpm --filter @ood/web dev",
     "dev:with-db": "docker compose up -d && pnpm db:migrate && pnpm dev",

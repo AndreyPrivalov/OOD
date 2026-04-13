@@ -1,80 +1,50 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-const { MockPostgresRepository, MockInMemoryRepository } = vi.hoisted(() => ({
-  MockPostgresRepository: class MockPostgresRepository {},
-  MockInMemoryRepository: class MockInMemoryRepository {}
-}));
+const { createWorkItemRepositoryMock } = vi.hoisted(() => ({
+  createWorkItemRepositoryMock: vi.fn(),
+}))
 
 vi.mock("@ood/db", () => ({
-  PostgresWorkItemRepository: MockPostgresRepository,
-  InMemoryWorkItemRepository: MockInMemoryRepository
-}));
+  createWorkItemRepository: createWorkItemRepositoryMock,
+}))
 
-import { getRepository } from "./repository";
+import { getRepository } from "./repository"
 
 function resetRepositorySingleton() {
   // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-  delete (globalThis as { __oodRepository?: unknown }).__oodRepository;
+  ;(globalThis as { __oodRepository?: unknown }).__oodRepository = undefined
 }
 
 describe("getRepository", () => {
-  const originalEnv = process.env;
-
   beforeEach(() => {
-    vi.resetModules();
-    vi.restoreAllMocks();
-    resetRepositorySingleton();
-    process.env = { ...originalEnv };
-  });
+    vi.resetModules()
+    vi.restoreAllMocks()
+    resetRepositorySingleton()
+    createWorkItemRepositoryMock.mockReset()
+  })
 
   afterEach(() => {
-    process.env = originalEnv;
-    resetRepositorySingleton();
-  });
+    resetRepositorySingleton()
+  })
 
-  it("selects Postgres repository when DATABASE_URL is present", () => {
-    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => undefined);
-    process.env.DATABASE_URL = "postgres://db";
-    process.env = { ...process.env, NODE_ENV: "development" };
+  it("creates repository once and reuses singleton", () => {
+    const repositoryInstance = { name: "repo" }
+    createWorkItemRepositoryMock.mockReturnValue(repositoryInstance)
 
-    const repository = getRepository();
+    const firstRepository = getRepository()
+    const secondRepository = getRepository()
 
-    expect(repository).toBeInstanceOf(MockPostgresRepository);
-    expect(infoSpy).toHaveBeenCalledWith(
-      expect.stringContaining("PostgresWorkItemRepository selected")
-    );
-  });
+    expect(firstRepository).toBe(repositoryInstance)
+    expect(secondRepository).toBe(repositoryInstance)
+    expect(createWorkItemRepositoryMock).toHaveBeenCalledTimes(1)
+  })
 
-  it("throws clear startup error when DATABASE_URL is missing in production", () => {
-    process.env = { ...process.env, NODE_ENV: "production" };
-    delete process.env.DATABASE_URL;
-    delete process.env.ALLOW_INMEMORY_DEV;
+  it("surfaces repository factory errors", () => {
+    const error = new Error("DATABASE_URL is required to initialize DB client")
+    createWorkItemRepositoryMock.mockImplementation(() => {
+      throw error
+    })
 
-    expect(() => getRepository()).toThrow(
-      "DATABASE_URL is required. InMemory repository is disabled unless NODE_ENV=test or ALLOW_INMEMORY_DEV=true in local development."
-    );
-  });
-
-  it("allows InMemory repository in tests", () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    process.env = { ...process.env, NODE_ENV: "test" };
-    delete process.env.DATABASE_URL;
-
-    const repository = getRepository();
-
-    expect(repository).toBeInstanceOf(MockInMemoryRepository);
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("InMemoryWorkItemRepository selected")
-    );
-  });
-
-  it("allows InMemory repository in local development only with explicit flag", () => {
-    process.env = { ...process.env, NODE_ENV: "development" };
-    process.env.ALLOW_INMEMORY_DEV = "true";
-    delete process.env.DATABASE_URL;
-
-    const repository = getRepository();
-
-    expect(repository).toBeInstanceOf(MockInMemoryRepository);
-  });
-});
+    expect(() => getRepository()).toThrow(error)
+  })
+})

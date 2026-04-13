@@ -1,50 +1,50 @@
-import { DomainError, DomainErrorCode } from "@ood/domain";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { DomainError, DomainErrorCode } from "@ood/domain"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const repository = {
   listTree: vi.fn(),
   create: vi.fn(),
   update: vi.fn(),
   move: vi.fn(),
-  deleteCascade: vi.fn()
-};
+  deleteCascade: vi.fn(),
+}
 
 vi.mock("../../../../lib/repository", () => ({
-  getRepository: () => repository
-}));
+  getRepository: () => repository,
+}))
 
-import { PATCH } from "./route";
+import { PATCH } from "./route"
 
 describe("PATCH /api/work-items/[id] contract", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-  });
+    vi.clearAllMocks()
+  })
 
   it("returns domain error when attempting to update ratings of parent node", async () => {
     repository.update.mockRejectedValueOnce(
       new DomainError(
         DomainErrorCode.PARENT_RATINGS_READ_ONLY,
-        "Ratings are read-only for items with child work items"
-      )
-    );
+        "Ratings are read-only for items with child work items",
+      ),
+    )
 
     const response = await PATCH(
       new Request("http://localhost/api/work-items/parent", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ overcomplication: 3 })
+        body: JSON.stringify({ overcomplication: 3 }),
       }),
-      { params: Promise.resolve({ id: "parent" }) }
-    );
-    const payload = await response.json();
+      { params: Promise.resolve({ id: "parent" }) },
+    )
+    const payload = await response.json()
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(400)
     expect(payload).toEqual(
       expect.objectContaining({
-        error: DomainErrorCode.PARENT_RATINGS_READ_ONLY
-      })
-    );
-  });
+        error: DomainErrorCode.PARENT_RATINGS_READ_ONLY,
+      }),
+    )
+  })
 
   it("accepts possiblyRemovable in patch contract", async () => {
     repository.update.mockResolvedValueOnce({
@@ -59,26 +59,26 @@ describe("PATCH /api/work-items/[id] contract", () => {
       importance: null,
       blocksMoney: null,
       currentProblems: [],
-      solutionVariants: []
-    });
+      solutionVariants: [],
+    })
 
     const response = await PATCH(
       new Request("http://localhost/api/work-items/item-1", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ possiblyRemovable: true })
+        body: JSON.stringify({ possiblyRemovable: true }),
       }),
-      { params: Promise.resolve({ id: "item-1" }) }
-    );
-    const payload = await response.json();
+      { params: Promise.resolve({ id: "item-1" }) },
+    )
+    const payload = await response.json()
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(200)
     expect(repository.update).toHaveBeenCalledWith(
       "item-1",
-      expect.objectContaining({ possiblyRemovable: true })
-    );
-    expect(payload.data).toMatchObject({ possiblyRemovable: true });
-  });
+      expect.objectContaining({ possiblyRemovable: true }),
+    )
+    expect(payload.data).toMatchObject({ possiblyRemovable: true })
+  })
 
   it("accepts text list fields in patch contract", async () => {
     repository.update.mockResolvedValueOnce({
@@ -93,8 +93,8 @@ describe("PATCH /api/work-items/[id] contract", () => {
       importance: null,
       blocksMoney: null,
       currentProblems: ["p1", "p2"],
-      solutionVariants: ["s1"]
-    });
+      solutionVariants: ["s1"],
+    })
 
     const response = await PATCH(
       new Request("http://localhost/api/work-items/item-2", {
@@ -104,28 +104,28 @@ describe("PATCH /api/work-items/[id] contract", () => {
           title: "Updated title",
           object: "Updated object",
           currentProblems: ["p1", "p2"],
-          solutionVariants: ["s1"]
-        })
+          solutionVariants: ["s1"],
+        }),
       }),
-      { params: Promise.resolve({ id: "item-2" }) }
-    );
-    const payload = await response.json();
+      { params: Promise.resolve({ id: "item-2" }) },
+    )
+    const payload = await response.json()
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(200)
     expect(repository.update).toHaveBeenCalledWith(
       "item-2",
       expect.objectContaining({
         title: "Updated title",
         object: "Updated object",
         currentProblems: ["p1", "p2"],
-        solutionVariants: ["s1"]
-      })
-    );
+        solutionVariants: ["s1"],
+      }),
+    )
     expect(payload.data).toMatchObject({
       title: "Updated title",
       object: "Updated object",
       currentProblems: ["p1", "p2"],
-      solutionVariants: ["s1"]
-    });
-  });
-});
+      solutionVariants: ["s1"],
+    })
+  })
+})

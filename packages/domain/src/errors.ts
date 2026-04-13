@@ -4,18 +4,18 @@ export const DomainErrorCode = {
   PARENT_NOT_FOUND: "PARENT_NOT_FOUND",
   CYCLE_DETECTED: "CYCLE_DETECTED",
   INVALID_MOVE_TARGET: "INVALID_MOVE_TARGET",
-  PARENT_RATINGS_READ_ONLY: "PARENT_RATINGS_READ_ONLY"
-} as const;
+  PARENT_RATINGS_READ_ONLY: "PARENT_RATINGS_READ_ONLY",
+} as const
 
 export type DomainErrorCode =
-  (typeof DomainErrorCode)[keyof typeof DomainErrorCode];
+  (typeof DomainErrorCode)[keyof typeof DomainErrorCode]
 
 export class DomainError extends Error {
-  public readonly code: DomainErrorCode;
+  public readonly code: DomainErrorCode
 
   constructor(code: DomainErrorCode, message: string) {
-    super(message);
-    this.code = code;
-    this.name = "DomainError";
+    super(message)
+    this.code = code
+    this.name = "DomainError"
   }
 }
