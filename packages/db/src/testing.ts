@@ -11,12 +11,10 @@ import {
   type WorkspaceId,
   assertNoCycle,
   buildTree,
+  validateCreateWorkItemInput,
   withScoreSums,
 } from "@ood/domain"
-import type {
-  ReplaceWorkspaceTreeInput,
-  WorkItemRepository,
-} from "./repository"
+import type { WorkItemRepository } from "./repository"
 import type {
   CreateWorkspaceInput,
   WorkspaceRepository,
@@ -125,9 +123,12 @@ export class InMemoryWorkItemRepository implements WorkItemRepository {
   }
 
   async create(input: CreateWorkItemInput): Promise<WorkItem> {
-    const workspaceItems = getWorkspaceItems(input.workspaceId)
-    if (input.parentId) {
-      const parent = workspaceItems.find((item) => item.id === input.parentId)
+    const validatedInput = validateCreateWorkItemInput(input)
+    const workspaceItems = getWorkspaceItems(validatedInput.workspaceId)
+    if (validatedInput.parentId) {
+      const parent = workspaceItems.find(
+        (item) => item.id === validatedInput.parentId,
+      )
       if (!parent) {
         throw new DomainError(
           DomainErrorCode.PARENT_NOT_FOUND,
@@ -137,10 +138,10 @@ export class InMemoryWorkItemRepository implements WorkItemRepository {
     }
     const id = randomUUID()
     const siblings = workspaceItems
-      .filter((item) => item.parentId === (input.parentId ?? null))
+      .filter((item) => item.parentId === (validatedInput.parentId ?? null))
       .sort((a, b) => a.siblingOrder - b.siblingOrder)
     const insertIndex = clampIndex(
-      input.siblingOrder ?? siblings.length,
+      validatedInput.siblingOrder ?? siblings.length,
       siblings.length,
     )
     const siblingIds = siblings.map((item) => item.id)
@@ -152,18 +153,20 @@ export class InMemoryWorkItemRepository implements WorkItemRepository {
     const now = new Date()
     const created: WorkItem = {
       id,
-      workspaceId: input.workspaceId,
-      title: input.title ?? "",
-      object: input.object ?? null,
-      possiblyRemovable: input.possiblyRemovable ?? false,
-      parentId: input.parentId ?? null,
+      workspaceId: validatedInput.workspaceId,
+      title: validatedInput.title,
+      object: validatedInput.object ?? null,
+      possiblyRemovable: validatedInput.possiblyRemovable ?? false,
+      parentId: validatedInput.parentId ?? null,
       siblingOrder: insertIndex,
       overcomplication:
-        (input.overcomplication as WorkItem["overcomplication"]) ?? null,
-      importance: (input.importance as WorkItem["importance"]) ?? null,
-      blocksMoney: (input.blocksMoney as WorkItem["blocksMoney"]) ?? null,
-      currentProblems: input.currentProblems ?? [],
-      solutionVariants: input.solutionVariants ?? [],
+        (validatedInput.overcomplication as WorkItem["overcomplication"]) ??
+        null,
+      importance: (validatedInput.importance as WorkItem["importance"]) ?? null,
+      blocksMoney:
+        (validatedInput.blocksMoney as WorkItem["blocksMoney"]) ?? null,
+      currentProblems: validatedInput.currentProblems ?? [],
+      solutionVariants: validatedInput.solutionVariants ?? [],
       createdAt: now,
       updatedAt: now,
     }
@@ -271,52 +274,6 @@ export class InMemoryWorkItemRepository implements WorkItemRepository {
     siblings.forEach((row, index) => {
       row.siblingOrder = index
     })
-  }
-
-  async replaceWorkspaceTree(
-    workspaceId: WorkspaceId,
-    items: ReplaceWorkspaceTreeInput[],
-  ): Promise<WorkItem[]> {
-    const previous = getWorkspaceItems(workspaceId).map((item) => ({
-      ...item,
-      currentProblems: [...item.currentProblems],
-      solutionVariants: [...item.solutionVariants],
-    }))
-    memoryStore.byWorkspace.set(workspaceId, [])
-    const tempToReal = new Map<string, string>()
-    const created: WorkItem[] = []
-
-    try {
-      for (const item of items) {
-        const parentId = item.parentTempId
-          ? (tempToReal.get(item.parentTempId) ?? null)
-          : null
-        if (item.parentTempId && parentId === null) {
-          throw new DomainError(
-            DomainErrorCode.INVALID_MOVE_TARGET,
-            `Parent reference was not found for tempId=${item.parentTempId}`,
-          )
-        }
-        const next = await this.create({
-          workspaceId,
-          title: item.title,
-          parentId,
-          siblingOrder: item.siblingOrder,
-          object: null,
-          overcomplication: null,
-          importance: null,
-          blocksMoney: null,
-          currentProblems: [],
-          solutionVariants: [],
-        })
-        tempToReal.set(item.tempId, next.id)
-        created.push(next)
-      }
-      return created
-    } catch (error) {
-      memoryStore.byWorkspace.set(workspaceId, previous)
-      throw error
-    }
   }
 }
 
