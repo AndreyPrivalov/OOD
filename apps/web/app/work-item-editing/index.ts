@@ -1,5 +1,8 @@
 export { buildEditState, isSameEditState } from "./edit-state"
-export { buildRowPatchFromServer, isServerPatchEchoingPayload } from "./reconciliation"
+export {
+  buildRowPatchFromServer,
+  isServerPatchEchoingPayload,
+} from "./reconciliation"
 export { buildPatchPayload } from "./save-payload"
 export {
   LocalFirstRowQueue,

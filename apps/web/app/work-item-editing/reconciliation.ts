@@ -1,6 +1,6 @@
 import {
-  buildRatingServerPatch,
   type WorkspaceRatingValues,
+  buildRatingServerPatch,
 } from "../workspace-ratings"
 import type { EditableWorkItemPatch, EditableWorkItemRow } from "./types"
 
