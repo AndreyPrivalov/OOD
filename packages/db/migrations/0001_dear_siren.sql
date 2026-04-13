@@ -1,0 +1,1 @@
+ALTER TABLE "work_items" ADD COLUMN "possibly_removable" boolean DEFAULT false NOT NULL;

@@ -1,0 +1,25 @@
+{
+  "name": "@ood/web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm exec vitest run app/api"
+  },
+  "dependencies": {
+    "@ood/domain": "workspace:*",
+    "@ood/db": "workspace:*",
+    "@ood/ui": "workspace:*",
+    "next": "^15.0.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.4"
+  }
+}
