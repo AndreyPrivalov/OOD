@@ -1,6 +1,5 @@
-import { NextResponse } from "next/server"
 import { z } from "zod"
-import { jsonError } from "../../../lib/http"
+import { jsonData, jsonError, jsonInvalidPayload } from "../../../lib/http"
 import { getWorkspaceRepository } from "../../../lib/workspace-repository"
 
 const CreateWorkspaceSchema = z.object({
@@ -11,7 +10,7 @@ export async function GET() {
   try {
     const repository = getWorkspaceRepository()
     const workspaces = await repository.list()
-    return NextResponse.json({ data: workspaces })
+    return jsonData(workspaces)
   } catch (error) {
     return jsonError(error)
   }
@@ -23,15 +22,12 @@ export async function POST(request: Request) {
     const parsed = CreateWorkspaceSchema.safeParse(body)
 
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: "INVALID_PAYLOAD", details: parsed.error.flatten() },
-        { status: 400 },
-      )
+      return jsonInvalidPayload(parsed.error.flatten())
     }
 
     const repository = getWorkspaceRepository()
     const created = await repository.create(parsed.data)
-    return NextResponse.json({ data: created }, { status: 201 })
+    return jsonData(created, { status: 201 })
   } catch (error) {
     return jsonError(error)
   }

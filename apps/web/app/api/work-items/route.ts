@@ -5,12 +5,11 @@ import {
 import { jsonData, jsonError, jsonInvalidPayload } from "../../../lib/http"
 import { getRepository } from "../../../lib/repository"
 import { serializeWorkItem, serializeWorkTree } from "./contracts"
+import { readWorkspaceId } from "./request"
 
 export async function GET(request: Request) {
   try {
-    const url = new URL(request.url)
-    const workspaceId =
-      url.searchParams.get("workspaceId") ?? "default-workspace"
+    const workspaceId = readWorkspaceId(request)
     const repository = getRepository()
     const tree = await repository.listTree(workspaceId)
     return jsonData(serializeWorkTree(tree))
