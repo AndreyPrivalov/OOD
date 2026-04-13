@@ -1,0 +1,58 @@
+import {
+  buildRatingServerPatch,
+  type WorkspaceRatingValues,
+} from "../workspace-ratings"
+import type { EditableWorkItemPatch, EditableWorkItemRow } from "./types"
+
+export function buildRowPatchFromServer(
+  updated: Partial<EditableWorkItemRow>,
+): EditableWorkItemPatch {
+  const patch: EditableWorkItemPatch = {}
+  if (typeof updated.title === "string") {
+    patch.title = updated.title
+  }
+  if (updated.object === null || typeof updated.object === "string") {
+    patch.object = updated.object
+  }
+  if (typeof updated.possiblyRemovable === "boolean") {
+    patch.possiblyRemovable = updated.possiblyRemovable
+  }
+  Object.assign(
+    patch,
+    buildRatingServerPatch(updated as Partial<WorkspaceRatingValues>),
+  )
+  if (Array.isArray(updated.currentProblems)) {
+    patch.currentProblems = updated.currentProblems.filter(
+      (item): item is string => typeof item === "string",
+    )
+  }
+  if (Array.isArray(updated.solutionVariants)) {
+    patch.solutionVariants = updated.solutionVariants.filter(
+      (item): item is string => typeof item === "string",
+    )
+  }
+  return patch
+}
+
+function isSamePrimitiveOrList(left: unknown, right: unknown): boolean {
+  if (Array.isArray(left) && Array.isArray(right)) {
+    if (left.length !== right.length) {
+      return false
+    }
+    return left.every((item, index) => item === right[index])
+  }
+  return left === right
+}
+
+export function isServerPatchEchoingPayload(
+  patch: EditableWorkItemPatch,
+  payload: Record<string, unknown>,
+): boolean {
+  const entries = Object.entries(patch)
+  if (entries.length === 0) {
+    return false
+  }
+  return entries.every(([key, value]) =>
+    isSamePrimitiveOrList(value, payload[key]),
+  )
+}
