@@ -1,5 +1,4 @@
 "use client"
-
 import {
   type CSSProperties,
   type KeyboardEvent,
@@ -13,11 +12,18 @@ import {
   useState,
 } from "react"
 import {
-  LocalFirstRowQueue,
-  type RevisionedValue,
-  type RowEditPatch,
-  resolveAutosaveDelayMs,
-} from "./local-first-autosave"
+  type EditState,
+  buildEditState,
+  useWorkItemEditing,
+} from "./use-work-item-editing"
+import {
+  WorkItemRequestError,
+  createWorkItem,
+  deleteWorkItem,
+  fetchWorkItems,
+  moveWorkItem,
+  patchWorkItem,
+} from "./work-item-client"
 import {
   type DropIntent,
   type FlatRowLike,
@@ -30,6 +36,10 @@ import {
   resolveDropIntentAtPoint,
   withLaneAnchors,
 } from "./workspace-interactions"
+import {
+  WorkspaceRatingCell,
+  workspaceRatingFieldConfigs,
+} from "./workspace-ratings"
 import { useWorkspaceContext } from "./workspaces/use-workspace-context"
 import { WorkspaceSwitcher } from "./workspaces/workspace-switcher"
 
@@ -53,24 +63,6 @@ type WorkTreeNode = {
 }
 
 type FlatRow = WorkTreeNode & { depth: number }
-
-type EditState = {
-  title: string
-  object: string
-  possiblyRemovable: boolean
-  overcomplication: string
-  importance: string
-  blocksMoney: string
-  currentProblems: string
-  solutionVariants: string
-}
-
-type RowEditMeta = {
-  isDirty: boolean
-  isFocused: boolean
-  lastLocalRevision: number
-  lastAckRevision: number
-}
 
 type DevPerfMetrics = {
   patchLatencies: number[]
@@ -203,118 +195,6 @@ function buildTreeNumbering(nodes: WorkTreeNode[], prefix: number[] = []) {
   return map
 }
 
-function listToMultiline(values: string[]) {
-  return values.join("\n")
-}
-
-function multilineToList(value: string) {
-  return value
-    .split("\n")
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0)
-}
-
-function isSameStringList(left: string[], right: string[]): boolean {
-  if (left.length !== right.length) {
-    return false
-  }
-  return left.every((value, index) => value === right[index])
-}
-
-function toNullableNumber(value: string): number | null {
-  if (value.trim().length === 0) {
-    return null
-  }
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : null
-}
-
-function parseRating(value: string): number {
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed)) {
-    return 0
-  }
-  return Math.max(0, Math.min(5, Math.trunc(parsed)))
-}
-
-function ratingToneClass(value: number): string {
-  if (value <= 0) {
-    return "rating-tone-none"
-  }
-  if (value === 1) {
-    return "rating-tone-low"
-  }
-  if (value <= 3) {
-    return "rating-tone-mid"
-  }
-  return "rating-tone-high"
-}
-
-function buildEditState(row: FlatRow): EditState {
-  return {
-    title: row.title,
-    object: row.object ?? "",
-    possiblyRemovable: row.possiblyRemovable ?? false,
-    overcomplication:
-      row.overcomplication === null ? "" : String(row.overcomplication),
-    importance: row.importance === null ? "" : String(row.importance),
-    blocksMoney: row.blocksMoney === null ? "" : String(row.blocksMoney),
-    currentProblems: listToMultiline(row.currentProblems),
-    solutionVariants: listToMultiline(row.solutionVariants),
-  }
-}
-
-function isSameEditState(left: EditState, right: EditState): boolean {
-  return (
-    left.title === right.title &&
-    left.object === right.object &&
-    left.possiblyRemovable === right.possiblyRemovable &&
-    left.overcomplication === right.overcomplication &&
-    left.importance === right.importance &&
-    left.blocksMoney === right.blocksMoney &&
-    left.currentProblems === right.currentProblems &&
-    left.solutionVariants === right.solutionVariants
-  )
-}
-
-function buildRowPatchFromServer(
-  updated: Partial<WorkTreeNode>,
-): Partial<WorkTreeNode> {
-  const patch: Partial<WorkTreeNode> = {}
-  if (typeof updated.title === "string") {
-    patch.title = updated.title
-  }
-  if (updated.object === null || typeof updated.object === "string") {
-    patch.object = updated.object
-  }
-  if (typeof updated.possiblyRemovable === "boolean") {
-    patch.possiblyRemovable = updated.possiblyRemovable
-  }
-  if (
-    updated.overcomplication === null ||
-    typeof updated.overcomplication === "number"
-  ) {
-    patch.overcomplication = updated.overcomplication
-  }
-  if (updated.importance === null || typeof updated.importance === "number") {
-    patch.importance = updated.importance
-  }
-  if (updated.blocksMoney === null || typeof updated.blocksMoney === "number") {
-    patch.blocksMoney = updated.blocksMoney
-  }
-  if (Array.isArray(updated.currentProblems)) {
-    patch.currentProblems = updated.currentProblems.filter(
-      (item): item is string => typeof item === "string",
-    )
-  }
-  if (Array.isArray(updated.solutionVariants)) {
-    patch.solutionVariants = updated.solutionVariants.filter(
-      (item): item is string => typeof item === "string",
-    )
-  }
-  return patch
-}
-
 function mapErrorText(
   payload: { error?: string; message?: string } | null | undefined,
 ) {
@@ -345,29 +225,6 @@ function getMedian(values: number[]): number | null {
     return (sorted[middle - 1] + sorted[middle]) / 2
   }
   return sorted[middle]
-}
-
-function isSamePrimitiveOrList(left: unknown, right: unknown): boolean {
-  if (Array.isArray(left) && Array.isArray(right)) {
-    if (left.length !== right.length) {
-      return false
-    }
-    return left.every((item, index) => item === right[index])
-  }
-  return left === right
-}
-
-function isServerPatchEchoingPayload(
-  patch: Partial<WorkTreeNode>,
-  payload: Record<string, unknown>,
-): boolean {
-  const entries = Object.entries(patch)
-  if (entries.length === 0) {
-    return false
-  }
-  return entries.every(([key, value]) =>
-    isSamePrimitiveOrList(value, payload[key]),
-  )
 }
 
 function normalizeTreeData(input: unknown): WorkTreeNode[] {
@@ -447,17 +304,6 @@ function patchTreeRow(
     return node
   })
   return changed ? nextNodes : nodes
-}
-
-function getAggregateFromBackend(
-  row: FlatRow,
-  key: "overcomplicationSum" | "importanceSum" | "blocksMoneySum",
-): number | null {
-  const value = row[key]
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value
-  }
-  return null
 }
 
 function cloneTree(nodes: WorkTreeNode[]): WorkTreeNode[] {
@@ -605,7 +451,6 @@ export function WorkspaceClient() {
     openWorkspace,
   } = useWorkspaceContext()
   const [tree, setTree] = useState<WorkTreeNode[]>([])
-  const [edits, setEdits] = useState<Record<string, EditState>>({})
   const [errorText, setErrorText] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [pendingFocusRowId, setPendingFocusRowId] = useState<string | null>(
@@ -616,13 +461,6 @@ export function WorkspaceClient() {
   >(null)
   const [dragState, setDragState] = useState<PointerDragState | null>(null)
   const dragStateRef = useRef<PointerDragState | null>(null)
-  const autosaveTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
-    new Map(),
-  )
-  const rowQueuesRef = useRef<Map<string, LocalFirstRowQueue<EditState>>>(
-    new Map(),
-  )
-  const rowMetaRef = useRef<Map<string, RowEditMeta>>(new Map())
   const editsRef = useRef<Record<string, EditState>>({})
   const columnWidthRafRef = useRef<number | null>(null)
   const devMetricsRef = useRef<DevPerfMetrics>({
@@ -671,19 +509,14 @@ export function WorkspaceClient() {
     STABLE_TABLE_COLUMN_WIDTHS,
   )
 
-  useEffect(() => {
-    editsRef.current = edits
-  }, [edits])
-
   const recomputeTextColumnWidths = useCallback(() => {
-    const editsSnapshot = editsRef.current
     let maxTitle = 0
     let maxObject = 0
     let maxProblems = 0
     let maxSolutions = 0
 
     for (const row of rows) {
-      const edit = editsSnapshot[row.id] ?? buildEditState(row)
+      const edit = editsRef.current[row.id] ?? buildEditState(row)
       const depthChars = Math.ceil((row.depth * TREE_LEVEL_OFFSET_PX) / 10)
       maxTitle = Math.max(
         maxTitle,
@@ -741,31 +574,6 @@ export function WorkspaceClient() {
     })
   }, [recomputeTextColumnWidths])
 
-  const getRowQueue = useCallback((rowId: string) => {
-    const existing = rowQueuesRef.current.get(rowId)
-    if (existing) {
-      return existing
-    }
-    const created = new LocalFirstRowQueue<EditState>()
-    rowQueuesRef.current.set(rowId, created)
-    return created
-  }, [])
-
-  const getRowMeta = useCallback((rowId: string) => {
-    const existing = rowMetaRef.current.get(rowId)
-    if (existing) {
-      return existing
-    }
-    const created: RowEditMeta = {
-      isDirty: false,
-      isFocused: false,
-      lastLocalRevision: 0,
-      lastAckRevision: 0,
-    }
-    rowMetaRef.current.set(rowId, created)
-    return created
-  }, [])
-
   const recordInputToPaint = useCallback(
     (durationMs: number) => {
       if (!isDev || typeof window === "undefined") {
@@ -796,6 +604,56 @@ export function WorkspaceClient() {
     scheduleTextColumnWidthRecalc()
   }, [scheduleTextColumnWidthRecalc])
 
+  useEffect(() => {
+    return () => {
+      if (columnWidthRafRef.current !== null) {
+        cancelAnimationFrame(columnWidthRafRef.current)
+        columnWidthRafRef.current = null
+      }
+    }
+  }, [])
+
+  const toErrorText = useCallback((error: unknown) => {
+    if (error instanceof WorkItemRequestError) {
+      return mapErrorText(error.payload)
+    }
+    return error instanceof Error ? error.message : "Неизвестная ошибка."
+  }, [])
+
+  const {
+    edits,
+    commitEdit,
+    commitTextEdit,
+    discardPendingSave,
+    flushPendingEdits,
+    handleFieldBlur,
+    handleFieldFocus,
+    updateEdit,
+  } = useWorkItemEditing({
+    isDev,
+    rows,
+    rowsById,
+    patchRow: (rowId, patch) => {
+      setTree((currentTree) => patchTreeRow(currentTree, rowId, patch))
+    },
+    reportError: setErrorText,
+    saveRow: patchWorkItem,
+    toErrorText,
+    recordInputToPaint,
+    recordPatchLatency: (latency) => {
+      const metrics = devMetricsRef.current
+      metrics.patchLatencies.push(latency)
+      if (metrics.patchLatencies.length > DEV_METRICS_SAMPLE_LIMIT) {
+        metrics.patchLatencies.shift()
+      }
+    },
+    scheduleTextColumnWidthRecalc,
+  })
+
+  useEffect(() => {
+    editsRef.current = edits
+  }, [edits])
+
   const refreshTree = useCallback(
     async (options?: { silent?: boolean }) => {
       if (!currentWorkspaceId) {
@@ -807,80 +665,27 @@ export function WorkspaceClient() {
         setIsLoading(true)
       }
       try {
-        const response = await fetch(
-          `/api/work-items?workspaceId=${encodeURIComponent(currentWorkspaceId)}`,
-          { cache: "no-store" },
-        )
-        const json = await response.json()
-        if (!response.ok) {
-          throw new Error(mapErrorText(json))
-        }
-        setTree(normalizeTreeData(json.data))
+        const data = await fetchWorkItems(currentWorkspaceId)
+        setTree(normalizeTreeData(data))
         if (isDev) {
           const metrics = devMetricsRef.current
           metrics.refreshCount += 1
         }
         setErrorText("")
       } catch (error) {
-        setErrorText(
-          error instanceof Error ? error.message : "Неизвестная ошибка.",
-        )
+        setErrorText(toErrorText(error))
       } finally {
         if (!options?.silent) {
           setIsLoading(false)
         }
       }
     },
-    [currentWorkspaceId, isDev],
+    [currentWorkspaceId, isDev, toErrorText],
   )
 
   useEffect(() => {
     void refreshTree()
   }, [refreshTree])
-
-  useEffect(() => {
-    const liveRowIds = new Set(rows.map((row) => row.id))
-    setEdits((current) => {
-      let changed = false
-      const next: Record<string, EditState> = { ...current }
-
-      for (const row of rows) {
-        const serverEdit = buildEditState(row)
-        const currentEdit = current[row.id]
-        const meta = getRowMeta(row.id)
-        const queue = rowQueuesRef.current.get(row.id)
-        const hasTimer = autosaveTimersRef.current.has(row.id)
-        const hasPending = (queue?.hasPending() ?? false) || hasTimer
-        const protectDraft = meta.isDirty && (meta.isFocused || hasPending)
-
-        if (!currentEdit) {
-          next[row.id] = serverEdit
-          changed = true
-          continue
-        }
-        if (protectDraft) {
-          continue
-        }
-        if (!isSameEditState(currentEdit, serverEdit)) {
-          next[row.id] = serverEdit
-          changed = true
-        }
-      }
-
-      for (const rowId of Object.keys(next)) {
-        if (liveRowIds.has(rowId)) {
-          continue
-        }
-        delete next[rowId]
-        rowMetaRef.current.delete(rowId)
-        rowQueuesRef.current.delete(rowId)
-        clearAutosaveTimer(rowId)
-        changed = true
-      }
-
-      return changed ? next : current
-    })
-  }, [getRowMeta, rows])
 
   useEffect(() => {
     if (!pendingFocusRowId) {
@@ -1079,27 +884,22 @@ export function WorkspaceClient() {
     }
 
     try {
-      const response = await fetch("/api/work-items", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          workspaceId: currentWorkspaceId,
-          title: "",
-          object: null,
-          parentId,
-          siblingOrder: targetIndex,
-        }),
+      const created = await createWorkItem({
+        workspaceId: currentWorkspaceId,
+        title: "",
+        object: null,
+        parentId,
+        siblingOrder: targetIndex,
       })
-      const json = await response.json()
-      if (!response.ok) {
-        throw new Error(mapErrorText(json))
-      }
-      const createdId = json?.data?.id
-      if (json?.data && typeof json.data === "object") {
+      const createdId =
+        created && typeof created === "object" && "id" in created
+          ? created.id
+          : null
+      if (created && typeof created === "object") {
         setTree((current) =>
           applyOptimisticCreate(
             current,
-            json.data as Partial<WorkTreeNode>,
+            created as Partial<WorkTreeNode>,
             parentId,
             targetIndex,
           ),
@@ -1111,315 +911,20 @@ export function WorkspaceClient() {
       }
       await refreshTree({ silent: true })
     } catch (error) {
-      setErrorText(
-        error instanceof Error ? error.message : "Неизвестная ошибка.",
-      )
-    }
-  }
-
-  function buildPatchPayload(currentRow: FlatRow, rowEdit: EditState) {
-    const payload: Record<string, unknown> = {}
-    const nextTitle = rowEdit.title
-    if (nextTitle !== currentRow.title) {
-      payload.title = nextTitle
-    }
-
-    const nextObject =
-      rowEdit.object.trim().length === 0 ? null : rowEdit.object
-    if (nextObject !== currentRow.object) {
-      payload.object = nextObject
-    }
-
-    if (rowEdit.possiblyRemovable !== currentRow.possiblyRemovable) {
-      payload.possiblyRemovable = rowEdit.possiblyRemovable
-    }
-
-    const isParentRow = currentRow.children.length > 0
-    if (!isParentRow) {
-      const nextOvercomplication = toNullableNumber(rowEdit.overcomplication)
-      if (nextOvercomplication !== currentRow.overcomplication) {
-        payload.overcomplication = nextOvercomplication
-      }
-
-      const nextImportance = toNullableNumber(rowEdit.importance)
-      if (nextImportance !== currentRow.importance) {
-        payload.importance = nextImportance
-      }
-
-      const nextBlocksMoney = toNullableNumber(rowEdit.blocksMoney)
-      if (nextBlocksMoney !== currentRow.blocksMoney) {
-        payload.blocksMoney = nextBlocksMoney
-      }
-    }
-
-    const nextCurrentProblems = multilineToList(rowEdit.currentProblems)
-    if (!isSameStringList(nextCurrentProblems, currentRow.currentProblems)) {
-      payload.currentProblems = nextCurrentProblems
-    }
-
-    const nextSolutionVariants = multilineToList(rowEdit.solutionVariants)
-    if (!isSameStringList(nextSolutionVariants, currentRow.solutionVariants)) {
-      payload.solutionVariants = nextSolutionVariants
-    }
-
-    return payload
-  }
-
-  function markRowCleanIfSettled(id: string) {
-    const queue = rowQueuesRef.current.get(id)
-    const meta = getRowMeta(id)
-    const hasTimer = autosaveTimersRef.current.has(id)
-    const hasPending = (queue?.hasPending() ?? false) || hasTimer
-    if (
-      !hasPending &&
-      meta.lastAckRevision >= meta.lastLocalRevision &&
-      !meta.isFocused
-    ) {
-      meta.isDirty = false
-    }
-  }
-
-  async function runRowSaveRequest(
-    id: string,
-    request: RevisionedValue<EditState>,
-  ) {
-    const queue = getRowQueue(id)
-    const currentRow = rowsById.get(id)
-    if (!currentRow) {
-      queue.acknowledge(request.revision)
-      markRowCleanIfSettled(id)
-      return
-    }
-
-    const payload = buildPatchPayload(currentRow, request.value)
-    if (Object.keys(payload).length === 0) {
-      const ackResult = queue.acknowledge(request.revision)
-      const meta = getRowMeta(id)
-      meta.lastAckRevision = Math.max(
-        meta.lastAckRevision,
-        queue.getLastAckRevision(),
-      )
-      if (ackResult.nextRequest) {
-        void runRowSaveRequest(id, ackResult.nextRequest)
-      }
-      markRowCleanIfSettled(id)
-      return
-    }
-
-    const startedAt = typeof performance !== "undefined" ? performance.now() : 0
-    try {
-      const response = await fetch(`/api/work-items/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-      const json = await response.json()
-      if (!response.ok) {
-        throw new Error(mapErrorText(json))
-      }
-
-      if (isDev && typeof performance !== "undefined") {
-        const latency = Math.max(0, performance.now() - startedAt)
-        const metrics = devMetricsRef.current
-        metrics.patchLatencies.push(latency)
-        if (metrics.patchLatencies.length > DEV_METRICS_SAMPLE_LIMIT) {
-          metrics.patchLatencies.shift()
-        }
-      }
-
-      const ackResult = queue.acknowledge(request.revision)
-      const meta = getRowMeta(id)
-      meta.lastAckRevision = Math.max(
-        meta.lastAckRevision,
-        queue.getLastAckRevision(),
-      )
-
-      if (!ackResult.stale && ackResult.shouldApply && json?.data) {
-        const patch = buildRowPatchFromServer(
-          json.data as Partial<WorkTreeNode>,
-        )
-        if (
-          Object.keys(patch).length > 0 &&
-          !isServerPatchEchoingPayload(patch, payload)
-        ) {
-          setTree((currentTree) => patchTreeRow(currentTree, id, patch))
-        }
-      }
-      if (ackResult.nextRequest) {
-        void runRowSaveRequest(id, ackResult.nextRequest)
-      }
-      setErrorText("")
-      markRowCleanIfSettled(id)
-    } catch (error) {
-      const nextRequest = queue.fail(request.revision)
-      if (nextRequest) {
-        void runRowSaveRequest(id, nextRequest)
-      }
-      setErrorText(
-        error instanceof Error ? error.message : "Неизвестная ошибка.",
-      )
+      setErrorText(toErrorText(error))
     }
   }
 
   async function deleteRow(id: string) {
     try {
-      clearAutosaveTimer(id)
-      rowQueuesRef.current.delete(id)
-      rowMetaRef.current.delete(id)
-      const response = await fetch(`/api/work-items/${id}`, {
-        method: "DELETE",
-      })
-      const json = await response.json()
-      if (!response.ok) {
-        throw new Error(mapErrorText(json))
-      }
+      discardPendingSave(id)
+      await deleteWorkItem(id)
       if (escapeCancellableRowId === id) {
         setEscapeCancellableRowId(null)
       }
       await refreshTree()
     } catch (error) {
-      setErrorText(
-        error instanceof Error ? error.message : "Неизвестная ошибка.",
-      )
-    }
-  }
-
-  function clearAutosaveTimer(id: string) {
-    const timer = autosaveTimersRef.current.get(id)
-    if (timer) {
-      clearTimeout(timer)
-      autosaveTimersRef.current.delete(id)
-    }
-  }
-
-  function startQueuedSave(id: string) {
-    const queue = getRowQueue(id)
-    const nextRequest = queue.startNext()
-    if (!nextRequest) {
-      markRowCleanIfSettled(id)
-      return
-    }
-    void runRowSaveRequest(id, nextRequest)
-  }
-
-  function queueAutosave(id: string, nextEdit: EditState, patch: RowEditPatch) {
-    const queue = getRowQueue(id)
-    const revisioned = queue.enqueue(nextEdit)
-    const meta = getRowMeta(id)
-    meta.isDirty = true
-    meta.lastLocalRevision = Math.max(
-      meta.lastLocalRevision,
-      revisioned.revision,
-    )
-
-    clearAutosaveTimer(id)
-    const delay = resolveAutosaveDelayMs(
-      Object.keys(patch) as Array<keyof RowEditPatch>,
-    )
-    const timer = setTimeout(() => {
-      autosaveTimersRef.current.delete(id)
-      startQueuedSave(id)
-    }, delay)
-    autosaveTimersRef.current.set(id, timer)
-  }
-
-  function flushRowAutosave(id: string) {
-    clearAutosaveTimer(id)
-    startQueuedSave(id)
-  }
-
-  function flushAllAutosaves() {
-    const rowIds = new Set<string>([
-      ...autosaveTimersRef.current.keys(),
-      ...rowQueuesRef.current.keys(),
-    ])
-
-    for (const rowId of rowIds) {
-      flushRowAutosave(rowId)
-    }
-  }
-
-  useEffect(() => {
-    return () => {
-      for (const timer of autosaveTimersRef.current.values()) {
-        clearTimeout(timer)
-      }
-      autosaveTimersRef.current.clear()
-      if (columnWidthRafRef.current !== null) {
-        cancelAnimationFrame(columnWidthRafRef.current)
-        columnWidthRafRef.current = null
-      }
-    }
-  }, [])
-
-  function updateEdit(
-    id: string,
-    patch: RowEditPatch,
-    options?: {
-      queueAutosave?: boolean
-      flush?: boolean
-      recalcColumnWidths?: boolean
-    },
-  ) {
-    const startedAt =
-      isDev && typeof performance !== "undefined" ? performance.now() : 0
-    const shouldQueueAutosave = options?.queueAutosave ?? true
-    const shouldRecalcColumnWidths = options?.recalcColumnWidths ?? false
-    setEdits((current) => {
-      const fallbackRow = rowsById.get(id)
-      const base =
-        current[id] ?? (fallbackRow ? buildEditState(fallbackRow) : null)
-      if (!base) return current
-      const nextEdit = { ...base, ...patch }
-      if (isSameEditState(base, nextEdit)) {
-        return current
-      }
-      if (shouldQueueAutosave) {
-        queueAutosave(id, nextEdit, patch)
-      }
-      const next = { ...current, [id]: nextEdit }
-      if (shouldRecalcColumnWidths) {
-        editsRef.current = next
-      }
-      return next
-    })
-    if (options?.flush) {
-      flushRowAutosave(id)
-    }
-    if (shouldRecalcColumnWidths) {
-      scheduleTextColumnWidthRecalc()
-    }
-    if (isDev && typeof window !== "undefined" && startedAt > 0) {
-      requestAnimationFrame(() => {
-        recordInputToPaint(Math.max(0, performance.now() - startedAt))
-      })
-    }
-  }
-
-  function commitTextEdit(id: string, patch: RowEditPatch) {
-    updateEdit(id, patch, {
-      queueAutosave: true,
-      flush: true,
-      recalcColumnWidths: true,
-    })
-    handleFieldBlur(id, { flushAutosave: true })
-  }
-
-  function handleFieldFocus(rowId: string) {
-    const meta = getRowMeta(rowId)
-    meta.isFocused = true
-  }
-
-  function handleFieldBlur(
-    rowId: string,
-    options?: { flushAutosave?: boolean },
-  ) {
-    const meta = getRowMeta(rowId)
-    meta.isFocused = false
-    if (options?.flushAutosave) {
-      flushRowAutosave(rowId)
-    } else {
-      markRowCleanIfSettled(rowId)
+      setErrorText(toErrorText(error))
     }
   }
 
@@ -1441,7 +946,7 @@ export function WorkspaceClient() {
     }
     event.preventDefault()
     event.stopPropagation()
-    clearAutosaveTimer(rowId)
+    discardPendingSave(rowId)
     setEscapeCancellableRowId(null)
     void deleteRow(rowId)
   }
@@ -1455,24 +960,14 @@ export function WorkspaceClient() {
       setTree((current) =>
         applyOptimisticMove(current, id, targetParentId, targetIndex),
       )
-      const response = await fetch(`/api/work-items/${id}/move`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          targetParentId,
-          targetIndex,
-        }),
+      await moveWorkItem(id, {
+        targetParentId,
+        targetIndex,
       })
-      const json = await response.json()
-      if (!response.ok) {
-        throw new Error(mapErrorText(json))
-      }
       await refreshTree({ silent: true })
       setErrorText("")
     } catch (error) {
-      setErrorText(
-        error instanceof Error ? error.message : "Неизвестная ошибка.",
-      )
+      setErrorText(toErrorText(error))
     }
   }
 
@@ -1686,13 +1181,13 @@ export function WorkspaceClient() {
       return
     }
 
-    flushAllAutosaves()
+    flushPendingEdits()
     setErrorText("")
     openWorkspace(workspaceId)
   }
 
   async function handleCreateWorkspace(name: string) {
-    flushAllAutosaves()
+    flushPendingEdits()
     setErrorText("")
     await createWorkspace(name)
   }
@@ -1767,11 +1262,14 @@ export function WorkspaceClient() {
                   <tr>
                     <th className="work-col">Работа</th>
                     <th className="object-col">Объект</th>
-                    <th className="score-col overcomplication-col">Сложно</th>
-                    <th className="score-col importance-col">Важно</th>
-                    <th className="score-col blocks-money-col">
-                      Не доплачивает
-                    </th>
+                    {workspaceRatingFieldConfigs.map((field) => (
+                      <th
+                        key={field.key}
+                        className={`score-col ${field.columnClassName}`}
+                      >
+                        {field.headerLabel}
+                      </th>
+                    ))}
                     <th className="problems-col">Проблемы</th>
                     <th className="solutions-col">Решения</th>
                     <th className="removable-col">Возможно убрать</th>
@@ -1809,18 +1307,6 @@ export function WorkspaceClient() {
                       edit.possiblyRemovable ? "1" : "0",
                     ].join("::")
                     const isParentRow = row.children.length > 0
-                    const overcomplicationSum = getAggregateFromBackend(
-                      row,
-                      "overcomplicationSum",
-                    )
-                    const importanceSum = getAggregateFromBackend(
-                      row,
-                      "importanceSum",
-                    )
-                    const blocksMoneySum = getAggregateFromBackend(
-                      row,
-                      "blocksMoneySum",
-                    )
                     return (
                       <MemoWorkRow
                         key={row.id}
@@ -1882,6 +1368,7 @@ export function WorkspaceClient() {
                                 commitTextEdit(row.id, {
                                   title: event.currentTarget.value,
                                 })
+                                handleFieldBlur(row.id)
                                 handleTitleBlur(row.id)
                               }}
                             />
@@ -1895,180 +1382,47 @@ export function WorkspaceClient() {
                             placeholder="Объект"
                             aria-label="Объект"
                             onFocus={() => handleFieldFocus(row.id)}
-                            onBlur={(event) =>
+                            onBlur={(event) => {
                               commitTextEdit(row.id, {
                                 object: event.currentTarget.value,
                               })
-                            }
+                              handleFieldBlur(row.id)
+                            }}
                           />
                         </td>
-                        <td className="score-col overcomplication-col">
-                          {isParentRow ? (
-                            <span
-                              className="score-summary"
-                              title={
-                                overcomplicationSum === null
-                                  ? "Агрегат не получен от API"
-                                  : undefined
-                              }
-                            >
-                              {overcomplicationSum ?? "—"}
-                            </span>
-                          ) : (
-                            <div
-                              className={`rating-control ${ratingToneClass(
-                                parseRating(edit.overcomplication),
-                              )}`}
-                              aria-label="Сложно от 1 до 5"
-                            >
-                              {[1, 2, 3, 4, 5].map((value) => {
-                                const current = parseRating(
-                                  edit.overcomplication,
-                                )
-                                const active = value <= current
-                                return (
-                                  <button
-                                    key={`overcomplication-${value}`}
-                                    type="button"
-                                    className={`rating-icon-btn${active ? " is-active" : ""}`}
-                                    aria-label={`Сложно ${value} из 5`}
-                                    aria-pressed={active}
-                                    onClick={() =>
-                                      updateEdit(row.id, {
-                                        overcomplication:
-                                          current === value
-                                            ? ""
-                                            : String(value),
-                                      })
-                                    }
-                                  >
-                                    <svg
-                                      xmlns="http://www.w3.org/2000/svg"
-                                      viewBox="0 0 24 24"
-                                      width="1.12em"
-                                      height="1.12em"
-                                      fill="currentColor"
-                                      aria-hidden
-                                    >
-                                      <title>Переусложнение</title>
-                                      <path d="M7 6C7 6.23676 7.04072 6.46184 7.11469 6.66999C7.22686 6.98559 7.17357 7.33638 6.97276 7.60444C6.77194 7.8725 6.45026 8.02222 6.11585 8.00327C6.0776 8.0011 6.03898 8 6 8C4.89543 8 4 8.89543 4 10C4 10.5129 4.19174 10.9786 4.50903 11.3331C4.84885 11.7128 4.84885 12.2872 4.50903 12.6669C4.19174 13.0214 4 13.4871 4 14C4 14.8842 4.57447 15.6369 5.37327 15.9001C5.84924 16.057 6.1356 16.5419 6.04308 17.0345C6.01489 17.1846 6 17.3401 6 17.5C6 18.8807 7.11929 20 8.5 20C9.75862 20 10.8015 19.069 10.9746 17.8583C10.9806 17.8165 10.9891 17.7756 11 17.7358V6C11 4.89543 10.1046 4 9 4C7.89543 4 7 4.89543 7 6ZM13 17.7358C13.0109 17.7756 13.0194 17.8165 13.0254 17.8583C13.1985 19.069 14.2414 20 15.5 20C16.8807 20 18 18.8807 18 17.5C18 17.3401 17.9851 17.1846 17.9569 17.0345C17.8644 16.5419 18.1508 16.057 18.6267 15.9001C19.4255 15.6369 20 14.8842 20 14C20 13.4871 19.8083 13.0214 19.491 12.6669C19.1511 12.2872 19.1511 11.7128 19.491 11.3331C19.8083 10.9786 20 10.5129 20 10C20 8.89543 19.1046 8 18 8C17.961 8 17.9224 8.0011 17.8841 8.00327C17.5497 8.02222 17.2281 7.8725 17.0272 7.60444C16.8264 7.33638 16.7731 6.98559 16.8853 6.66999C16.9593 6.46184 17 6.23676 17 6C17 4.89543 16.1046 4 15 4C13.8954 4 13 4.89543 13 6V17.7358ZM9 2C10.1947 2 11.2671 2.52376 12 3.35418C12.7329 2.52376 13.8053 2 15 2C17.2091 2 19 3.79086 19 6C19 6.04198 18.9994 6.08382 18.9981 6.12552C20.7243 6.56889 22 8.13546 22 10C22 10.728 21.8049 11.4116 21.4646 12C21.8049 12.5884 22 13.272 22 14C22 15.4817 21.1949 16.7734 19.9999 17.4646L20 17.5C20 19.9853 17.9853 22 15.5 22C14.0859 22 12.8248 21.3481 12 20.3285C11.1752 21.3481 9.91405 22 8.5 22C6.01472 22 4 19.9853 4 17.5L4.00014 17.4646C2.80512 16.7734 2 15.4817 2 14C2 13.272 2.19513 12.5884 2.53536 12C2.19513 11.4116 2 10.728 2 10C2 8.13546 3.27573 6.56889 5.00194 6.12552C5.00065 6.08382 5 6.04198 5 6C5 3.79086 6.79086 2 9 2Z" />
-                                    </svg>
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          )}
-                        </td>
-                        <td className="score-col importance-col">
-                          {isParentRow ? (
-                            <span
-                              className="score-summary"
-                              title={
-                                importanceSum === null
-                                  ? "Агрегат не получен от API"
-                                  : undefined
-                              }
-                            >
-                              {importanceSum ?? "—"}
-                            </span>
-                          ) : (
-                            <div
-                              className={`rating-control ${ratingToneClass(
-                                parseRating(edit.importance),
-                              )}`}
-                              aria-label="Важно от 1 до 5"
-                            >
-                              {[1, 2, 3, 4, 5].map((value) => {
-                                const current = parseRating(edit.importance)
-                                const active = value <= current
-                                return (
-                                  <button
-                                    key={`importance-${value}`}
-                                    type="button"
-                                    className={`rating-icon-btn${active ? " is-active" : ""}`}
-                                    aria-label={`Важно ${value} из 5`}
-                                    aria-pressed={active}
-                                    onClick={() =>
-                                      updateEdit(row.id, {
-                                        importance:
-                                          current === value
-                                            ? ""
-                                            : String(value),
-                                      })
-                                    }
-                                  >
-                                    <svg
-                                      xmlns="http://www.w3.org/2000/svg"
-                                      viewBox="0 0 24 24"
-                                      width="1.12em"
-                                      height="1.12em"
-                                      fill="currentColor"
-                                      aria-hidden
-                                    >
-                                      <title>Важность</title>
-                                      <path d="M12 23C16.1421 23 19.5 19.6421 19.5 15.5C19.5 14.6345 19.2697 13.8032 19 13.0296C17.3333 14.6765 16.0667 15.5 15.2 15.5C19.1954 8.5 17 5.5 11 1.5C11.5 6.49951 8.20403 8.77375 6.86179 10.0366C5.40786 11.4045 4.5 13.3462 4.5 15.5C4.5 19.6421 7.85786 23 12 23ZM12.7094 5.23498C15.9511 7.98528 15.9666 10.1223 13.463 14.5086C12.702 15.8419 13.6648 17.5 15.2 17.5C15.8884 17.5 16.5841 17.2992 17.3189 16.9051C16.6979 19.262 14.5519 21 12 21C8.96243 21 6.5 18.5376 6.5 15.5C6.5 13.9608 7.13279 12.5276 8.23225 11.4932C8.35826 11.3747 8.99749 10.8081 9.02477 10.7836C9.44862 10.4021 9.7978 10.0663 10.1429 9.69677C11.3733 8.37932 12.2571 6.91631 12.7094 5.23498Z" />
-                                    </svg>
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          )}
-                        </td>
-                        <td className="score-col blocks-money-col">
-                          {isParentRow ? (
-                            <span
-                              className="score-summary"
-                              title={
-                                blocksMoneySum === null
-                                  ? "Агрегат не получен от API"
-                                  : undefined
-                              }
-                            >
-                              {blocksMoneySum ?? "—"}
-                            </span>
-                          ) : (
-                            <div
-                              className={`rating-control ${ratingToneClass(
-                                parseRating(edit.blocksMoney),
-                              )}`}
-                              aria-label="Не доплачивает от 1 до 5"
-                            >
-                              {[1, 2, 3, 4, 5].map((value) => {
-                                const current = parseRating(edit.blocksMoney)
-                                const active = value <= current
-                                return (
-                                  <button
-                                    key={`blocksMoney-${value}`}
-                                    type="button"
-                                    className={`rating-icon-btn${active ? " is-active" : ""}`}
-                                    aria-label={`Не доплачивает ${value} из 5`}
-                                    aria-pressed={active}
-                                    onClick={() =>
-                                      updateEdit(row.id, {
-                                        blocksMoney:
-                                          current === value
-                                            ? ""
-                                            : String(value),
-                                      })
-                                    }
-                                  >
-                                    <svg
-                                      xmlns="http://www.w3.org/2000/svg"
-                                      viewBox="0 0 24 24"
-                                      width="1.12em"
-                                      height="1.12em"
-                                      fill="currentColor"
-                                      aria-hidden
-                                    >
-                                      <title>Не доплачивает</title>
-                                      <path d="M12.0049 22.0027C6.48204 22.0027 2.00488 17.5256 2.00488 12.0027C2.00488 6.4799 6.48204 2.00275 12.0049 2.00275C17.5277 2.00275 22.0049 6.4799 22.0049 12.0027C22.0049 17.5256 17.5277 22.0027 12.0049 22.0027ZM12.0049 20.0027C16.4232 20.0027 20.0049 16.421 20.0049 12.0027C20.0049 7.58447 16.4232 4.00275 12.0049 4.00275C7.5866 4.00275 4.00488 7.58447 4.00488 12.0027C4.00488 16.421 7.5866 20.0027 12.0049 20.0027ZM12.0049 7.053L16.9546 12.0027L12.0049 16.9525L7.05514 12.0027L12.0049 7.053ZM12.0049 9.88143L9.88356 12.0027L12.0049 14.1241L14.1262 12.0027L12.0049 9.88143Z" />
-                                    </svg>
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          )}
-                        </td>
+                        <WorkspaceRatingCell
+                          field={workspaceRatingFieldConfigs[0]}
+                          row={row}
+                          editState={edit}
+                          isParentRow={isParentRow}
+                          onChange={(value) =>
+                            commitEdit(row.id, {
+                              overcomplication: value,
+                            })
+                          }
+                        />
+                        <WorkspaceRatingCell
+                          field={workspaceRatingFieldConfigs[1]}
+                          row={row}
+                          editState={edit}
+                          isParentRow={isParentRow}
+                          onChange={(value) =>
+                            commitEdit(row.id, {
+                              importance: value,
+                            })
+                          }
+                        />
+                        <WorkspaceRatingCell
+                          field={workspaceRatingFieldConfigs[2]}
+                          row={row}
+                          editState={edit}
+                          isParentRow={isParentRow}
+                          onChange={(value) =>
+                            commitEdit(row.id, {
+                              blocksMoney: value,
+                            })
+                          }
+                        />
                         <td className="problems-col">
                           <textarea
                             className="textarea-list"
@@ -2084,11 +1438,12 @@ export function WorkspaceClient() {
                             placeholder="Проблемы"
                             aria-label="Проблемы по строкам"
                             onFocus={() => handleFieldFocus(row.id)}
-                            onBlur={(event) =>
+                            onBlur={(event) => {
                               commitTextEdit(row.id, {
                                 currentProblems: event.currentTarget.value,
                               })
-                            }
+                              handleFieldBlur(row.id)
+                            }}
                             onKeyDown={(event) => {
                               if (
                                 event.key === "Enter" &&
@@ -2120,11 +1475,12 @@ export function WorkspaceClient() {
                             placeholder="Решения"
                             aria-label="Решения по строкам"
                             onFocus={() => handleFieldFocus(row.id)}
-                            onBlur={(event) =>
+                            onBlur={(event) => {
                               commitTextEdit(row.id, {
                                 solutionVariants: event.currentTarget.value,
                               })
-                            }
+                              handleFieldBlur(row.id)
+                            }}
                             onKeyDown={(event) => {
                               if (
                                 event.key === "Enter" &&
@@ -2148,7 +1504,7 @@ export function WorkspaceClient() {
                               checked={edit.possiblyRemovable}
                               aria-label="Возможно убрать"
                               onChange={(event) =>
-                                updateEdit(row.id, {
+                                commitEdit(row.id, {
                                   possiblyRemovable: event.target.checked,
                                 })
                               }
