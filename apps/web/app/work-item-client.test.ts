@@ -49,4 +49,21 @@ describe("work-item-client", () => {
       },
     })
   })
+
+  it("keeps error stable when response body is not json", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("Internal Server Error", {
+        status: 500,
+        headers: { "Content-Type": "text/plain" },
+      }),
+    )
+
+    await expect(patchWorkItem("row-1", { title: "ok" })).rejects.toMatchObject(
+      {
+        constructor: WorkItemRequestError,
+        payload: null,
+        message: "Work item request failed",
+      },
+    )
+  })
 })

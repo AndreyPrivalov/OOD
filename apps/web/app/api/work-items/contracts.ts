@@ -1,4 +1,4 @@
-type SerializedWorkItem = {
+export type SerializedWorkItem = {
   id: string
   workspaceId: string
   title: string

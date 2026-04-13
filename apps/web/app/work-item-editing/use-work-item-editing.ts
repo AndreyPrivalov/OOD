@@ -1,51 +1,20 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { buildEditState, isSameEditState } from "./edit-state"
 import {
-  LocalFirstRowQueue,
-  type RevisionedValue,
-  type RowEditPatch,
-} from "./local-first-autosave"
-import {
-  type WorkspaceRatingEditValues,
-  type WorkspaceRatingValues,
-  areRatingEditValuesEqual,
-  buildRatingEditValues,
-  buildRatingPayload,
-  buildRatingServerPatch,
-} from "./workspace-ratings"
-
-export type EditableWorkItemRow = {
-  id: string
-  title: string
-  object: string | null
-  possiblyRemovable: boolean
-  overcomplication: number | null
-  importance: number | null
-  blocksMoney: number | null
-  currentProblems: string[]
-  solutionVariants: string[]
-  children: Array<{ id: string }>
-}
-
-export type EditableWorkItemPatch = Partial<
-  Omit<EditableWorkItemRow, "children">
->
-
-export type EditState = {
-  title: string
-  object: string
-  possiblyRemovable: boolean
-  currentProblems: string
-  solutionVariants: string
-} & WorkspaceRatingEditValues
-
-type RowEditMeta = {
-  isDirty: boolean
-  isFocused: boolean
-  lastLocalRevision: number
-  lastAckRevision: number
-}
+  buildRowPatchFromServer,
+  isServerPatchEchoingPayload,
+} from "./reconciliation"
+import { buildPatchPayload } from "./save-payload"
+import { LocalFirstRowQueue, type RevisionedValue } from "./save-queue"
+import type {
+  EditState,
+  EditableWorkItemPatch,
+  EditableWorkItemRow,
+  RowEditMeta,
+  RowEditPatch,
+} from "./types"
 
 type UseWorkItemEditingOptions<Row extends EditableWorkItemRow> = {
   isDev: boolean
@@ -58,136 +27,6 @@ type UseWorkItemEditingOptions<Row extends EditableWorkItemRow> = {
   recordInputToPaint: (durationMs: number) => void
   recordPatchLatency?: (durationMs: number) => void
   scheduleTextColumnWidthRecalc: () => void
-}
-
-function listToMultiline(values: string[]) {
-  return values.join("\n")
-}
-
-function multilineToList(value: string) {
-  return value
-    .split("\n")
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0)
-}
-
-function isSameStringList(left: string[], right: string[]): boolean {
-  if (left.length !== right.length) {
-    return false
-  }
-  return left.every((value, index) => value === right[index])
-}
-
-export function buildEditState(row: EditableWorkItemRow): EditState {
-  return {
-    title: row.title,
-    object: row.object ?? "",
-    possiblyRemovable: row.possiblyRemovable ?? false,
-    ...buildRatingEditValues(row),
-    currentProblems: listToMultiline(row.currentProblems),
-    solutionVariants: listToMultiline(row.solutionVariants),
-  }
-}
-
-export function isSameEditState(left: EditState, right: EditState): boolean {
-  return (
-    left.title === right.title &&
-    left.object === right.object &&
-    left.possiblyRemovable === right.possiblyRemovable &&
-    areRatingEditValuesEqual(left, right) &&
-    left.currentProblems === right.currentProblems &&
-    left.solutionVariants === right.solutionVariants
-  )
-}
-
-export function buildRowPatchFromServer(
-  updated: Partial<EditableWorkItemRow>,
-): EditableWorkItemPatch {
-  const patch: EditableWorkItemPatch = {}
-  if (typeof updated.title === "string") {
-    patch.title = updated.title
-  }
-  if (updated.object === null || typeof updated.object === "string") {
-    patch.object = updated.object
-  }
-  if (typeof updated.possiblyRemovable === "boolean") {
-    patch.possiblyRemovable = updated.possiblyRemovable
-  }
-  Object.assign(
-    patch,
-    buildRatingServerPatch(updated as Partial<WorkspaceRatingValues>),
-  )
-  if (Array.isArray(updated.currentProblems)) {
-    patch.currentProblems = updated.currentProblems.filter(
-      (item): item is string => typeof item === "string",
-    )
-  }
-  if (Array.isArray(updated.solutionVariants)) {
-    patch.solutionVariants = updated.solutionVariants.filter(
-      (item): item is string => typeof item === "string",
-    )
-  }
-  return patch
-}
-
-function isSamePrimitiveOrList(left: unknown, right: unknown): boolean {
-  if (Array.isArray(left) && Array.isArray(right)) {
-    if (left.length !== right.length) {
-      return false
-    }
-    return left.every((item, index) => item === right[index])
-  }
-  return left === right
-}
-
-function isServerPatchEchoingPayload(
-  patch: EditableWorkItemPatch,
-  payload: Record<string, unknown>,
-): boolean {
-  const entries = Object.entries(patch)
-  if (entries.length === 0) {
-    return false
-  }
-  return entries.every(([key, value]) =>
-    isSamePrimitiveOrList(value, payload[key]),
-  )
-}
-
-function buildPatchPayload(
-  currentRow: EditableWorkItemRow,
-  rowEdit: EditState,
-) {
-  const payload: Record<string, unknown> = {}
-  const nextTitle = rowEdit.title
-  if (nextTitle !== currentRow.title) {
-    payload.title = nextTitle
-  }
-
-  const nextObject = rowEdit.object.trim().length === 0 ? null : rowEdit.object
-  if (nextObject !== currentRow.object) {
-    payload.object = nextObject
-  }
-
-  if (rowEdit.possiblyRemovable !== currentRow.possiblyRemovable) {
-    payload.possiblyRemovable = rowEdit.possiblyRemovable
-  }
-
-  const isParentRow = currentRow.children.length > 0
-  if (!isParentRow) {
-    Object.assign(payload, buildRatingPayload(currentRow, rowEdit))
-  }
-
-  const nextCurrentProblems = multilineToList(rowEdit.currentProblems)
-  if (!isSameStringList(nextCurrentProblems, currentRow.currentProblems)) {
-    payload.currentProblems = nextCurrentProblems
-  }
-
-  const nextSolutionVariants = multilineToList(rowEdit.solutionVariants)
-  if (!isSameStringList(nextSolutionVariants, currentRow.solutionVariants)) {
-    payload.solutionVariants = nextSolutionVariants
-  }
-
-  return payload
 }
 
 export function useWorkItemEditing<Row extends EditableWorkItemRow>(

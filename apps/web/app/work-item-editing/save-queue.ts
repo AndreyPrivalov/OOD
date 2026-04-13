@@ -94,13 +94,3 @@ export class LocalFirstRowQueue<T> {
     return this.hasInFlight() || this.hasQueued()
   }
 }
-export type RowEditPatch = {
-  title?: string
-  object?: string
-  possiblyRemovable?: boolean
-  overcomplication?: string
-  importance?: string
-  blocksMoney?: string
-  currentProblems?: string
-  solutionVariants?: string
-}

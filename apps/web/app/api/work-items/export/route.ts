@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { jsonData, jsonError, jsonErrorCode } from "../../../../lib/http"
 import { getRepository } from "../../../../lib/repository"
 import { serializeWorkTree } from "../contracts"
+import { readWorkspaceId } from "../request"
 
 type ExportRow = {
   id: string
@@ -11,8 +12,6 @@ type ExportRow = {
   parentTitle: string
   siblingOrder: number
 }
-
-const DEFAULT_WORKSPACE_ID = "default-workspace"
 
 function escapeCsv(value: string | number): string {
   const text = String(value)
@@ -56,8 +55,7 @@ function toCsv(rows: ExportRow[]): string {
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url)
-    const workspaceId =
-      url.searchParams.get("workspaceId") ?? DEFAULT_WORKSPACE_ID
+    const workspaceId = readWorkspaceId(request)
     const format = url.searchParams.get("format") ?? "json"
 
     if (format !== "json" && format !== "csv") {

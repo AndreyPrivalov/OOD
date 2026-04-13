@@ -4,7 +4,7 @@ import {
   buildInsertLanes,
   isSameDropIntent,
   withLaneAnchors,
-} from "./workspace-interactions"
+} from "./index"
 
 function createSiblingBuckets(
   rows: FlatRowLike[],

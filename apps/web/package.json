@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "pnpm exec vitest run app/api"
+    "test": "pnpm exec vitest run app"
   },
   "dependencies": {
     "@ood/domain": "workspace:*",

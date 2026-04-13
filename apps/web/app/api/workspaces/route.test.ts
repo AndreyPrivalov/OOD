@@ -83,7 +83,10 @@ describe("POST /api/workspaces", () => {
       }),
     )
 
+    const payload = await response.json()
+
     expect(response.status).toBe(400)
+    expect(payload.error).toBe("INVALID_PAYLOAD")
     expect(repository.create).not.toHaveBeenCalled()
   })
 })
