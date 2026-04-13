@@ -1,5 +1,3 @@
-"use client"
-
 import {
   type CSSProperties,
   type KeyboardEvent,
@@ -7,14 +5,71 @@ import {
   type ReactNode,
   memo,
 } from "react"
-import type { TableColumnWidths } from "../../hooks/use-workspace-layout"
-import type { FlatRow } from "../../state/workspace-tree-state"
-import type { DropIntent, OverlayIndicator } from "../../tree-interactions"
-import type { EditState } from "../../work-item-editing"
-import {
-  WorkspaceRatingCell,
-  workspaceRatingFieldConfigs,
-} from "../../workspace-ratings"
+
+type TreeRowLike = {
+  id: string
+  parentId: string | null
+  depth: number
+  siblingOrder: number
+  children: unknown[]
+  overcomplication: number | null
+  importance: number | null
+  blocksMoney: number | null
+  overcomplicationTotal?: number
+  importanceTotal?: number
+  blocksMoneyTotal?: number
+}
+
+type TreeEditLike = {
+  title: string
+  object: string
+  overcomplication: string
+  importance: string
+  blocksMoney: string
+  currentProblems: string
+  solutionVariants: string
+  possiblyRemovable: boolean
+}
+
+type DropIntentLike =
+  | {
+      type: "between"
+      rowId: string
+      position: "before" | "after"
+    }
+  | {
+      type: "nest"
+      targetId: string
+    }
+  | {
+      type: "root-start"
+    }
+
+type OverlayIndicatorLike = {
+  kind: "add" | "drop"
+  laneId: string
+  y: number
+  parentId: string | null
+  targetIndex: number
+  showPlus: boolean
+}
+
+type TableColumnWidthsLike = {
+  work: string
+  object: string
+  overcomplication: string
+  importance: string
+  blocksMoney: string
+  currentProblems: string
+  solutionVariants: string
+  removable: string
+}
+
+type RatingHeader = {
+  key: string
+  headerLabel: string
+  columnClassName: string
+}
 
 type MemoRowProps = {
   rowId: string
@@ -56,13 +111,14 @@ const MemoWorkRow = memo(
     prev.editRenderSignature === next.editRenderSignature,
 )
 
-type WorkspaceTreeTableProps = {
-  rows: FlatRow[]
-  edits: Record<string, EditState>
+export type WorkspaceTreeTableProps = {
+  rows: TreeRowLike[]
+  edits: Record<string, TreeEditLike>
   numberingById: Map<string, string>
   draggedRowId: string | null
-  dropIntent: DropIntent | null
-  tableColumnWidths: TableColumnWidths
+  dropIntent: DropIntentLike | null
+  tableColumnWidths: TableColumnWidthsLike
+  ratingHeaders: readonly RatingHeader[]
   rowTreeIndentPx: number
   workContentIndentPx: number
   contentStartXPx: number
@@ -71,7 +127,7 @@ type WorkspaceTreeTableProps = {
   cellInlinePadPx: number
   structureLineWidthPx: number
   overlayHeight: number
-  overlayAddIndicators: OverlayIndicator[]
+  overlayAddIndicators: OverlayIndicatorLike[]
   overlayDropY: number | null
   listScrollRef: React.RefObject<HTMLDivElement>
   tableWrapRef: React.RefObject<HTMLDivElement>
@@ -91,8 +147,8 @@ type WorkspaceTreeTableProps = {
   onHandlePointerCancel: (event: PointerEvent<HTMLButtonElement>) => void
   onCreateAtPosition: (parentId: string | null, targetIndex: number) => void
   onDeleteRow: (rowId: string) => void
-  onCommitTextEdit: (rowId: string, patch: Partial<EditState>) => void
-  onCommitEdit: (rowId: string, patch: Partial<EditState>) => void
+  onCommitTextEdit: (rowId: string, patch: Partial<TreeEditLike>) => void
+  onCommitEdit: (rowId: string, patch: Partial<TreeEditLike>) => void
   onFieldFocus: (rowId: string) => void
   onFieldBlur: (rowId: string) => void
   onTitleKeyDown: (
@@ -100,6 +156,13 @@ type WorkspaceTreeTableProps = {
     rowId: string,
   ) => void
   onTitleBlurExtra: (rowId: string) => void
+  renderRatingCells: (params: {
+    row: TreeRowLike
+    edit: TreeEditLike
+    isParentRow: boolean
+    rowId: string
+    onCommitEdit: (patch: Partial<TreeEditLike>) => void
+  }) => ReactNode
 }
 
 function autoGrowTextarea(target: HTMLTextAreaElement) {
@@ -150,7 +213,7 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
             <tr>
               <th className="work-col">Работа</th>
               <th className="object-col">Объект</th>
-              {workspaceRatingFieldConfigs.map((field) => (
+              {props.ratingHeaders.map((field) => (
                 <th
                   key={field.key}
                   className={`score-col ${field.columnClassName}`}
@@ -277,33 +340,13 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                       }}
                     />
                   </td>
-                  <WorkspaceRatingCell
-                    field={workspaceRatingFieldConfigs[0]}
-                    row={row}
-                    editState={edit}
-                    isParentRow={isParentRow}
-                    onChange={(value) =>
-                      props.onCommitEdit(row.id, { overcomplication: value })
-                    }
-                  />
-                  <WorkspaceRatingCell
-                    field={workspaceRatingFieldConfigs[1]}
-                    row={row}
-                    editState={edit}
-                    isParentRow={isParentRow}
-                    onChange={(value) =>
-                      props.onCommitEdit(row.id, { importance: value })
-                    }
-                  />
-                  <WorkspaceRatingCell
-                    field={workspaceRatingFieldConfigs[2]}
-                    row={row}
-                    editState={edit}
-                    isParentRow={isParentRow}
-                    onChange={(value) =>
-                      props.onCommitEdit(row.id, { blocksMoney: value })
-                    }
-                  />
+                  {props.renderRatingCells({
+                    row,
+                    edit,
+                    isParentRow,
+                    rowId: row.id,
+                    onCommitEdit: (patch) => props.onCommitEdit(row.id, patch),
+                  })}
                   <td className="problems-col">
                     <textarea
                       className="textarea-list"

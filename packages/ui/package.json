@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "echo \"No tests configured for @ood/ui yet\""
+    "test": "pnpm exec vitest run src"
   },
   "dependencies": {
     "react": "^18.3.1"

@@ -4,6 +4,7 @@ import {
   ViewportScrollbar,
   WorkspaceControlPanel,
   WorkspaceTitlePanel,
+  WorkspaceTreeTable,
 } from "@ood/ui"
 import {
   type KeyboardEvent,
@@ -13,7 +14,6 @@ import {
   useRef,
   useState,
 } from "react"
-import { WorkspaceTreeTable } from "./components/tree/workspace-tree-table"
 import { useWorkspaceDragDrop } from "./hooks/use-workspace-drag-drop"
 import {
   useTableFrameConstants,
@@ -37,6 +37,10 @@ import {
   buildEditState,
   useWorkItemEditing,
 } from "./work-item-editing"
+import {
+  WorkspaceRatingCell,
+  workspaceRatingFieldConfigs,
+} from "./workspace-ratings"
 import { useWorkspaceContext } from "./workspaces/use-workspace-context"
 import { WorkspaceSwitcher } from "./workspaces/workspace-switcher"
 
@@ -377,6 +381,7 @@ export function WorkspaceClient() {
             draggedRowId={dnd.draggedRowId}
             dropIntent={dnd.dropIntent}
             tableColumnWidths={layout.tableColumnWidths}
+            ratingHeaders={workspaceRatingFieldConfigs}
             rowTreeIndentPx={TREE_LEVEL_OFFSET_PX}
             workContentIndentPx={WORK_CONTENT_INDENT_PX}
             contentStartXPx={CONTENT_START_X_PX}
@@ -409,6 +414,33 @@ export function WorkspaceClient() {
             onFieldBlur={handleFieldBlur}
             onTitleKeyDown={handleTitleKeyDown}
             onTitleBlurExtra={handleTitleBlur}
+            renderRatingCells={({ edit, isParentRow, onCommitEdit, row }) => (
+              <>
+                <WorkspaceRatingCell
+                  field={workspaceRatingFieldConfigs[0]}
+                  row={row}
+                  editState={edit}
+                  isParentRow={isParentRow}
+                  onChange={(value) =>
+                    onCommitEdit({ overcomplication: value })
+                  }
+                />
+                <WorkspaceRatingCell
+                  field={workspaceRatingFieldConfigs[1]}
+                  row={row}
+                  editState={edit}
+                  isParentRow={isParentRow}
+                  onChange={(value) => onCommitEdit({ importance: value })}
+                />
+                <WorkspaceRatingCell
+                  field={workspaceRatingFieldConfigs[2]}
+                  row={row}
+                  editState={edit}
+                  isParentRow={isParentRow}
+                  onChange={(value) => onCommitEdit({ blocksMoney: value })}
+                />
+              </>
+            )}
           />
         </section>
       </div>
