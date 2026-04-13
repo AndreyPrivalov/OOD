@@ -1,0 +1,33 @@
+{
+  "name": "ood-work-hierarchy",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.12.2",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "pnpm --filter @ood/web dev",
+    "dev:with-db": "docker compose up -d && pnpm db:migrate && pnpm dev",
+    "build": "pnpm --filter @ood/web build",
+    "start": "pnpm --filter @ood/web start",
+    "db:generate": "pnpm --filter @ood/db drizzle-kit generate",
+    "db:migrate": "pnpm --filter @ood/db drizzle-kit migrate",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v",
+    "check": "npm run check:biome && npm run check:typecheck",
+    "check:biome": "biome check .",
+    "check:typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "pnpm -r test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/node": "^22.8.7",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  }
+}
