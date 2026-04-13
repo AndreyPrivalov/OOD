@@ -44,7 +44,7 @@ Responsibilities:
 - `docs/tech.md` — technical invariants and implementation constraints;
 - `docs/features/*.md` — business logic and feature-specific rules.
 
-The legacy `Docs/` directory is treated as a legacy source during migration and must not remain the long-term source of truth after approval of this phase.
+`docs/` is the only canonical documentation root. `Docs/` and ad hoc root markdown drafts are obsolete and must not remain in active use.
 
 ## 5. Target Scope of the Cleaned Core
 

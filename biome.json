@@ -10,7 +10,6 @@
   "files": {
     "ignoreUnknown": true,
     "ignore": [
-      "Docs/**",
       ".next/**",
       "dist/**",
       "coverage/**",

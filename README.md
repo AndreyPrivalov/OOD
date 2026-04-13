@@ -17,7 +17,16 @@ Monorepo for MVP web app that manages a hierarchical list of work items.
 - `packages/domain` - domain types, errors, validation, tree invariants
 - `packages/db` - schema, client wiring, repository interfaces
 - `packages/ui` - reusable UI components for tree/table view
-- `Docs` - canonical product/design/technical knowledge base
+- `docs` - canonical documentation root for shared product, design, technical, and feature rules
+
+## Source of truth
+
+- `spec.md` - master specification for the cleaned core
+- `AGENTS.md` - implementation constitution for changes and reviews
+- `docs/product.md` - shared product vocabulary and cross-feature rules
+- `docs/design-system.md` - shared UI behavior and visual principles
+- `docs/tech.md` - technical invariants and architecture constraints
+- `docs/features/*.md` - feature-specific business logic
 
 ## Prerequisites
 
@@ -67,36 +76,6 @@ pnpm dev:with-db
 
 If `docker` command is not found, install Docker Desktop and ensure engine status is `Running`.
 
-## Import / Export
-
-### Import from Google Sheets
-
-`POST /api/work-items/import/google-sheet`
-
-Example dry run:
-```bash
-curl -X POST "http://localhost:3000/api/work-items/import/google-sheet" \
-  -H "content-type: application/json" \
-  -d '{
-    "sheetUrl": "https://docs.google.com/spreadsheets/d/1A2--ansmO0qlNZ5spLXugSgclBuG3ftoHqU3tHPaU6A/edit?usp=sharing",
-    "workspaceId": "default-workspace",
-    "mode": "replace",
-    "dryRun": true
-  }'
-```
-
-### Export work items
-
-JSON:
-```bash
-curl "http://localhost:3000/api/work-items/export?workspaceId=default-workspace&format=json"
-```
-
-CSV:
-```bash
-curl -L "http://localhost:3000/api/work-items/export?workspaceId=default-workspace&format=csv"
-```
-
 ## Run and view result
 
 1. Start dev server:
@@ -109,6 +88,7 @@ pnpm dev
 You should see:
 - root/child creation,
 - inline field editing,
+- ratings with aggregate read values on parent rows,
 - move within siblings or to another parent,
 - delete item/branch,
 - persisted tree from Postgres.
