@@ -12,7 +12,7 @@ This file is the implementation constitution for OOD. Follow it when designing, 
 - `docs/design-system.md` defines shared UI behavior and visual principles.
 - `docs/tech.md` defines technical invariants and architecture constraints.
 - `docs/features/*.md` define feature-specific business logic.
-- Legacy `Docs/` content is migration-era material only and must not remain the long-term source of truth.
+- `Docs/` and ad hoc root markdown drafts are obsolete and must not be used or recreated as sources of truth.
 
 ## Product Scope
 
@@ -57,7 +57,7 @@ Keep boundaries real. If a module does not provide reusable value, simplify it i
 - Keep business logic out of random notes or ad hoc markdown files.
 - Keep shared design rules in `docs/design-system.md`, not duplicated in feature files unless the feature truly needs an exception.
 - Keep technical invariants in `docs/tech.md`.
-- Do not create local `rules.md` files or alternate documentation roots.
+- Do not create local `rules.md` files, alternate documentation roots, or root-level draft specs that duplicate canonical docs.
 
 ## Design Identity
 
