@@ -4,6 +4,7 @@ import { PostgresWorkItemRepository } from "./repository"
 
 type DbStubState = {
   selectQueue: unknown[][]
+  executeCalls: number
   updateCalls: number
 }
 
@@ -12,7 +13,7 @@ function createDbStub(state: DbStubState) {
     return Promise.resolve(state.selectQueue.shift() ?? [])
   }
 
-  return {
+  const tx = {
     select() {
       return {
         from() {
@@ -42,6 +43,17 @@ function createDbStub(state: DbStubState) {
           },
         }),
       }
+    },
+    execute: async () => {
+      state.executeCalls += 1
+      return { rows: [] }
+    },
+  }
+
+  return {
+    ...tx,
+    transaction: async <T>(callback: (trx: typeof tx) => Promise<T>) => {
+      return callback(tx)
     },
   }
 }
@@ -73,6 +85,7 @@ describe("PostgresWorkItemRepository", () => {
         [row({ id: "parent", workspaceId: "ws" })],
         [{ id: "child" }],
       ],
+      executeCalls: 0,
       updateCalls: 0,
     }
     const repo = new PostgresWorkItemRepository(
@@ -112,6 +125,7 @@ describe("PostgresWorkItemRepository", () => {
           }),
         ],
       ],
+      executeCalls: 0,
       updateCalls: 0,
     }
     const repo = new PostgresWorkItemRepository(
@@ -134,5 +148,26 @@ describe("PostgresWorkItemRepository", () => {
       importanceSum: 0,
       blocksMoneySum: 1,
     })
+  })
+
+  it("deleteCascade removes a full branch before compacting remaining siblings", async () => {
+    const state: DbStubState = {
+      selectQueue: [
+        [row({ id: "branch", workspaceId: "ws", parentId: null })],
+        [{ id: "keep-a" }, { id: "keep-b" }],
+      ],
+      executeCalls: 0,
+      updateCalls: 0,
+    }
+    const repo = new PostgresWorkItemRepository(
+      createDbStub(state) as unknown as ConstructorParameters<
+        typeof PostgresWorkItemRepository
+      >[0],
+    )
+
+    await repo.deleteCascade("branch")
+
+    expect(state.executeCalls).toBe(1)
+    expect(state.updateCalls).toBe(2)
   })
 })

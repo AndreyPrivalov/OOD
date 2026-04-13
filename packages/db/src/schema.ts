@@ -1,4 +1,5 @@
 import {
+  type AnyPgColumn,
   boolean,
   integer,
   jsonb,
@@ -26,7 +27,9 @@ export const workItems = pgTable("work_items", {
   title: text("title").notNull(),
   object: text("object"),
   possiblyRemovable: boolean("possibly_removable").notNull().default(false),
-  parentId: text("parent_id"),
+  parentId: text("parent_id").references((): AnyPgColumn => workItems.id, {
+    onDelete: "cascade",
+  }),
   siblingOrder: integer("sibling_order").notNull().default(0),
   overcomplication: integer("overcomplication"),
   importance: integer("importance"),

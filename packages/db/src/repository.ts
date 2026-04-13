@@ -324,7 +324,19 @@ export class PostgresWorkItemRepository implements WorkItemRepository {
         return
       }
       const current = rows[0]
-      await tx.delete(workItems).where(eq(workItems.id, id))
+      await tx.execute(sql`
+        with recursive descendants as (
+          select id
+          from work_items
+          where id = ${id}
+          union all
+          select wi.id
+          from work_items wi
+          inner join descendants d on wi.parent_id = d.id
+        )
+        delete from work_items
+        where id in (select id from descendants)
+      `)
 
       const siblings = await tx
         .select({ id: workItems.id })
