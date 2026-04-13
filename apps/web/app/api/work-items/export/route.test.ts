@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const repository = {
   listTree: vi.fn(),
@@ -6,19 +6,19 @@ const repository = {
   update: vi.fn(),
   move: vi.fn(),
   deleteCascade: vi.fn(),
-  replaceWorkspaceTree: vi.fn()
-};
+  replaceWorkspaceTree: vi.fn(),
+}
 
 vi.mock("../../../../lib/repository", () => ({
-  getRepository: () => repository
-}));
+  getRepository: () => repository,
+}))
 
-import { GET } from "./route";
+import { GET } from "./route"
 
 describe("GET /api/work-items/export", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-  });
+    vi.clearAllMocks()
+  })
 
   it("returns json export by default", async () => {
     repository.listTree.mockResolvedValueOnce([
@@ -53,26 +53,26 @@ describe("GET /api/work-items/export", () => {
             overcomplicationSum: 0,
             importanceSum: 0,
             blocksMoneySum: 0,
-            children: []
-          }
-        ]
-      }
-    ]);
+            children: [],
+          },
+        ],
+      },
+    ])
 
     const response = await GET(
-      new Request("http://localhost/api/work-items/export?workspaceId=ws")
-    );
-    const payload = await response.json();
+      new Request("http://localhost/api/work-items/export?workspaceId=ws"),
+    )
+    const payload = await response.json()
 
-    expect(response.status).toBe(200);
-    expect(payload.data.workspaceId).toBe("ws");
-    expect(payload.data.rows).toHaveLength(2);
+    expect(response.status).toBe(200)
+    expect(payload.data.workspaceId).toBe("ws")
+    expect(payload.data.rows).toHaveLength(2)
     expect(payload.data.rows[1]).toMatchObject({
       title: "Child",
       path: "Root/Child",
-      parentTitle: "Root"
-    });
-  });
+      parentTitle: "Root",
+    })
+  })
 
   it("returns csv export when requested", async () => {
     repository.listTree.mockResolvedValueOnce([
@@ -91,18 +91,20 @@ describe("GET /api/work-items/export", () => {
         overcomplicationSum: 0,
         importanceSum: 0,
         blocksMoneySum: 0,
-        children: []
-      }
-    ]);
+        children: [],
+      },
+    ])
 
     const response = await GET(
-      new Request("http://localhost/api/work-items/export?workspaceId=ws&format=csv")
-    );
-    const csv = await response.text();
+      new Request(
+        "http://localhost/api/work-items/export?workspaceId=ws&format=csv",
+      ),
+    )
+    const csv = await response.text()
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get("content-type")).toContain("text/csv");
-    expect(csv).toContain("id,title,path,parentTitle,siblingOrder");
-    expect(csv).toContain('"Root, Title"');
-  });
-});
+    expect(response.status).toBe(200)
+    expect(response.headers.get("content-type")).toContain("text/csv")
+    expect(csv).toContain("id,title,path,parentTitle,siblingOrder")
+    expect(csv).toContain('"Root, Title"')
+  })
+})

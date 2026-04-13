@@ -1,9 +1,9 @@
 export interface TreeRowModel {
-  id: string;
-  title: string;
-  object: string | null;
-  depth: number;
-  hasChildren: boolean;
+  id: string
+  title: string
+  object: string | null
+  depth: number
+  hasChildren: boolean
 }
 
 export function WorkTreeTable({ rows }: { rows: TreeRowModel[] }) {
@@ -15,7 +15,7 @@ export function WorkTreeTable({ rows }: { rows: TreeRowModel[] }) {
           gridTemplateColumns: "2fr 2fr 120px 120px 120px",
           fontWeight: 700,
           borderBottom: "1px solid #d8d4cf",
-          paddingBottom: "6px"
+          paddingBottom: "6px",
         }}
       >
         <span>Работа</span>
@@ -33,7 +33,7 @@ export function WorkTreeTable({ rows }: { rows: TreeRowModel[] }) {
             alignItems: "center",
             gap: "8px",
             borderBottom: "1px solid #d8d4cf",
-            padding: "6px 0"
+            padding: "6px 0",
           }}
         >
           <span style={{ paddingLeft: `${row.depth * 20}px` }}>
@@ -46,5 +46,5 @@ export function WorkTreeTable({ rows }: { rows: TreeRowModel[] }) {
         </article>
       ))}
     </div>
-  );
+  )
 }

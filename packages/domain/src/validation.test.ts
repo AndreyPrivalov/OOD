@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { DomainError, DomainErrorCode } from "./errors";
+import { describe, expect, it } from "vitest"
+import { DomainError, DomainErrorCode } from "./errors"
 import {
   validateCreateWorkItemInput,
-  validateUpdateWorkItemInput
-} from "./validation";
+  validateUpdateWorkItemInput,
+} from "./validation"
 
 describe("validation", () => {
   it("accepts ratings in 0..5 range", () => {
@@ -12,31 +12,31 @@ describe("validation", () => {
       possiblyRemovable: true,
       overcomplication: 5,
       importance: 0,
-      blocksMoney: 3
-    });
-    expect(parsed.workspaceId).toBe("default-workspace");
-    expect(parsed.possiblyRemovable).toBe(true);
-  });
+      blocksMoney: 3,
+    })
+    expect(parsed.workspaceId).toBe("default-workspace")
+    expect(parsed.possiblyRemovable).toBe(true)
+  })
 
   it("rejects out of range rating", () => {
     try {
-      validateUpdateWorkItemInput({ importance: 8 });
-      throw new Error("Expected validation to fail");
+      validateUpdateWorkItemInput({ importance: 8 as never })
+      throw new Error("Expected validation to fail")
     } catch (error) {
-      expect(error).toBeInstanceOf(DomainError);
+      expect(error).toBeInstanceOf(DomainError)
       expect((error as DomainError).code).toBe(
-        DomainErrorCode.INVALID_NUMERIC_RANGE
-      );
+        DomainErrorCode.INVALID_NUMERIC_RANGE,
+      )
     }
-  });
+  })
 
   it("rejects empty title update", () => {
     try {
-      validateUpdateWorkItemInput({ title: " " });
-      throw new Error("Expected validation to fail");
+      validateUpdateWorkItemInput({ title: " " })
+      throw new Error("Expected validation to fail")
     } catch (error) {
-      expect(error).toBeInstanceOf(DomainError);
-      expect((error as DomainError).code).toBe(DomainErrorCode.EMPTY_TITLE);
+      expect(error).toBeInstanceOf(DomainError)
+      expect((error as DomainError).code).toBe(DomainErrorCode.EMPTY_TITLE)
     }
-  });
-});
+  })
+})

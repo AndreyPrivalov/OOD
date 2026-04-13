@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const repository = {
   listTree: vi.fn(),
@@ -6,42 +6,42 @@ const repository = {
   update: vi.fn(),
   move: vi.fn(),
   deleteCascade: vi.fn(),
-  replaceWorkspaceTree: vi.fn()
-};
+  replaceWorkspaceTree: vi.fn(),
+}
 
 const { importWorkItemsFromGoogleSheet } = vi.hoisted(() => ({
-  importWorkItemsFromGoogleSheet: vi.fn()
-}));
+  importWorkItemsFromGoogleSheet: vi.fn(),
+}))
 
 vi.mock("../../../../../lib/repository", () => ({
-  getRepository: () => repository
-}));
+  getRepository: () => repository,
+}))
 
 vi.mock("../../../../../lib/google-sheet-import", () => ({
-  importWorkItemsFromGoogleSheet
-}));
+  importWorkItemsFromGoogleSheet,
+}))
 
-import { POST } from "./route";
+import { POST } from "./route"
 
 describe("POST /api/work-items/import/google-sheet", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-  });
+    vi.clearAllMocks()
+  })
 
   it("validates payload", async () => {
     const response = await POST(
       new Request("http://localhost/api/work-items/import/google-sheet", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ mode: "replace" })
-      })
-    );
-    const payload = await response.json();
+        body: JSON.stringify({ mode: "replace" }),
+      }),
+    )
+    const payload = await response.json()
 
-    expect(response.status).toBe(400);
-    expect(payload.error).toBe("INVALID_PAYLOAD");
-    expect(importWorkItemsFromGoogleSheet).not.toHaveBeenCalled();
-  });
+    expect(response.status).toBe(400)
+    expect(payload.error).toBe("INVALID_PAYLOAD")
+    expect(importWorkItemsFromGoogleSheet).not.toHaveBeenCalled()
+  })
 
   it("returns import result on success", async () => {
     importWorkItemsFromGoogleSheet.mockResolvedValueOnce({
@@ -55,8 +55,8 @@ describe("POST /api/work-items/import/google-sheet", () => {
       updated: 0,
       skipped: 0,
       errors: [],
-      actions: []
-    });
+      actions: [],
+    })
 
     const response = await POST(
       new Request("http://localhost/api/work-items/import/google-sheet", {
@@ -65,24 +65,24 @@ describe("POST /api/work-items/import/google-sheet", () => {
         body: JSON.stringify({
           sheetId: "sheet-1",
           mode: "replace",
-          dryRun: true
-        })
-      })
-    );
-    const payload = await response.json();
+          dryRun: true,
+        }),
+      }),
+    )
+    const payload = await response.json()
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(200)
     expect(importWorkItemsFromGoogleSheet).toHaveBeenCalledWith(
       {
         sheetId: "sheet-1",
         mode: "replace",
-        dryRun: true
+        dryRun: true,
       },
-      { repository }
-    );
+      { repository },
+    )
     expect(payload.data).toMatchObject({
       source: "csv",
-      dryRun: true
-    });
-  });
-});
+      dryRun: true,
+    })
+  })
+})

@@ -1,49 +1,49 @@
-import { describe, expect, it } from "vitest";
-import { DomainErrorCode } from "@ood/domain";
-import { PostgresWorkItemRepository } from "./repository";
+import { DomainErrorCode } from "@ood/domain"
+import { describe, expect, it } from "vitest"
+import { PostgresWorkItemRepository } from "./repository"
 
 type DbStubState = {
-  selectQueue: unknown[][];
-  updateCalls: number;
-};
+  selectQueue: unknown[][]
+  updateCalls: number
+}
 
-function createDbStub(state: DbStubState): any {
+function createDbStub(state: DbStubState) {
   function consumeSelectResult() {
-    return Promise.resolve(state.selectQueue.shift() ?? []);
+    return Promise.resolve(state.selectQueue.shift() ?? [])
   }
 
   return {
     select() {
       return {
         from() {
-          return this;
+          return this
         },
         where() {
-          return this;
+          return this
         },
         limit() {
-          return consumeSelectResult();
+          return consumeSelectResult()
         },
         orderBy() {
-          return consumeSelectResult();
-        }
-      };
+          return consumeSelectResult()
+        },
+      }
     },
     insert() {
       return {
-        values: async () => undefined
-      };
+        values: async () => undefined,
+      }
     },
     update() {
       return {
         set: () => ({
           where: async () => {
-            state.updateCalls += 1;
-          }
-        })
-      };
-    }
-  };
+            state.updateCalls += 1
+          },
+        }),
+      }
+    },
+  }
 }
 
 function row(partial: Record<string, unknown>) {
@@ -62,8 +62,8 @@ function row(partial: Record<string, unknown>) {
     solutionVariants: [],
     createdAt: new Date(),
     updatedAt: new Date(),
-    ...partial
-  };
+    ...partial,
+  }
 }
 
 describe("PostgresWorkItemRepository", () => {
@@ -71,17 +71,23 @@ describe("PostgresWorkItemRepository", () => {
     const state: DbStubState = {
       selectQueue: [
         [row({ id: "parent", workspaceId: "ws" })],
-        [{ id: "child" }]
+        [{ id: "child" }],
       ],
-      updateCalls: 0
-    };
-    const repo = new PostgresWorkItemRepository(createDbStub(state));
+      updateCalls: 0,
+    }
+    const repo = new PostgresWorkItemRepository(
+      createDbStub(state) as unknown as ConstructorParameters<
+        typeof PostgresWorkItemRepository
+      >[0],
+    )
 
-    await expect(repo.update("parent", { overcomplication: 3 })).rejects.toMatchObject({
-      code: DomainErrorCode.PARENT_RATINGS_READ_ONLY
-    });
-    expect(state.updateCalls).toBe(0);
-  });
+    await expect(
+      repo.update("parent", { overcomplication: 3 }),
+    ).rejects.toMatchObject({
+      code: DomainErrorCode.PARENT_RATINGS_READ_ONLY,
+    })
+    expect(state.updateCalls).toBe(0)
+  })
 
   it("listTree returns mandatory top-level score sums for every node", async () => {
     const state: DbStubState = {
@@ -94,7 +100,7 @@ describe("PostgresWorkItemRepository", () => {
             siblingOrder: 0,
             overcomplication: 5,
             importance: 5,
-            blocksMoney: 5
+            blocksMoney: 5,
           }),
           row({
             id: "leaf",
@@ -102,27 +108,31 @@ describe("PostgresWorkItemRepository", () => {
             siblingOrder: 0,
             overcomplication: 2,
             importance: null,
-            blocksMoney: 1
-          })
-        ]
+            blocksMoney: 1,
+          }),
+        ],
       ],
-      updateCalls: 0
-    };
-    const repo = new PostgresWorkItemRepository(createDbStub(state));
+      updateCalls: 0,
+    }
+    const repo = new PostgresWorkItemRepository(
+      createDbStub(state) as unknown as ConstructorParameters<
+        typeof PostgresWorkItemRepository
+      >[0],
+    )
 
-    const tree = await repo.listTree("ws");
-    const root = tree[0];
-    const leaf = root.children[0];
+    const tree = await repo.listTree("ws")
+    const root = tree[0]
+    const leaf = root.children[0]
 
     expect(root).toMatchObject({
       overcomplicationSum: 2,
       importanceSum: 0,
-      blocksMoneySum: 1
-    });
+      blocksMoneySum: 1,
+    })
     expect(leaf).toMatchObject({
       overcomplicationSum: 2,
       importanceSum: 0,
-      blocksMoneySum: 1
-    });
-  });
-});
+      blocksMoneySum: 1,
+    })
+  })
+})
