@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest"
-import {
-  FAST_AUTOSAVE_DELAY_MS,
-  LocalFirstRowQueue,
-  TEXT_AUTOSAVE_DELAY_MS,
-  resolveAutosaveDelayMs,
-} from "../../local-first-autosave"
+import { LocalFirstRowQueue } from "../../local-first-autosave"
 
 describe("local-first autosave queue", () => {
   it("keeps newest draft and does not apply stale ack", () => {
@@ -45,14 +40,16 @@ describe("local-first autosave queue", () => {
     expect(firstAck.nextRequest?.value).toBe("v3")
   })
 
-  it("uses slower debounce for text fields and fast debounce for click fields", () => {
-    expect(resolveAutosaveDelayMs(["title"])).toBe(TEXT_AUTOSAVE_DELAY_MS)
-    expect(resolveAutosaveDelayMs(["currentProblems"])).toBe(
-      TEXT_AUTOSAVE_DELAY_MS,
-    )
-    expect(resolveAutosaveDelayMs(["possiblyRemovable"])).toBe(
-      FAST_AUTOSAVE_DELAY_MS,
-    )
-    expect(resolveAutosaveDelayMs(["importance"])).toBe(FAST_AUTOSAVE_DELAY_MS)
+  it("can drop queued revision without affecting in-flight request", () => {
+    const queue = new LocalFirstRowQueue<string>()
+    queue.enqueue("v1")
+    expect(queue.startNext()?.revision).toBe(1)
+
+    queue.enqueue("v2")
+    queue.clearQueued()
+
+    const firstAck = queue.acknowledge(1)
+    expect(firstAck.nextRequest).toBeNull()
+    expect(queue.hasPending()).toBe(false)
   })
 })

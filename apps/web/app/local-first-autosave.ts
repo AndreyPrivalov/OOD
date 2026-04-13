@@ -70,6 +70,10 @@ export class LocalFirstRowQueue<T> {
     return this.startNext()
   }
 
+  clearQueued() {
+    this.queued = null
+  }
+
   getLastLocalRevision() {
     return this.lastLocalRevision
   }
@@ -90,27 +94,6 @@ export class LocalFirstRowQueue<T> {
     return this.hasInFlight() || this.hasQueued()
   }
 }
-
-export const TEXT_AUTOSAVE_DELAY_MS = 1000
-export const FAST_AUTOSAVE_DELAY_MS = 250
-
-export function resolveAutosaveDelayMs(
-  patchKeys: Array<keyof RowEditPatch>,
-): number {
-  if (
-    patchKeys.some(
-      (key) =>
-        key === "title" ||
-        key === "object" ||
-        key === "currentProblems" ||
-        key === "solutionVariants",
-    )
-  ) {
-    return TEXT_AUTOSAVE_DELAY_MS
-  }
-  return FAST_AUTOSAVE_DELAY_MS
-}
-
 export type RowEditPatch = {
   title?: string
   object?: string
