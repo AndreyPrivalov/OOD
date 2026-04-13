@@ -1,7 +1,10 @@
-import { NextResponse } from "next/server"
 import { z } from "zod"
 import { importWorkItemsFromGoogleSheet } from "../../../../../lib/google-sheet-import"
-import { jsonError } from "../../../../../lib/http"
+import {
+  jsonData,
+  jsonError,
+  jsonInvalidPayload,
+} from "../../../../../lib/http"
 import { getRepository } from "../../../../../lib/repository"
 
 const ImportGoogleSheetSchema = z
@@ -22,17 +25,14 @@ export async function POST(request: Request) {
     const body = await request.json()
     const parsed = ImportGoogleSheetSchema.safeParse(body)
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: "INVALID_PAYLOAD", details: parsed.error.flatten() },
-        { status: 400 },
-      )
+      return jsonInvalidPayload(parsed.error.flatten())
     }
 
     const repository = getRepository()
     const result = await importWorkItemsFromGoogleSheet(parsed.data, {
       repository,
     })
-    return NextResponse.json({ data: result }, { status: 200 })
+    return jsonData(result)
   } catch (error) {
     return jsonError(error)
   }

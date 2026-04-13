@@ -12,6 +12,7 @@ export type {
 export type { WorkItemId, WorkspaceId } from "./identifiers"
 export type {
   Rating,
+  RatingAggregateKey,
   RatingFieldKey,
   RatingTotals,
   WorkItemRatings,

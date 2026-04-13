@@ -10,6 +10,33 @@ export const ratingFieldKeys = [
 
 export type RatingFieldKey = (typeof ratingFieldKeys)[number]
 
+export const ratingAggregateKeyByField = {
+  overcomplication: "overcomplicationSum",
+  importance: "importanceSum",
+  blocksMoney: "blocksMoneySum",
+} as const satisfies Record<RatingFieldKey, string>
+
+export type RatingAggregateKey =
+  (typeof ratingAggregateKeyByField)[RatingFieldKey]
+
+export const ratingFieldDefinitions = [
+  {
+    key: "overcomplication",
+    aggregateKey: ratingAggregateKeyByField.overcomplication,
+  },
+  {
+    key: "importance",
+    aggregateKey: ratingAggregateKeyByField.importance,
+  },
+  {
+    key: "blocksMoney",
+    aggregateKey: ratingAggregateKeyByField.blocksMoney,
+  },
+] as const satisfies readonly {
+  key: RatingFieldKey
+  aggregateKey: RatingAggregateKey
+}[]
+
 export interface WorkItemRatings {
   overcomplication: Rating | null
   importance: Rating | null
@@ -33,20 +60,45 @@ export function emptyRatingTotals(): RatingTotals {
 export function ratingTotalsFromOwnRatings(
   ratings: WorkItemRatings,
 ): RatingTotals {
-  return {
-    overcomplicationSum: ratings.overcomplication ?? 0,
-    importanceSum: ratings.importance ?? 0,
-    blocksMoneySum: ratings.blocksMoney ?? 0,
+  const totals = emptyRatingTotals()
+
+  for (const field of ratingFieldKeys) {
+    totals[getRatingAggregateKey(field)] = getLeafRatingValue(ratings, field)
   }
+
+  return totals
 }
 
 export function addRatingTotals(
   left: RatingTotals,
   right: RatingTotals,
 ): RatingTotals {
-  return {
-    overcomplicationSum: left.overcomplicationSum + right.overcomplicationSum,
-    importanceSum: left.importanceSum + right.importanceSum,
-    blocksMoneySum: left.blocksMoneySum + right.blocksMoneySum,
+  const totals = emptyRatingTotals()
+
+  for (const field of ratingFieldKeys) {
+    const aggregateKey = getRatingAggregateKey(field)
+    totals[aggregateKey] = left[aggregateKey] + right[aggregateKey]
   }
+
+  return totals
+}
+
+export function getRatingAggregateKey(
+  field: RatingFieldKey,
+): RatingAggregateKey {
+  return ratingAggregateKeyByField[field]
+}
+
+export function getLeafRatingValue(
+  ratings: WorkItemRatings,
+  field: RatingFieldKey,
+): number {
+  return ratings[field] ?? 0
+}
+
+export function getParentAggregateValue(
+  totals: RatingTotals,
+  field: RatingFieldKey,
+): number {
+  return totals[getRatingAggregateKey(field)]
 }

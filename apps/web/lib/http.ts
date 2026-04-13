@@ -1,18 +1,38 @@
 import { DomainError, DomainErrorCode } from "@ood/domain"
 import { NextResponse } from "next/server"
 
+export function jsonData<T>(data: T, init?: ResponseInit) {
+  return NextResponse.json({ data }, init)
+}
+
+export function jsonInvalidPayload(details: unknown) {
+  return jsonErrorCode("INVALID_PAYLOAD", 400, { details })
+}
+
+export function jsonErrorCode(
+  error: string,
+  status: number,
+  extras?: { details?: unknown; message?: string },
+) {
+  return NextResponse.json(
+    {
+      error,
+      ...(extras?.message ? { message: extras.message } : {}),
+      ...(extras?.details === undefined ? {} : { details: extras.details }),
+    },
+    { status },
+  )
+}
+
 export function jsonError(error: unknown) {
   if (error instanceof DomainError) {
-    return NextResponse.json(
-      { error: error.code, message: error.message },
-      { status: mapDomainErrorToStatus(error.code) },
-    )
+    return jsonErrorCode(error.code, mapDomainErrorToStatus(error.code), {
+      message: error.message,
+    })
   }
+
   const message = error instanceof Error ? error.message : "Unexpected error"
-  return NextResponse.json(
-    { error: "INTERNAL_ERROR", message },
-    { status: 500 },
-  )
+  return jsonErrorCode("INTERNAL_ERROR", 500, { message })
 }
 
 function mapDomainErrorToStatus(code: DomainErrorCode): number {

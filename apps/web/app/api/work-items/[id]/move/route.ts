@@ -1,6 +1,9 @@
 import { MoveWorkItemInputSchema, validateMoveWorkItemInput } from "@ood/domain"
-import { NextResponse } from "next/server"
-import { jsonError } from "../../../../../lib/http"
+import {
+  jsonData,
+  jsonError,
+  jsonInvalidPayload,
+} from "../../../../../lib/http"
 import { getRepository } from "../../../../../lib/repository"
 
 export async function POST(
@@ -12,15 +15,12 @@ export async function POST(
     const body = await request.json()
     const parsed = MoveWorkItemInputSchema.safeParse(body)
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: "INVALID_PAYLOAD", details: parsed.error.flatten() },
-        { status: 400 },
-      )
+      return jsonInvalidPayload(parsed.error.flatten())
     }
     const move = validateMoveWorkItemInput(parsed.data)
     const repository = getRepository()
     await repository.move(id, move)
-    return NextResponse.json({ data: { id, ...move } })
+    return jsonData({ id, ...move })
   } catch (error) {
     return jsonError(error)
   }

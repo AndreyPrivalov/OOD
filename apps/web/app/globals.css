@@ -127,6 +127,18 @@ button:focus-visible {
   line-height: 1.05;
 }
 
+.workspace-context {
+  margin: 0;
+  padding-left: calc(
+    var(--frame-x) +
+    var(--left-gutter-width) +
+    var(--content-start-x)
+  );
+  color: var(--muted);
+  font-size: var(--text-secondary);
+  line-height: 1.35;
+}
+
 .works-title {
   padding-left: calc(
     var(--frame-x) +
@@ -188,6 +200,87 @@ button:focus-visible {
   margin: 0;
   font-size: var(--text-secondary);
   line-height: 1.35;
+}
+
+.workspace-panel {
+  display: grid;
+  gap: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  background: #fcfbf9;
+}
+
+.workspace-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.workspace-panel-copy {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.workspace-panel-title {
+  font-size: 24px;
+  line-height: 1.15;
+}
+
+.workspace-panel-text,
+.workspace-panel-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.workspace-create-form {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.workspace-create-input {
+  min-width: min(320px, 100%);
+}
+
+.workspace-create-button,
+.workspace-tab {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--fg);
+}
+
+.workspace-create-button {
+  height: var(--control-height);
+  padding: 0 16px;
+}
+
+.workspace-tabs {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.workspace-tab {
+  min-height: 40px;
+  padding: 8px 14px;
+  text-align: left;
+}
+
+.workspace-tab.is-active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: #f4f7f5;
+}
+
+.workspace-tab-name {
+  display: block;
 }
 
 .work-table-wrap {
