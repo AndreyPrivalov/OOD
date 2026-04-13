@@ -170,6 +170,8 @@ The default save behavior should be based on stable end-of-edit triggers such as
 
 The system should avoid aggressive continuous autosave queues when a simpler end-of-edit save can deliver a more predictable result.
 
+The system must not persist placeholder rows with an empty saved `title` just to support focus or creation flow. If the UI needs a temporary draft row, that draft must remain local until it can be saved with a valid non-empty `title`.
+
 ## 9. Architectural Direction
 
 ### Frontend
@@ -209,6 +211,16 @@ The cleanup phase must remove or phase out:
 - legacy compatibility aliases in active API responses;
 - non-test in-memory repository fallbacks;
 - redundant duplicate documentation roots.
+
+### Approved Refactoring Goals
+
+The current cleanup phase explicitly authorizes the following refactoring goals:
+
+- remove active `import/export` product surfaces that are outside the cleaned core, including Google Sheets import and JSON/CSV export routes, tests, and supporting orchestration;
+- enforce the `title` invariant across UI draft handling, domain validation, repository logic, and database constraints so that an empty `title` can never be persisted as a saved row;
+- collapse the client/server tree contract to one canonical nested response shape and remove fallback normalization paths that silently accept alternative or legacy payload formats;
+- reduce oversized orchestration modules by separating tree data loading, inline editing state, and drag/drop overlay mechanics into smaller modules with clear ownership;
+- keep shared tree presentation in `packages/ui`, but move app-specific orchestration and contract-recovery logic out of the shared UI layer.
 
 ## 10. Technology Decisions
 
