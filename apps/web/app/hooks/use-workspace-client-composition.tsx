@@ -1,6 +1,10 @@
 "use client"
 
-import type { WorkspaceTreeTableProps } from "@ood/ui"
+import {
+  WorkspaceRatingCell,
+  type WorkspaceTreeTableProps,
+  workspaceRatingFieldConfigs,
+} from "@ood/ui"
 import {
   type KeyboardEvent,
   useCallback,
@@ -26,10 +30,6 @@ import {
   buildEditState,
   useWorkItemEditing,
 } from "../work-item-editing"
-import {
-  WorkspaceRatingCell,
-  workspaceRatingFieldConfigs,
-} from "../workspace-ratings"
 import { useWorkspaceContext } from "../workspaces/use-workspace-context"
 import { WorkspaceSwitcher } from "../workspaces/workspace-switcher"
 import { useWorkspaceDragDrop } from "./use-workspace-drag-drop"
