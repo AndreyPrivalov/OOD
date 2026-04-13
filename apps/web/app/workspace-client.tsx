@@ -1,6 +1,11 @@
 "use client"
 
 import {
+  ViewportScrollbar,
+  WorkspaceControlPanel,
+  WorkspaceTitlePanel,
+} from "@ood/ui"
+import {
   type KeyboardEvent,
   useCallback,
   useEffect,
@@ -8,12 +13,7 @@ import {
   useRef,
   useState,
 } from "react"
-import { ViewportScrollbar } from "./components/tree/viewport-scrollbar"
 import { WorkspaceTreeTable } from "./components/tree/workspace-tree-table"
-import {
-  WorkspaceControlPanel,
-  WorkspaceTitlePanel,
-} from "./components/workspace/workspace-panels"
 import { useWorkspaceDragDrop } from "./hooks/use-workspace-drag-drop"
 import {
   useTableFrameConstants,
@@ -31,13 +31,14 @@ import {
   buildInsertLanes,
   withLaneAnchors,
 } from "./tree-interactions"
+import { patchWorkItem } from "./work-item-client"
 import {
   type EditState,
   buildEditState,
   useWorkItemEditing,
-} from "./use-work-item-editing"
-import { patchWorkItem } from "./work-item-client"
+} from "./work-item-editing"
 import { useWorkspaceContext } from "./workspaces/use-workspace-context"
+import { WorkspaceSwitcher } from "./workspaces/workspace-switcher"
 
 const DEV_METRICS_SAMPLE_LIMIT = 40
 
@@ -343,10 +344,24 @@ export function WorkspaceClient() {
           isWorkspaceLoading={isWorkspaceLoading}
           workspaceErrorText={workspaceErrorText}
           workspaces={workspaces}
-          onCreateWorkspace={handleCreateWorkspace}
-          onOpenWorkspace={handleOpenWorkspace}
+          renderSwitcher={({
+            currentWorkspaceId,
+            isCreatingWorkspace,
+            isWorkspaceLoading,
+            workspaces,
+          }) => (
+            <WorkspaceSwitcher
+              currentWorkspaceId={currentWorkspaceId}
+              isCreating={isCreatingWorkspace}
+              isLoading={isWorkspaceLoading}
+              onCreateWorkspace={handleCreateWorkspace}
+              onOpenWorkspace={handleOpenWorkspace}
+              workspaces={workspaces}
+            />
+          )}
         />
         <WorkspaceTitlePanel
+          title="Работы"
           currentWorkspaceName={currentWorkspaceName}
           errorText={errorText}
         />

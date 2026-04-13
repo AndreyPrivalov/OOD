@@ -9,6 +9,7 @@ export {
   type AcknowledgeResult,
   type RevisionedValue,
 } from "./save-queue"
+export { useWorkItemEditing } from "./use-work-item-editing"
 export type {
   EditState,
   EditableWorkItemPatch,

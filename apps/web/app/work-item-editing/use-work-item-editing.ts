@@ -1,23 +1,20 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { buildEditState, isSameEditState } from "./edit-state"
 import {
-  type EditState,
-  type EditableWorkItemPatch,
-  type EditableWorkItemRow,
-  LocalFirstRowQueue,
-  type RevisionedValue,
-  type RowEditMeta,
-  type RowEditPatch,
-  buildEditState,
-  buildPatchPayload,
   buildRowPatchFromServer,
-  isSameEditState,
   isServerPatchEchoingPayload,
-} from "./work-item-editing"
-
-export type { EditState, EditableWorkItemPatch, EditableWorkItemRow }
-export { buildEditState }
+} from "./reconciliation"
+import { buildPatchPayload } from "./save-payload"
+import { LocalFirstRowQueue, type RevisionedValue } from "./save-queue"
+import type {
+  EditState,
+  EditableWorkItemPatch,
+  EditableWorkItemRow,
+  RowEditMeta,
+  RowEditPatch,
+} from "./types"
 
 type UseWorkItemEditingOptions<Row extends EditableWorkItemRow> = {
   isDev: boolean

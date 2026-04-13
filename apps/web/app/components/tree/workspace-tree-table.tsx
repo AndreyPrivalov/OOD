@@ -10,7 +10,7 @@ import {
 import type { TableColumnWidths } from "../../hooks/use-workspace-layout"
 import type { FlatRow } from "../../state/workspace-tree-state"
 import type { DropIntent, OverlayIndicator } from "../../tree-interactions"
-import type { EditState } from "../../use-work-item-editing"
+import type { EditState } from "../../work-item-editing"
 import {
   WorkspaceRatingCell,
   workspaceRatingFieldConfigs,
