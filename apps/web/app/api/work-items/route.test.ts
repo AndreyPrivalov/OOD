@@ -76,7 +76,7 @@ describe("GET /api/work-items contract", () => {
     })
   })
 
-  it("keeps legacy aggregate values instead of overriding them with zero", async () => {
+  it("ignores legacy aggregate aliases in the API response", async () => {
     repository.listTree.mockResolvedValueOnce([
       {
         id: "root",
@@ -112,10 +112,14 @@ describe("GET /api/work-items contract", () => {
 
     expect(response.status).toBe(200)
     expect(payload.data[0]).toMatchObject({
-      overcomplicationSum: 4,
-      importanceSum: 3,
-      blocksMoneySum: 2,
+      overcomplicationSum: 0,
+      importanceSum: 0,
+      blocksMoneySum: 0,
     })
+    expect(payload.data[0]).not.toHaveProperty("overcomplication_sum")
+    expect(payload.data[0]).not.toHaveProperty("importance_sum")
+    expect(payload.data[0]).not.toHaveProperty("blocks_money_sum")
+    expect(payload.data[0]).not.toHaveProperty("aggregates")
   })
 
   it("accepts and returns possiblyRemovable for create contract", async () => {
@@ -132,6 +136,10 @@ describe("GET /api/work-items contract", () => {
       blocksMoney: null,
       currentProblems: [],
       solutionVariants: [],
+      overcomplication_sum: 5,
+      aggregates: {
+        overcomplicationSum: 5,
+      },
     })
 
     const response = await POST(
@@ -159,5 +167,7 @@ describe("GET /api/work-items contract", () => {
       id: "new-item",
       possiblyRemovable: true,
     })
+    expect(payload.data).not.toHaveProperty("overcomplication_sum")
+    expect(payload.data).not.toHaveProperty("aggregates")
   })
 })

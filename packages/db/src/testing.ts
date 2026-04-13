@@ -7,6 +7,7 @@ import {
   type UpdateWorkItemInput,
   type WorkItem,
   type WorkTreeReadNode,
+  type Workspace,
   type WorkspaceId,
   assertNoCycle,
   buildTree,
@@ -16,13 +17,20 @@ import type {
   ReplaceWorkspaceTreeInput,
   WorkItemRepository,
 } from "./repository"
+import type {
+  CreateWorkspaceInput,
+  WorkspaceRepository,
+} from "./workspace-repository"
+import { DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME } from "./workspace-store"
 
 type InMemoryStore = {
   byWorkspace: Map<WorkspaceId, WorkItem[]>
+  workspaces: Map<WorkspaceId, Workspace>
 }
 
 const memoryStore: InMemoryStore = {
   byWorkspace: new Map(),
+  workspaces: new Map(),
 }
 
 function clampIndex(index: number, maxLength: number): number {
@@ -40,6 +48,7 @@ function hasRatingUpdate(patch: UpdateWorkItemInput): boolean {
 }
 
 function getWorkspaceItems(workspaceId: WorkspaceId): WorkItem[] {
+  ensureWorkspace(workspaceId)
   const items = memoryStore.byWorkspace.get(workspaceId)
   if (items) {
     return items
@@ -57,6 +66,26 @@ function findItemById(id: string): WorkItem | undefined {
     }
   }
   return undefined
+}
+
+function ensureWorkspace(
+  workspaceId: WorkspaceId,
+  name = DEFAULT_WORKSPACE_NAME,
+): Workspace {
+  const existing = memoryStore.workspaces.get(workspaceId)
+  if (existing) {
+    return existing
+  }
+
+  const now = new Date()
+  const created: Workspace = {
+    id: workspaceId,
+    name,
+    createdAt: now,
+    updatedAt: now,
+  }
+  memoryStore.workspaces.set(workspaceId, created)
+  return created
 }
 
 function descendantsFor(items: WorkItem[]): Map<string, Set<string>> {
@@ -291,6 +320,23 @@ export class InMemoryWorkItemRepository implements WorkItemRepository {
   }
 }
 
+export class InMemoryWorkspaceRepository implements WorkspaceRepository {
+  async list(): Promise<Workspace[]> {
+    ensureWorkspace(DEFAULT_WORKSPACE_ID)
+    return Array.from(memoryStore.workspaces.values()).sort(
+      (left, right) =>
+        left.createdAt.getTime() - right.createdAt.getTime() ||
+        left.id.localeCompare(right.id),
+    )
+  }
+
+  async create(input: CreateWorkspaceInput): Promise<Workspace> {
+    const workspace = ensureWorkspace(randomUUID(), input.name)
+    return { ...workspace }
+  }
+}
+
 export function __resetInMemoryStoreForTests() {
   memoryStore.byWorkspace.clear()
+  memoryStore.workspaces.clear()
 }

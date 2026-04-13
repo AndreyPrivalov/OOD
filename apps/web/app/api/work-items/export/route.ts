@@ -1,7 +1,8 @@
 import type { WorkTreeReadNode } from "@ood/domain"
 import { NextResponse } from "next/server"
-import { jsonError } from "../../../../lib/http"
+import { jsonData, jsonError, jsonErrorCode } from "../../../../lib/http"
 import { getRepository } from "../../../../lib/repository"
+import { serializeWorkTree } from "../contracts"
 
 type ExportRow = {
   id: string
@@ -60,10 +61,9 @@ export async function GET(request: Request) {
     const format = url.searchParams.get("format") ?? "json"
 
     if (format !== "json" && format !== "csv") {
-      return NextResponse.json(
-        { error: "INVALID_FORMAT", message: "format must be json or csv" },
-        { status: 400 },
-      )
+      return jsonErrorCode("INVALID_FORMAT", 400, {
+        message: "format must be json or csv",
+      })
     }
 
     const repository = getRepository()
@@ -81,12 +81,10 @@ export async function GET(request: Request) {
       })
     }
 
-    return NextResponse.json({
-      data: {
-        workspaceId,
-        rows,
-        tree,
-      },
+    return jsonData({
+      workspaceId,
+      rows,
+      tree: serializeWorkTree(tree),
     })
   } catch (error) {
     return jsonError(error)

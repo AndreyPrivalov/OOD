@@ -2,9 +2,9 @@ import {
   UpdateWorkItemInputSchema,
   validateUpdateWorkItemInput,
 } from "@ood/domain"
-import { NextResponse } from "next/server"
-import { jsonError } from "../../../../lib/http"
+import { jsonData, jsonError, jsonInvalidPayload } from "../../../../lib/http"
 import { getRepository } from "../../../../lib/repository"
+import { serializeWorkItem } from "../contracts"
 
 export async function PATCH(
   request: Request,
@@ -15,15 +15,12 @@ export async function PATCH(
     const body = await request.json()
     const parsed = UpdateWorkItemInputSchema.safeParse(body)
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: "INVALID_PAYLOAD", details: parsed.error.flatten() },
-        { status: 400 },
-      )
+      return jsonInvalidPayload(parsed.error.flatten())
     }
     const patch = validateUpdateWorkItemInput(parsed.data)
     const repository = getRepository()
     const updated = await repository.update(id, patch)
-    return NextResponse.json({ data: updated })
+    return jsonData(serializeWorkItem(updated))
   } catch (error) {
     return jsonError(error)
   }
@@ -37,7 +34,7 @@ export async function DELETE(
     const { id } = await context.params
     const repository = getRepository()
     await repository.deleteCascade(id)
-    return NextResponse.json({ data: { id, mode: "cascade" as const } })
+    return jsonData({ id, mode: "cascade" as const })
   } catch (error) {
     return jsonError(error)
   }

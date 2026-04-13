@@ -30,6 +30,8 @@ import {
   resolveDropIntentAtPoint,
   withLaneAnchors,
 } from "./workspace-interactions"
+import { useWorkspaceContext } from "./workspaces/use-workspace-context"
+import { WorkspaceSwitcher } from "./workspaces/workspace-switcher"
 
 type WorkTreeNode = {
   id: string
@@ -47,17 +49,6 @@ type WorkTreeNode = {
   overcomplicationSum?: number
   importanceSum?: number
   blocksMoneySum?: number
-  overcomplication_sum?: number
-  importance_sum?: number
-  blocks_money_sum?: number
-  aggregates?: {
-    overcomplicationSum?: number
-    importanceSum?: number
-    blocksMoneySum?: number
-    overcomplication_sum?: number
-    importance_sum?: number
-    blocks_money_sum?: number
-  }
   children: WorkTreeNode[]
 }
 
@@ -414,10 +405,6 @@ function normalizeTreeData(input: unknown): WorkTreeNode[] {
       overcomplicationSum: row.overcomplicationSum,
       importanceSum: row.importanceSum,
       blocksMoneySum: row.blocksMoneySum,
-      overcomplication_sum: row.overcomplication_sum,
-      importance_sum: row.importance_sum,
-      blocks_money_sum: row.blocks_money_sum,
-      aggregates: row.aggregates,
       children: [],
     })
   }
@@ -466,29 +453,9 @@ function getAggregateFromBackend(
   row: FlatRow,
   key: "overcomplicationSum" | "importanceSum" | "blocksMoneySum",
 ): number | null {
-  const candidates: unknown[] = [row[key], row.aggregates?.[key]]
-  if (key === "overcomplicationSum") {
-    candidates.push(
-      row.overcomplication_sum,
-      row.aggregates?.overcomplication_sum,
-    )
-  }
-  if (key === "importanceSum") {
-    candidates.push(row.importance_sum, row.aggregates?.importance_sum)
-  }
-  if (key === "blocksMoneySum") {
-    candidates.push(row.blocks_money_sum, row.aggregates?.blocks_money_sum)
-  }
-  for (const value of candidates) {
-    if (typeof value === "number" && Number.isFinite(value)) {
-      return value
-    }
-    if (typeof value === "string" && value.trim().length > 0) {
-      const parsed = Number(value)
-      if (Number.isFinite(parsed)) {
-        return parsed
-      }
-    }
+  const value = row[key]
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value
   }
   return null
 }
@@ -569,10 +536,6 @@ function makeOptimisticNode(input: Partial<WorkTreeNode>): WorkTreeNode | null {
     overcomplicationSum: input.overcomplicationSum,
     importanceSum: input.importanceSum,
     blocksMoneySum: input.blocksMoneySum,
-    overcomplication_sum: input.overcomplication_sum,
-    importance_sum: input.importance_sum,
-    blocks_money_sum: input.blocks_money_sum,
-    aggregates: input.aggregates,
     children: [],
   }
 }
@@ -631,6 +594,16 @@ function applyOptimisticMove(
 
 export function WorkspaceClient() {
   const isDev = process.env.NODE_ENV !== "production"
+  const {
+    workspaces,
+    currentWorkspace,
+    currentWorkspaceId,
+    errorText: workspaceErrorText,
+    isCreating: isCreatingWorkspace,
+    isLoading: isWorkspaceLoading,
+    createWorkspace,
+    openWorkspace,
+  } = useWorkspaceContext()
   const [tree, setTree] = useState<WorkTreeNode[]>([])
   const [edits, setEdits] = useState<Record<string, EditState>>({})
   const [errorText, setErrorText] = useState("")
@@ -825,12 +798,17 @@ export function WorkspaceClient() {
 
   const refreshTree = useCallback(
     async (options?: { silent?: boolean }) => {
+      if (!currentWorkspaceId) {
+        setTree([])
+        setIsLoading(false)
+        return
+      }
       if (!options?.silent) {
         setIsLoading(true)
       }
       try {
         const response = await fetch(
-          `/api/work-items?workspaceId=${encodeURIComponent(DEFAULT_WORKSPACE_ID)}`,
+          `/api/work-items?workspaceId=${encodeURIComponent(currentWorkspaceId)}`,
           { cache: "no-store" },
         )
         const json = await response.json()
@@ -853,7 +831,7 @@ export function WorkspaceClient() {
         }
       }
     },
-    [isDev],
+    [currentWorkspaceId, isDev],
   )
 
   useEffect(() => {
@@ -1096,12 +1074,16 @@ export function WorkspaceClient() {
     parentId: string | null,
     targetIndex: number,
   ) {
+    if (!currentWorkspaceId) {
+      return
+    }
+
     try {
       const response = await fetch("/api/work-items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          workspaceId: DEFAULT_WORKSPACE_ID,
+          workspaceId: currentWorkspaceId,
           title: "",
           object: null,
           parentId,
@@ -1344,6 +1326,17 @@ export function WorkspaceClient() {
   function flushRowAutosave(id: string) {
     clearAutosaveTimer(id)
     startQueuedSave(id)
+  }
+
+  function flushAllAutosaves() {
+    const rowIds = new Set<string>([
+      ...autosaveTimersRef.current.keys(),
+      ...rowQueuesRef.current.keys(),
+    ])
+
+    for (const rowId of rowIds) {
+      flushRowAutosave(rowId)
+    }
   }
 
   useEffect(() => {
@@ -1686,12 +1679,45 @@ export function WorkspaceClient() {
     autoGrowTextarea(node)
   }
 
+  const currentWorkspaceName = currentWorkspace?.name ?? "Рабочее пространство"
+
+  function handleOpenWorkspace(workspaceId: string) {
+    if (workspaceId === currentWorkspaceId) {
+      return
+    }
+
+    flushAllAutosaves()
+    setErrorText("")
+    openWorkspace(workspaceId)
+  }
+
+  async function handleCreateWorkspace(name: string) {
+    flushAllAutosaves()
+    setErrorText("")
+    await createWorkspace(name)
+  }
+
   return (
     <main>
       <div className="workspace">
         <section className="section">
+          <WorkspaceSwitcher
+            currentWorkspaceId={currentWorkspaceId}
+            isCreating={isCreatingWorkspace}
+            isLoading={isWorkspaceLoading}
+            onCreateWorkspace={handleCreateWorkspace}
+            onOpenWorkspace={handleOpenWorkspace}
+            workspaces={workspaces}
+          />
+          {workspaceErrorText ? (
+            <p className="error-text">{workspaceErrorText}</p>
+          ) : null}
+        </section>
+
+        <section className="section">
           <header className="section-head">
             <h1 className="works-title">Работы</h1>
+            <p className="workspace-context">{currentWorkspaceName}</p>
           </header>
           {errorText ? <p className="error-text">{errorText}</p> : null}
         </section>

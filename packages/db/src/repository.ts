@@ -13,7 +13,8 @@ import {
 } from "@ood/domain"
 import { and, asc, eq, isNull, ne, sql } from "drizzle-orm"
 import { getDb } from "./client"
-import { workItems, workspaces } from "./schema"
+import { workItems } from "./schema"
+import { ensureWorkspace } from "./workspace-store"
 
 export interface WorkItemRepository {
   listTree(workspaceId: WorkspaceId): Promise<WorkTreeReadNode[]>
@@ -93,21 +94,6 @@ function siblingFilter(workspaceId: string, parentId: string | null) {
     eq(workItems.workspaceId, workspaceId),
     eq(workItems.parentId, parentId),
   )
-}
-
-async function ensureWorkspace(db: DbExecutor, workspaceId: string) {
-  const existing = await db
-    .select({ id: workspaces.id })
-    .from(workspaces)
-    .where(eq(workspaces.id, workspaceId))
-    .limit(1)
-  if (existing.length > 0) {
-    return
-  }
-  await db.insert(workspaces).values({
-    id: workspaceId,
-    name: "Default workspace",
-  })
 }
 
 export class PostgresWorkItemRepository implements WorkItemRepository {

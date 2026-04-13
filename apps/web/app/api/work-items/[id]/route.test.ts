@@ -13,7 +13,7 @@ vi.mock("../../../../lib/repository", () => ({
   getRepository: () => repository,
 }))
 
-import { PATCH } from "./route"
+import { DELETE, PATCH } from "./route"
 
 describe("PATCH /api/work-items/[id] contract", () => {
   beforeEach(() => {
@@ -92,6 +92,7 @@ describe("PATCH /api/work-items/[id] contract", () => {
       overcomplication: null,
       importance: null,
       blocksMoney: null,
+      overcomplication_sum: 4,
       currentProblems: ["p1", "p2"],
       solutionVariants: ["s1"],
     })
@@ -126,6 +127,26 @@ describe("PATCH /api/work-items/[id] contract", () => {
       object: "Updated object",
       currentProblems: ["p1", "p2"],
       solutionVariants: ["s1"],
+    })
+    expect(payload.data).not.toHaveProperty("overcomplication_sum")
+  })
+
+  it("returns canonical delete response", async () => {
+    const response = await DELETE(
+      new Request("http://localhost/api/work-items/item-3", {
+        method: "DELETE",
+      }),
+      { params: Promise.resolve({ id: "item-3" }) },
+    )
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(repository.deleteCascade).toHaveBeenCalledWith("item-3")
+    expect(payload).toEqual({
+      data: {
+        id: "item-3",
+        mode: "cascade",
+      },
     })
   })
 })
