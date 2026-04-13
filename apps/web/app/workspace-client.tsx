@@ -26,17 +26,17 @@ import {
   patchTreeRow,
 } from "./state/workspace-tree-state"
 import {
+  type FlatRowLike,
+  type OverlayIndicator,
+  buildInsertLanes,
+  withLaneAnchors,
+} from "./tree-interactions"
+import {
   type EditState,
   buildEditState,
   useWorkItemEditing,
 } from "./use-work-item-editing"
 import { patchWorkItem } from "./work-item-client"
-import {
-  type FlatRowLike,
-  type OverlayIndicator,
-  buildInsertLanes,
-  withLaneAnchors,
-} from "./workspace-interactions"
 import { useWorkspaceContext } from "./workspaces/use-workspace-context"
 
 const DEV_METRICS_SAMPLE_LIMIT = 40

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { LocalFirstRowQueue } from "../../local-first-autosave"
+import { LocalFirstRowQueue } from "./save-queue"
 
 describe("local-first autosave queue", () => {
   it("keeps newest draft and does not apply stale ack", () => {

@@ -9,7 +9,7 @@ import {
   useState,
 } from "react"
 import type { FlatRow } from "../state/workspace-tree-state"
-import type { RowAnchor } from "../workspace-interactions"
+import type { RowAnchor } from "../tree-interactions"
 
 type TextEditLike = {
   title: string

@@ -9,8 +9,8 @@ import {
 } from "react"
 import type { TableColumnWidths } from "../../hooks/use-workspace-layout"
 import type { FlatRow } from "../../state/workspace-tree-state"
+import type { DropIntent, OverlayIndicator } from "../../tree-interactions"
 import type { EditState } from "../../use-work-item-editing"
-import type { DropIntent, OverlayIndicator } from "../../workspace-interactions"
 import {
   WorkspaceRatingCell,
   workspaceRatingFieldConfigs,

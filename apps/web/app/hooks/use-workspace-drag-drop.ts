@@ -14,7 +14,7 @@ import {
   type InteractionMode,
   isSameDropIntent,
   resolveDropIntentAtPoint,
-} from "../workspace-interactions"
+} from "../tree-interactions"
 
 type PointerDragState = {
   activeId: string
