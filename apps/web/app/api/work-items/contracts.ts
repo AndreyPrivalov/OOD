@@ -24,12 +24,45 @@ export type SerializedWorkTreeNode = SerializedWorkItem & {
   children: SerializedWorkTreeNode[]
 }
 
-type WorkItemContractInput = Omit<WorkItem, "createdAt" | "updatedAt"> & {
-  createdAt?: Date
-  updatedAt?: Date
-}
+type WorkItemContractInput = Pick<
+  WorkItem,
+  | "id"
+  | "workspaceId"
+  | "title"
+  | "object"
+  | "possiblyRemovable"
+  | "parentId"
+  | "siblingOrder"
+  | "overcomplication"
+  | "importance"
+  | "blocksMoney"
+  | "currentProblems"
+  | "solutionVariants"
+  | "createdAt"
+  | "updatedAt"
+>
 
-type WorkTreeContractInput = Omit<WorkTreeReadNode, "createdAt" | "updatedAt">
+type WorkTreeContractInput = Pick<
+  WorkTreeReadNode,
+  | "id"
+  | "workspaceId"
+  | "title"
+  | "object"
+  | "possiblyRemovable"
+  | "parentId"
+  | "siblingOrder"
+  | "overcomplication"
+  | "importance"
+  | "blocksMoney"
+  | "currentProblems"
+  | "solutionVariants"
+  | "createdAt"
+  | "updatedAt"
+  | "overcomplicationSum"
+  | "importanceSum"
+  | "blocksMoneySum"
+  | "children"
+>
 
 export function serializeWorkItem(
   item: WorkItemContractInput,
@@ -47,22 +80,20 @@ export function serializeWorkItem(
     blocksMoney: item.blocksMoney,
     currentProblems: item.currentProblems,
     solutionVariants: item.solutionVariants,
-    ...(item.createdAt instanceof Date ? { createdAt: item.createdAt } : {}),
-    ...(item.updatedAt instanceof Date ? { updatedAt: item.updatedAt } : {}),
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
   }
 }
 
 export function serializeWorkTreeNode(
   item: WorkTreeContractInput,
 ): SerializedWorkTreeNode {
-  const children = item.children.map(serializeWorkTreeNode)
-
   return {
     ...serializeWorkItem(item),
     overcomplicationSum: item.overcomplicationSum,
     importanceSum: item.importanceSum,
     blocksMoneySum: item.blocksMoneySum,
-    children,
+    children: item.children.map(serializeWorkTreeNode),
   }
 }
 

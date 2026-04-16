@@ -75,62 +75,49 @@ export function mapWorkItemErrorText(
   return "Не удалось выполнить действие. Повторите попытку."
 }
 
+function isStringArray(input: unknown): input is string[] {
+  return Array.isArray(input) && input.every((item) => typeof item === "string")
+}
+
+function isWorkTreeNode(input: unknown): input is WorkTreeNode {
+  if (!input || typeof input !== "object") {
+    return false
+  }
+  const node = input as Partial<WorkTreeNode>
+  return (
+    typeof node.id === "string" &&
+    typeof node.workspaceId === "string" &&
+    typeof node.title === "string" &&
+    (typeof node.object === "string" || node.object === null) &&
+    typeof node.possiblyRemovable === "boolean" &&
+    (typeof node.parentId === "string" || node.parentId === null) &&
+    typeof node.siblingOrder === "number" &&
+    Number.isFinite(node.siblingOrder) &&
+    (typeof node.overcomplication === "number" ||
+      node.overcomplication === null) &&
+    (typeof node.importance === "number" || node.importance === null) &&
+    (typeof node.blocksMoney === "number" || node.blocksMoney === null) &&
+    isStringArray(node.currentProblems) &&
+    isStringArray(node.solutionVariants) &&
+    (typeof node.overcomplicationSum === "number" ||
+      node.overcomplicationSum === undefined) &&
+    (typeof node.importanceSum === "number" ||
+      node.importanceSum === undefined) &&
+    (typeof node.blocksMoneySum === "number" ||
+      node.blocksMoneySum === undefined) &&
+    Array.isArray(node.children) &&
+    node.children.every(isWorkTreeNode)
+  )
+}
+
 export function normalizeTreeData(input: unknown): WorkTreeNode[] {
   if (!Array.isArray(input)) {
     return []
   }
-  const raw = input as Array<Partial<WorkTreeNode>>
-  const hasNestedChildren = raw.some(
-    (node) => Array.isArray(node.children) && node.children.length > 0,
-  )
-  if (hasNestedChildren) {
-    return raw as WorkTreeNode[]
+  if (!input.every(isWorkTreeNode)) {
+    return []
   }
-
-  const byId = new Map<string, WorkTreeNode>()
-  for (const row of raw) {
-    if (!row || typeof row.id !== "string") continue
-    byId.set(row.id, {
-      id: row.id,
-      workspaceId: row.workspaceId ?? DEFAULT_WORKSPACE_ID,
-      title: row.title ?? "",
-      object: row.object ?? null,
-      possiblyRemovable: row.possiblyRemovable ?? false,
-      parentId: row.parentId ?? null,
-      siblingOrder: row.siblingOrder ?? 0,
-      overcomplication: row.overcomplication ?? null,
-      importance: row.importance ?? null,
-      blocksMoney: row.blocksMoney ?? null,
-      currentProblems: Array.isArray(row.currentProblems)
-        ? row.currentProblems
-        : [],
-      solutionVariants: Array.isArray(row.solutionVariants)
-        ? row.solutionVariants
-        : [],
-      overcomplicationSum: row.overcomplicationSum,
-      importanceSum: row.importanceSum,
-      blocksMoneySum: row.blocksMoneySum,
-      children: [],
-    })
-  }
-
-  const roots: WorkTreeNode[] = []
-  for (const node of byId.values()) {
-    if (!node.parentId || !byId.has(node.parentId)) {
-      roots.push(node)
-      continue
-    }
-    byId.get(node.parentId)?.children.push(node)
-  }
-
-  const sortRecursively = (nodes: WorkTreeNode[]) => {
-    nodes.sort((a, b) => a.siblingOrder - b.siblingOrder)
-    for (const node of nodes) {
-      sortRecursively(node.children)
-    }
-  }
-  sortRecursively(roots)
-  return roots
+  return input
 }
 
 export function patchTreeRow(
