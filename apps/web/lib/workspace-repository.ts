@@ -5,8 +5,23 @@ declare global {
   var __oodWorkspaceRepository: WorkspaceRepository | undefined
 }
 
+function isWorkspaceRepository(
+  value: WorkspaceRepository | undefined,
+): value is WorkspaceRepository {
+  if (!value) {
+    return false
+  }
+
+  return (
+    typeof value.list === "function" &&
+    typeof value.create === "function" &&
+    typeof value.rename === "function" &&
+    typeof value.delete === "function"
+  )
+}
+
 export function getWorkspaceRepository(): WorkspaceRepository {
-  if (!globalThis.__oodWorkspaceRepository) {
+  if (!isWorkspaceRepository(globalThis.__oodWorkspaceRepository)) {
     globalThis.__oodWorkspaceRepository = createWorkspaceRepository()
   }
 
