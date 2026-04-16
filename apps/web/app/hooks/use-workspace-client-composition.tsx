@@ -11,6 +11,7 @@ import {
   useTableFrameConstants,
   useWorkspaceLayout,
 } from "./use-workspace-layout"
+import { readActiveFieldSnapshot } from "./workspace-client-composition/page-exit-save"
 import { useWorkspaceDndOverlayComposition } from "./workspace-client-composition/use-dnd-overlay-composition"
 import {
   useWorkspaceEditingComposition,
@@ -179,6 +180,53 @@ export function useWorkspaceClientComposition() {
     },
     [createWorkspace, editing.flushPendingEdits, treeData.setErrorText],
   )
+
+  const commitActiveFieldBeforeLeave = useCallback(() => {
+    if (typeof document === "undefined") {
+      return
+    }
+
+    const snapshot = readActiveFieldSnapshot(document.activeElement)
+    if (!snapshot) {
+      return
+    }
+
+    if (snapshot.field === "title") {
+      editing.commitTextEdit(snapshot.rowId, { title: snapshot.value })
+      editing.handleTitleBlur(snapshot.rowId)
+    } else if (snapshot.field === "object") {
+      editing.commitTextEdit(snapshot.rowId, { object: snapshot.value })
+    } else if (snapshot.field === "currentProblems") {
+      editing.commitTextEdit(snapshot.rowId, {
+        currentProblems: snapshot.value,
+      })
+    } else if (snapshot.field === "solutionVariants") {
+      editing.commitTextEdit(snapshot.rowId, {
+        solutionVariants: snapshot.value,
+      })
+    }
+
+    editing.handleFieldBlur(snapshot.rowId)
+  }, [editing])
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return
+    }
+
+    const handlePageExit = () => {
+      commitActiveFieldBeforeLeave()
+      editing.flushPendingEdits()
+    }
+
+    window.addEventListener("pagehide", handlePageExit)
+    window.addEventListener("beforeunload", handlePageExit)
+
+    return () => {
+      window.removeEventListener("pagehide", handlePageExit)
+      window.removeEventListener("beforeunload", handlePageExit)
+    }
+  }, [commitActiveFieldBeforeLeave, editing.flushPendingEdits])
 
   const renderSwitcher = useCallback(
     ({

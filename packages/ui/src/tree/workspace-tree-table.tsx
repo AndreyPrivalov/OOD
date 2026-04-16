@@ -288,6 +288,7 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                       </button>
                       <input
                         className="input-title"
+                        data-row-field="title"
                         key={`title:${row.id}:${rowUi.title.value}`}
                         ref={rowUi.title.registerInputRef}
                         style={{
@@ -310,6 +311,7 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                   <td className="object-col">
                     <input
                       className="input-object"
+                      data-row-field="object"
                       key={`object:${row.id}:${rowUi.object.value}`}
                       defaultValue={rowUi.object.value}
                       placeholder="Объект"
@@ -324,6 +326,7 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                   <td className="problems-col">
                     <textarea
                       className="textarea-list"
+                      data-row-field="currentProblems"
                       ref={rowUi.currentProblems.registerTextareaRef}
                       key={`currentProblems:${row.id}:${rowUi.currentProblems.value}`}
                       rows={1}
@@ -343,6 +346,7 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                   <td className="solutions-col">
                     <textarea
                       className="textarea-list"
+                      data-row-field="solutionVariants"
                       ref={rowUi.solutionVariants.registerTextareaRef}
                       key={`solutionVariants:${row.id}:${rowUi.solutionVariants.value}`}
                       rows={1}
