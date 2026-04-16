@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
   type WorkTreeNode,
   applyOptimisticCreate,
@@ -14,6 +14,7 @@ import {
   deleteWorkItem,
   fetchWorkItems,
   moveWorkItem,
+  patchWorkItem,
 } from "../work-item-client"
 
 type UseWorkspaceTreeDataOptions = {
@@ -22,6 +23,56 @@ type UseWorkspaceTreeDataOptions = {
   isDev: boolean
   onCreateFocusRow: (rowId: string) => void
   onDeleteRow: (rowId: string) => void
+}
+
+const LOCAL_DRAFT_ROW_ID_PREFIX = "local-draft:"
+
+function isObjectLike(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object"
+}
+
+function isLocalDraftRowId(id: string) {
+  return id.startsWith(LOCAL_DRAFT_ROW_ID_PREFIX)
+}
+
+function removeLocalRow(nodes: WorkTreeNode[], rowId: string): WorkTreeNode[] {
+  const nextNodes: WorkTreeNode[] = []
+  let changed = false
+
+  for (const node of nodes) {
+    if (node.id === rowId) {
+      changed = true
+      continue
+    }
+    const nextChildren = removeLocalRow(node.children, rowId)
+    if (nextChildren !== node.children) {
+      changed = true
+      nextNodes.push({ ...node, children: nextChildren })
+      continue
+    }
+    nextNodes.push(node)
+  }
+
+  if (!changed) {
+    return nodes
+  }
+
+  return nextNodes.map((node, index) => ({ ...node, siblingOrder: index }))
+}
+
+function findRow(nodes: WorkTreeNode[], rowId: string): WorkTreeNode | null {
+  const queue = [...nodes]
+  while (queue.length > 0) {
+    const node = queue.shift()
+    if (!node) {
+      continue
+    }
+    if (node.id === rowId) {
+      return node
+    }
+    queue.push(...node.children)
+  }
+  return null
 }
 
 export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
@@ -36,6 +87,12 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
   const [isLoading, setIsLoading] = useState(true)
   const [errorText, setErrorText] = useState("")
   const [refreshCount, setRefreshCount] = useState(0)
+  const draftSequenceRef = useRef(0)
+  const treeRef = useRef(tree)
+
+  useEffect(() => {
+    treeRef.current = tree
+  }, [tree])
 
   const toErrorText = useCallback((error: unknown) => {
     if (error instanceof WorkItemRequestError) {
@@ -82,41 +139,43 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
         return
       }
 
-      try {
-        const created = await createWorkItem({
-          workspaceId: currentWorkspaceId,
-          title: "",
-          object: null,
+      draftSequenceRef.current += 1
+      const draftId = `${LOCAL_DRAFT_ROW_ID_PREFIX}${draftSequenceRef.current}`
+      setTree((current) =>
+        applyOptimisticCreate(
+          current,
+          {
+            id: draftId,
+            workspaceId: currentWorkspaceId,
+            title: "",
+            object: null,
+            parentId,
+            siblingOrder: targetIndex,
+            possiblyRemovable: false,
+            overcomplication: null,
+            importance: null,
+            blocksMoney: null,
+            currentProblems: [],
+            solutionVariants: [],
+          },
           parentId,
-          siblingOrder: targetIndex,
-        })
-        const createdId =
-          created && typeof created === "object" && "id" in created
-            ? created.id
-            : null
-        if (created && typeof created === "object") {
-          setTree((current) =>
-            applyOptimisticCreate(
-              current,
-              created as Partial<WorkTreeNode>,
-              parentId,
-              targetIndex,
-            ),
-          )
-        }
-        if (typeof createdId === "string" && createdId.length > 0) {
-          onCreateFocusRow(createdId)
-        }
-        await refreshTree({ silent: true })
-      } catch (error) {
-        setErrorText(toErrorText(error))
-      }
+          targetIndex,
+        ),
+      )
+      setErrorText("")
+      onCreateFocusRow(draftId)
     },
-    [currentWorkspaceId, onCreateFocusRow, refreshTree, toErrorText],
+    [currentWorkspaceId, onCreateFocusRow],
   )
 
   const deleteRow = useCallback(
     async (id: string) => {
+      if (isLocalDraftRowId(id)) {
+        discardPendingSave(id)
+        setTree((current) => removeLocalRow(current, id))
+        onDeleteRow(id)
+        return
+      }
       try {
         discardPendingSave(id)
         await deleteWorkItem(id)
@@ -129,8 +188,69 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
     [discardPendingSave, onDeleteRow, refreshTree, toErrorText],
   )
 
+  const saveRow = useCallback(
+    async (id: string, payload: Record<string, unknown>) => {
+      if (!isLocalDraftRowId(id)) {
+        return patchWorkItem(id, payload)
+      }
+
+      const draftRow = findRow(treeRef.current, id)
+      if (!draftRow) {
+        return null
+      }
+
+      const nextTitle =
+        typeof payload.title === "string" ? payload.title : draftRow.title
+      if (nextTitle.trim().length === 0) {
+        return null
+      }
+
+      const nextObject = Object.prototype.hasOwnProperty.call(payload, "object")
+        ? ((payload.object as string | null) ?? null)
+        : draftRow.object
+      const nextPossiblyRemovable =
+        typeof payload.possiblyRemovable === "boolean"
+          ? payload.possiblyRemovable
+          : draftRow.possiblyRemovable
+
+      const created = await createWorkItem({
+        workspaceId: draftRow.workspaceId,
+        title: nextTitle,
+        object: nextObject,
+        parentId: draftRow.parentId,
+        siblingOrder: draftRow.siblingOrder,
+        possiblyRemovable: nextPossiblyRemovable,
+      })
+
+      const createOnlyKeys = new Set(["title", "object", "possiblyRemovable"])
+      const patchPayload: Record<string, unknown> = {}
+      for (const [key, value] of Object.entries(payload)) {
+        if (createOnlyKeys.has(key)) {
+          continue
+        }
+        patchPayload[key] = value
+      }
+
+      if (Object.keys(patchPayload).length === 0) {
+        return created
+      }
+      if (!isObjectLike(created) || typeof created.id !== "string") {
+        return created
+      }
+      const patched = await patchWorkItem(created.id, patchPayload)
+      return { ...created, ...patched }
+    },
+    [],
+  )
+
   const moveRow = useCallback(
     async (id: string, targetParentId: string | null, targetIndex: number) => {
+      if (isLocalDraftRowId(id)) {
+        setTree((current) =>
+          applyOptimisticMove(current, id, targetParentId, targetIndex),
+        )
+        return
+      }
       try {
         setTree((current) =>
           applyOptimisticMove(current, id, targetParentId, targetIndex),
@@ -157,6 +277,7 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
     refreshTree,
     createRowAtPosition,
     deleteRow,
+    saveRow,
     moveRow,
     toErrorText,
     refreshCount,

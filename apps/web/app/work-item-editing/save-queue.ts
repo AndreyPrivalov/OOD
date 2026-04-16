@@ -5,16 +5,14 @@ export type RevisionedValue<T> = {
 
 export type AcknowledgeResult<T> = {
   stale: boolean
-  accepted: boolean
+  acknowledged: boolean
   shouldApply: boolean
-  hasNewerLocal: boolean
   nextRequest: RevisionedValue<T> | null
 }
 
 export class LocalFirstRowQueue<T> {
   private nextRevision = 1
-  private lastLocalRevision = 0
-  private lastAckRevision = 0
+  private latestRevision = 0
   private inFlight: RevisionedValue<T> | null = null
   private queued: RevisionedValue<T> | null = null
 
@@ -23,7 +21,7 @@ export class LocalFirstRowQueue<T> {
       revision: this.nextRevision++,
       value,
     }
-    this.lastLocalRevision = revisioned.revision
+    this.latestRevision = revisioned.revision
     this.queued = revisioned
     return revisioned
   }
@@ -41,23 +39,19 @@ export class LocalFirstRowQueue<T> {
     if (!this.inFlight || this.inFlight.revision !== revision) {
       return {
         stale: true,
-        accepted: false,
+        acknowledged: false,
         shouldApply: false,
-        hasNewerLocal: this.lastLocalRevision > revision,
         nextRequest: null,
       }
     }
 
     this.inFlight = null
-    this.lastAckRevision = Math.max(this.lastAckRevision, revision)
-    const hasNewerLocal = this.lastLocalRevision > revision
     const nextRequest = this.startNext()
 
     return {
       stale: false,
-      accepted: true,
-      shouldApply: !hasNewerLocal,
-      hasNewerLocal,
+      acknowledged: true,
+      shouldApply: revision === this.latestRevision,
       nextRequest,
     }
   }
@@ -72,14 +66,6 @@ export class LocalFirstRowQueue<T> {
 
   clearQueued() {
     this.queued = null
-  }
-
-  getLastLocalRevision() {
-    return this.lastLocalRevision
-  }
-
-  getLastAckRevision() {
-    return this.lastAckRevision
   }
 
   hasInFlight() {

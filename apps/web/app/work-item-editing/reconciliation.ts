@@ -8,6 +8,9 @@ export function buildRowPatchFromServer(
   updated: Partial<EditableWorkItemRow>,
 ): EditableWorkItemPatch {
   const patch: EditableWorkItemPatch = {}
+  if (typeof updated.id === "string" && updated.id.length > 0) {
+    patch.id = updated.id
+  }
   if (typeof updated.title === "string") {
     patch.title = updated.title
   }
