@@ -17,6 +17,7 @@ import {
 import type { WorkItemRepository } from "./repository"
 import type {
   CreateWorkspaceInput,
+  RenameWorkspaceInput,
   WorkspaceRepository,
 } from "./workspace-repository"
 import { DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME } from "./workspace-store"
@@ -290,6 +291,34 @@ export class InMemoryWorkspaceRepository implements WorkspaceRepository {
   async create(input: CreateWorkspaceInput): Promise<Workspace> {
     const workspace = ensureWorkspace(randomUUID(), input.name)
     return { ...workspace }
+  }
+
+  async rename(
+    id: string,
+    input: RenameWorkspaceInput,
+  ): Promise<Workspace | null> {
+    const existing = memoryStore.workspaces.get(id)
+    if (!existing) {
+      return null
+    }
+
+    const updated: Workspace = {
+      ...existing,
+      name: input.name,
+      updatedAt: new Date(),
+    }
+    memoryStore.workspaces.set(id, updated)
+    return { ...updated }
+  }
+
+  async delete(id: string): Promise<boolean> {
+    if (!memoryStore.workspaces.has(id)) {
+      return false
+    }
+
+    memoryStore.workspaces.delete(id)
+    memoryStore.byWorkspace.delete(id)
+    return true
   }
 }
 

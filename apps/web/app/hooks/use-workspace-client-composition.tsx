@@ -44,9 +44,13 @@ export function useWorkspaceClientComposition() {
     currentWorkspaceId,
     errorText: workspaceErrorText,
     isCreating: isCreatingWorkspace,
+    isDeletingWorkspaceId,
     isLoading: isWorkspaceLoading,
+    isRenamingWorkspaceId,
     createWorkspace,
+    deleteWorkspace,
     openWorkspace,
+    renameWorkspace,
   } = useWorkspaceContext()
 
   const [pendingFocusRowId, setPendingFocusRowId] = useState<string | null>(
@@ -181,6 +185,24 @@ export function useWorkspaceClientComposition() {
     [createWorkspace, editing.flushPendingEdits, treeData.setErrorText],
   )
 
+  const handleRenameWorkspace = useCallback(
+    async (workspaceId: string, name: string) => {
+      editing.flushPendingEdits()
+      treeData.setErrorText("")
+      await renameWorkspace(workspaceId, name)
+    },
+    [editing.flushPendingEdits, renameWorkspace, treeData.setErrorText],
+  )
+
+  const handleDeleteWorkspace = useCallback(
+    async (workspaceId: string) => {
+      editing.flushPendingEdits()
+      treeData.setErrorText("")
+      await deleteWorkspace(workspaceId)
+    },
+    [deleteWorkspace, editing.flushPendingEdits, treeData.setErrorText],
+  )
+
   const commitActiveFieldBeforeLeave = useCallback(() => {
     if (typeof document === "undefined") {
       return
@@ -243,13 +265,24 @@ export function useWorkspaceClientComposition() {
       <WorkspaceSwitcher
         currentWorkspaceId={currentWorkspaceId}
         isCreating={isCreatingWorkspace}
+        isDeletingWorkspaceId={isDeletingWorkspaceId}
         isLoading={isWorkspaceLoading}
+        isRenamingWorkspaceId={isRenamingWorkspaceId}
         onCreateWorkspace={handleCreateWorkspace}
+        onDeleteWorkspace={handleDeleteWorkspace}
         onOpenWorkspace={handleOpenWorkspace}
+        onRenameWorkspace={handleRenameWorkspace}
         workspaces={workspaces}
       />
     ),
-    [handleCreateWorkspace, handleOpenWorkspace],
+    [
+      handleCreateWorkspace,
+      handleDeleteWorkspace,
+      handleOpenWorkspace,
+      handleRenameWorkspace,
+      isDeletingWorkspaceId,
+      isRenamingWorkspaceId,
+    ],
   )
 
   const {
@@ -366,7 +399,9 @@ export function useWorkspaceClientComposition() {
   return {
     currentWorkspaceId,
     isCreatingWorkspace,
+    isDeletingWorkspaceId,
     isWorkspaceLoading,
+    isRenamingWorkspaceId,
     workspaceErrorText,
     workspaces,
     currentWorkspaceName,
