@@ -6,9 +6,9 @@ import {
   buildRowPatchFromServer,
   isServerPatchEchoingPayload,
 } from "./reconciliation"
-import { readSaveRowDeferredError } from "./save-result"
 import { buildPatchPayload } from "./save-payload"
 import { LocalFirstRowQueue, type RevisionedValue } from "./save-queue"
+import { readSaveRowDeferredError } from "./save-result"
 import type {
   EditState,
   EditableWorkItemPatch,

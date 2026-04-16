@@ -16,6 +16,7 @@ import {
   moveWorkItem,
   patchWorkItem,
 } from "../work-item-client"
+import { attachSaveRowDeferredError } from "../work-item-editing/save-result"
 
 type UseWorkspaceTreeDataOptions = {
   currentWorkspaceId: string | null
@@ -73,6 +74,45 @@ function findRow(nodes: WorkTreeNode[], rowId: string): WorkTreeNode | null {
     queue.push(...node.children)
   }
   return null
+}
+
+const CREATE_ONLY_KEYS = new Set(["title", "object", "possiblyRemovable"])
+
+function buildPostCreatePatchPayload(payload: Record<string, unknown>) {
+  const patchPayload: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(payload)) {
+    if (CREATE_ONLY_KEYS.has(key)) {
+      continue
+    }
+    patchPayload[key] = value
+  }
+  return patchPayload
+}
+
+export async function finalizeCreatedDraftRow(
+  created: Record<string, unknown>,
+  payload: Record<string, unknown>,
+  patchRowById: (
+    id: string,
+    patchPayload: Record<string, unknown>,
+  ) => Promise<Record<string, unknown>>,
+) {
+  const patchPayload = buildPostCreatePatchPayload(payload)
+  if (Object.keys(patchPayload).length === 0) {
+    return created
+  }
+
+  const createdId = created.id
+  if (typeof createdId !== "string" || createdId.length === 0) {
+    return created
+  }
+
+  try {
+    const patched = await patchRowById(createdId, patchPayload)
+    return { ...created, ...patched }
+  } catch (error) {
+    return attachSaveRowDeferredError(created, error)
+  }
 }
 
 export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
@@ -222,23 +262,10 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
         possiblyRemovable: nextPossiblyRemovable,
       })
 
-      const createOnlyKeys = new Set(["title", "object", "possiblyRemovable"])
-      const patchPayload: Record<string, unknown> = {}
-      for (const [key, value] of Object.entries(payload)) {
-        if (createOnlyKeys.has(key)) {
-          continue
-        }
-        patchPayload[key] = value
-      }
-
-      if (Object.keys(patchPayload).length === 0) {
+      if (!isObjectLike(created)) {
         return created
       }
-      if (!isObjectLike(created) || typeof created.id !== "string") {
-        return created
-      }
-      const patched = await patchWorkItem(created.id, patchPayload)
-      return { ...created, ...patched }
+      return finalizeCreatedDraftRow(created, payload, patchWorkItem)
     },
     [],
   )
