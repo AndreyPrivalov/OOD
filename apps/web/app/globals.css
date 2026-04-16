@@ -11,6 +11,7 @@
   --text-main: 20px;
   --text-secondary: 15px;
   --control-height: 44px;
+  --table-control-height: 32px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -300,7 +301,7 @@ button:focus-visible {
 .work-table th,
 .work-table td {
   border-bottom: 0;
-  padding: 6px var(--cell-inline-pad);
+  padding: 4px var(--cell-inline-pad);
   vertical-align: top;
   background: transparent;
   position: relative;
@@ -441,7 +442,7 @@ button:focus-visible {
   top: 0;
   transform: none;
   width: 20px;
-  height: var(--control-height);
+  height: var(--table-control-height);
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -629,7 +630,7 @@ button:focus-visible {
 
 .rating-control {
   display: flex;
-  min-height: var(--control-height);
+  min-height: var(--table-control-height);
   align-items: center;
   justify-content: flex-start;
   gap: 1px;
@@ -684,7 +685,7 @@ button:focus-visible {
 .score-summary {
   display: inline-flex;
   align-items: center;
-  min-height: var(--control-height);
+  min-height: var(--table-control-height);
   margin-top: 2px;
   font-weight: 400;
   color: var(--fg);
@@ -694,7 +695,7 @@ button:focus-visible {
   display: flex;
   align-items: center;
   position: relative;
-  height: var(--control-height);
+  height: var(--table-control-height);
   overflow: visible;
 }
 
@@ -738,6 +739,14 @@ button:focus-visible {
   width: var(--control-height);
   padding: 0;
   font-size: 16px;
+}
+
+.work-table .btn {
+  height: var(--table-control-height);
+}
+
+.work-table .btn-icon {
+  width: var(--table-control-height);
 }
 
 .work-table td:last-child {
@@ -787,7 +796,7 @@ button:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: var(--control-height);
+  height: var(--table-control-height);
   width: 100%;
 }
 
@@ -836,8 +845,8 @@ button:focus-visible {
 }
 
 .textarea-list {
-  min-height: var(--control-height);
-  height: var(--control-height);
+  min-height: var(--table-control-height);
+  height: var(--table-control-height);
   overflow: hidden;
   resize: none;
   min-width: 7ch;
@@ -848,9 +857,15 @@ button:focus-visible {
   width: 100%;
   min-width: 0;
   max-width: 100%;
+  padding-top: 6px;
+  padding-bottom: 6px;
   padding-left: 0;
   padding-right: 0;
   text-align: left;
+}
+
+.work-table td input {
+  height: var(--table-control-height);
 }
 
 .work-table th.removable-col,

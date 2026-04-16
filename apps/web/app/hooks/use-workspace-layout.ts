@@ -68,6 +68,7 @@ export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions) {
   const textareaRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map())
   const overlayRafRef = useRef<number | null>(null)
   const columnWidthRafRef = useRef<number | null>(null)
+  const textareaAutoGrowRafRef = useRef<number | null>(null)
   const tableWrapRef = useRef<HTMLDivElement | null>(null)
   const tableRef = useRef<HTMLTableElement | null>(null)
   const listScrollRef = useRef<HTMLDivElement | null>(null)
@@ -82,6 +83,13 @@ export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions) {
   const [tableColumnWidths, setTableColumnWidths] = useState<TableColumnWidths>(
     STABLE_TABLE_COLUMN_WIDTHS,
   )
+  const textareaLayoutSignature = [
+    rows.length,
+    tableColumnWidths.work,
+    tableColumnWidths.object,
+    tableColumnWidths.currentProblems,
+    tableColumnWidths.solutionVariants,
+  ].join(":")
 
   const recomputeTextColumnWidths = useCallback(() => {
     let maxTitle = 0
@@ -160,6 +168,22 @@ export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions) {
     }
   }, [])
 
+  useEffect(() => {
+    void textareaLayoutSignature
+    if (typeof window === "undefined") {
+      return
+    }
+    if (textareaAutoGrowRafRef.current !== null) {
+      cancelAnimationFrame(textareaAutoGrowRafRef.current)
+    }
+    textareaAutoGrowRafRef.current = requestAnimationFrame(() => {
+      textareaAutoGrowRafRef.current = null
+      for (const textarea of textareaRefs.current.values()) {
+        autoGrowTextarea(textarea)
+      }
+    })
+  }, [textareaLayoutSignature])
+
   const recalcOverlayGeometry = useCallback(() => {
     const wrapElement = tableWrapRef.current
     const tableElement = tableRef.current
@@ -221,6 +245,9 @@ export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions) {
       window.removeEventListener("scroll", handleScroll)
       if (overlayRafRef.current !== null) {
         cancelAnimationFrame(overlayRafRef.current)
+      }
+      if (textareaAutoGrowRafRef.current !== null) {
+        cancelAnimationFrame(textareaAutoGrowRafRef.current)
       }
     }
   }, [scheduleOverlayRecalc])
