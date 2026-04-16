@@ -6,10 +6,100 @@ import {
   WorkspaceTitlePanel,
   WorkspaceTreeTable,
 } from "@ood/ui"
+import { useMemo } from "react"
 import { useWorkspaceClientComposition } from "./hooks/use-workspace-client-composition"
 
 export function WorkspaceClient() {
   const vm = useWorkspaceClientComposition()
+
+  const rowUiById = useMemo(() => {
+    const next = {} as Parameters<typeof WorkspaceTreeTable>[0]["rowUiById"]
+    for (const row of vm.rows) {
+      const edit = vm.rowEdits[row.id]
+      if (!edit) {
+        continue
+      }
+      const isParentRow = row.children.length > 0
+      const commitEdit = (patch: Partial<typeof edit>) => {
+        vm.handlers.commitEdit(row.id, patch)
+      }
+
+      next[row.id] = {
+        title: {
+          value: edit.title,
+          registerInputRef: (node) =>
+            vm.layout.registerTitleInputRef(row.id, node),
+          onFocus: () => vm.handlers.handleFieldFocus(row.id),
+          onKeyDown: (event) => vm.handlers.handleTitleKeyDown(event, row.id),
+          onBlur: (value) => {
+            vm.handlers.commitTextEdit(row.id, { title: value })
+            vm.handlers.handleFieldBlur(row.id)
+            vm.handlers.handleTitleBlur(row.id)
+          },
+        },
+        object: {
+          value: edit.object,
+          onFocus: () => vm.handlers.handleFieldFocus(row.id),
+          onBlur: (value) => {
+            vm.handlers.commitTextEdit(row.id, { object: value })
+            vm.handlers.handleFieldBlur(row.id)
+          },
+        },
+        currentProblems: {
+          value: edit.currentProblems,
+          registerTextareaRef: (node) =>
+            vm.layout.registerTextareaRef(`${row.id}:currentProblems`, node),
+          onFocus: () => vm.handlers.handleFieldFocus(row.id),
+          onBlur: (value) => {
+            vm.handlers.commitTextEdit(row.id, { currentProblems: value })
+            vm.handlers.handleFieldBlur(row.id)
+          },
+          onInput: (target) => {
+            target.style.height = "auto"
+            target.style.height = `${target.scrollHeight}px`
+          },
+        },
+        solutionVariants: {
+          value: edit.solutionVariants,
+          registerTextareaRef: (node) =>
+            vm.layout.registerTextareaRef(`${row.id}:solutionVariants`, node),
+          onFocus: () => vm.handlers.handleFieldFocus(row.id),
+          onBlur: (value) => {
+            vm.handlers.commitTextEdit(row.id, { solutionVariants: value })
+            vm.handlers.handleFieldBlur(row.id)
+          },
+          onInput: (target) => {
+            target.style.height = "auto"
+            target.style.height = `${target.scrollHeight}px`
+          },
+        },
+        possiblyRemovable: {
+          checked: edit.possiblyRemovable,
+          onFocus: () => vm.handlers.handleFieldFocus(row.id),
+          onBlur: () => vm.handlers.handleFieldBlur(row.id),
+          onChange: (checked) => commitEdit({ possiblyRemovable: checked }),
+        },
+        ratingCells: vm.handlers.renderRatingCells({
+          edit,
+          isParentRow,
+          onCommitEdit: commitEdit,
+          row,
+        }),
+        renderSignature: [
+          edit.title,
+          edit.object,
+          edit.currentProblems,
+          edit.solutionVariants,
+          edit.possiblyRemovable ? "1" : "0",
+          edit.overcomplication,
+          edit.importance,
+          edit.blocksMoney,
+          isParentRow ? "1" : "0",
+        ].join("||"),
+      }
+    }
+    return next
+  }, [vm])
 
   return (
     <main>
@@ -34,7 +124,7 @@ export function WorkspaceClient() {
           ) : null}
           <WorkspaceTreeTable
             rows={vm.rows}
-            edits={vm.rowEdits}
+            rowUiById={rowUiById}
             numberingById={vm.numberingById}
             draggedRowId={vm.dnd.draggedRowId}
             dropIntent={vm.dnd.dropIntent}
@@ -54,8 +144,6 @@ export function WorkspaceClient() {
             tableWrapRef={vm.layout.tableWrapRef}
             tableRef={vm.layout.tableRef}
             registerRowElementRef={vm.layout.registerRowElementRef}
-            registerTitleInputRef={vm.layout.registerTitleInputRef}
-            registerTextareaRef={vm.layout.registerTextareaRef}
             onHandlePointerDown={vm.dnd.handleHandlePointerDown}
             onHandlePointerMove={vm.dnd.handleHandlePointerMove}
             onHandlePointerUp={vm.dnd.handleHandlePointerUp}
@@ -66,13 +154,6 @@ export function WorkspaceClient() {
             onDeleteRow={(rowId) => {
               void vm.handlers.deleteRow(rowId)
             }}
-            onCommitTextEdit={vm.handlers.commitTextEdit}
-            onCommitEdit={vm.handlers.commitEdit}
-            onFieldFocus={vm.handlers.handleFieldFocus}
-            onFieldBlur={vm.handlers.handleFieldBlur}
-            onTitleKeyDown={vm.handlers.handleTitleKeyDown}
-            onTitleBlurExtra={vm.handlers.handleTitleBlur}
-            renderRatingCells={vm.handlers.renderRatingCells}
           />
         </section>
       </div>
