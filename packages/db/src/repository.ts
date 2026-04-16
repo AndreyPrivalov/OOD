@@ -9,6 +9,7 @@ import {
   type WorkTreeReadNode,
   type WorkspaceId,
   buildTree,
+  validateCreateWorkItemInput,
   withScoreSums,
 } from "@ood/domain"
 import { and, asc, eq, isNull, ne, sql } from "drizzle-orm"
@@ -22,17 +23,6 @@ export interface WorkItemRepository {
   update(id: string, patch: UpdateWorkItemInput): Promise<WorkItem>
   move(id: string, input: MoveWorkItemInput): Promise<void>
   deleteCascade(id: string): Promise<void>
-  replaceWorkspaceTree(
-    workspaceId: WorkspaceId,
-    items: ReplaceWorkspaceTreeInput[],
-  ): Promise<WorkItem[]>
-}
-
-export interface ReplaceWorkspaceTreeInput {
-  tempId: string
-  parentTempId: string | null
-  title: string
-  siblingOrder: number
 }
 
 type DbExecutor = ReturnType<typeof getDb>
@@ -114,17 +104,18 @@ export class PostgresWorkItemRepository implements WorkItemRepository {
   }
 
   async create(input: CreateWorkItemInput): Promise<WorkItem> {
-    await ensureWorkspace(this.db, input.workspaceId)
+    const validatedInput = validateCreateWorkItemInput(input)
+    await ensureWorkspace(this.db, validatedInput.workspaceId)
     return this.db.transaction(async (tx) => {
-      if (input.parentId) {
+      if (validatedInput.parentId) {
         const parent = await tx
           .select({ id: workItems.id, workspaceId: workItems.workspaceId })
           .from(workItems)
-          .where(eq(workItems.id, input.parentId))
+          .where(eq(workItems.id, validatedInput.parentId))
           .limit(1)
         if (
           parent.length === 0 ||
-          parent[0].workspaceId !== input.workspaceId
+          parent[0].workspaceId !== validatedInput.workspaceId
         ) {
           throw new DomainError(
             DomainErrorCode.PARENT_NOT_FOUND,
@@ -136,12 +127,17 @@ export class PostgresWorkItemRepository implements WorkItemRepository {
       const siblings = await tx
         .select({ id: workItems.id })
         .from(workItems)
-        .where(siblingFilter(input.workspaceId, input.parentId ?? null))
+        .where(
+          siblingFilter(
+            validatedInput.workspaceId,
+            validatedInput.parentId ?? null,
+          ),
+        )
         .orderBy(asc(workItems.siblingOrder), asc(workItems.createdAt))
 
       const workItemId = randomUUID()
       const index = clampIndex(
-        input.siblingOrder ?? siblings.length,
+        validatedInput.siblingOrder ?? siblings.length,
         siblings.length,
       )
       const siblingIds = siblings.map((sibling) => sibling.id)
@@ -149,17 +145,17 @@ export class PostgresWorkItemRepository implements WorkItemRepository {
 
       await tx.insert(workItems).values({
         id: workItemId,
-        workspaceId: input.workspaceId,
-        title: input.title ?? "",
-        object: input.object ?? null,
-        possiblyRemovable: input.possiblyRemovable ?? false,
-        parentId: input.parentId ?? null,
+        workspaceId: validatedInput.workspaceId,
+        title: validatedInput.title,
+        object: validatedInput.object ?? null,
+        possiblyRemovable: validatedInput.possiblyRemovable ?? false,
+        parentId: validatedInput.parentId ?? null,
         siblingOrder: index,
-        overcomplication: input.overcomplication ?? null,
-        importance: input.importance ?? null,
-        blocksMoney: input.blocksMoney ?? null,
-        currentProblems: input.currentProblems ?? [],
-        solutionVariants: input.solutionVariants ?? [],
+        overcomplication: validatedInput.overcomplication ?? null,
+        importance: validatedInput.importance ?? null,
+        blocksMoney: validatedInput.blocksMoney ?? null,
+        currentProblems: validatedInput.currentProblems ?? [],
+        solutionVariants: validatedInput.solutionVariants ?? [],
       })
 
       await this.reorderSiblings(tx, siblingIds)
@@ -349,67 +345,6 @@ export class PostgresWorkItemRepository implements WorkItemRepository {
       )
     })
   }
-
-  async replaceWorkspaceTree(
-    workspaceId: WorkspaceId,
-    items: ReplaceWorkspaceTreeInput[],
-  ): Promise<WorkItem[]> {
-    await ensureWorkspace(this.db, workspaceId)
-    return this.db.transaction(async (tx) => {
-      await tx.delete(workItems).where(eq(workItems.workspaceId, workspaceId))
-
-      const tempToReal = new Map<string, string>()
-      const created: WorkItem[] = []
-      const now = new Date()
-
-      for (const item of items) {
-        const parentId = item.parentTempId
-          ? (tempToReal.get(item.parentTempId) ?? null)
-          : null
-        if (item.parentTempId && parentId === null) {
-          throw new DomainError(
-            DomainErrorCode.INVALID_MOVE_TARGET,
-            `Parent reference was not found for tempId=${item.parentTempId}`,
-          )
-        }
-        const id = randomUUID()
-        await tx.insert(workItems).values({
-          id,
-          workspaceId,
-          title: item.title,
-          object: null,
-          possiblyRemovable: false,
-          parentId,
-          siblingOrder: item.siblingOrder,
-          overcomplication: null,
-          importance: null,
-          blocksMoney: null,
-          currentProblems: [],
-          solutionVariants: [],
-        })
-        tempToReal.set(item.tempId, id)
-        created.push({
-          id,
-          workspaceId,
-          title: item.title,
-          object: null,
-          possiblyRemovable: false,
-          parentId,
-          siblingOrder: item.siblingOrder,
-          overcomplication: null,
-          importance: null,
-          blocksMoney: null,
-          currentProblems: [],
-          solutionVariants: [],
-          createdAt: now,
-          updatedAt: now,
-        })
-      }
-
-      return created
-    })
-  }
-
   private async reorderSiblings(
     tx: SiblingReorderExecutor,
     orderedIds: string[],

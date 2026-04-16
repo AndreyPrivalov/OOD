@@ -3,7 +3,7 @@ import type { Rating } from "./ratings"
 
 export interface CreateWorkItemInput {
   workspaceId: WorkspaceId
-  title?: string
+  title: string
   object?: string | null
   possiblyRemovable?: boolean
   parentId?: WorkItemId | null

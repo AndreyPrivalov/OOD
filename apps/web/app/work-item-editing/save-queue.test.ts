@@ -14,12 +14,12 @@ describe("local-first autosave queue", () => {
     const firstAck = queue.acknowledge(1)
     expect(firstAck.stale).toBe(false)
     expect(firstAck.shouldApply).toBe(false)
-    expect(firstAck.hasNewerLocal).toBe(true)
+    expect(firstAck.acknowledged).toBe(true)
     expect(firstAck.nextRequest?.revision).toBe(2)
 
     const duplicateAck = queue.acknowledge(1)
     expect(duplicateAck.stale).toBe(true)
-    expect(duplicateAck.accepted).toBe(false)
+    expect(duplicateAck.acknowledged).toBe(false)
 
     const secondAck = queue.acknowledge(2)
     expect(secondAck.stale).toBe(false)

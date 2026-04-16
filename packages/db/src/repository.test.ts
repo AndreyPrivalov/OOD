@@ -198,4 +198,14 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
 
     expect(updated.possiblyRemovable).toBe(true)
   })
+
+  it("rejects empty title on create via domain validation", async () => {
+    const repo = new InMemoryWorkItemRepository()
+
+    await expect(
+      repo.create({ workspaceId, title: "   " }),
+    ).rejects.toMatchObject({
+      code: DomainErrorCode.EMPTY_TITLE,
+    })
+  })
 })

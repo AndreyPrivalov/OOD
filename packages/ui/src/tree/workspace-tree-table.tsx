@@ -1,5 +1,6 @@
 import {
   type CSSProperties,
+  type FormEvent,
   type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
@@ -20,15 +21,38 @@ type TreeRowLike = {
   blocksMoneyTotal?: number
 }
 
-type TreeEditLike = {
-  title: string
-  object: string
-  overcomplication: string
-  importance: string
-  blocksMoney: string
-  currentProblems: string
-  solutionVariants: string
-  possiblyRemovable: boolean
+type FieldControl = {
+  value: string
+  onFocus: () => void
+  onBlur: (value: string) => void
+}
+
+type TitleFieldControl = FieldControl & {
+  registerInputRef: (node: HTMLInputElement | null) => void
+  onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void
+}
+
+type TextareaFieldControl = FieldControl & {
+  registerTextareaRef: (node: HTMLTextAreaElement | null) => void
+  onInput?: (target: HTMLTextAreaElement) => void
+  onKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void
+}
+
+type CheckboxControl = {
+  checked: boolean
+  onFocus: () => void
+  onBlur: () => void
+  onChange: (checked: boolean) => void
+}
+
+export type WorkspaceTreeRowUiModel = {
+  title: TitleFieldControl
+  object: FieldControl
+  currentProblems: TextareaFieldControl
+  solutionVariants: TextareaFieldControl
+  possiblyRemovable: CheckboxControl
+  ratingCells: ReactNode
+  renderSignature: string
 }
 
 type DropIntentLike =
@@ -113,7 +137,7 @@ const MemoWorkRow = memo(
 
 export type WorkspaceTreeTableProps = {
   rows: TreeRowLike[]
-  edits: Record<string, TreeEditLike>
+  rowUiById: Record<string, WorkspaceTreeRowUiModel>
   numberingById: Map<string, string>
   draggedRowId: string | null
   dropIntent: DropIntentLike | null
@@ -136,8 +160,6 @@ export type WorkspaceTreeTableProps = {
     rowId: string,
     node: HTMLTableRowElement | null,
   ) => void
-  registerTitleInputRef: (rowId: string, node: HTMLInputElement | null) => void
-  registerTextareaRef: (key: string, node: HTMLTextAreaElement | null) => void
   onHandlePointerDown: (
     event: PointerEvent<HTMLButtonElement>,
     rowId: string,
@@ -147,27 +169,6 @@ export type WorkspaceTreeTableProps = {
   onHandlePointerCancel: (event: PointerEvent<HTMLButtonElement>) => void
   onCreateAtPosition: (parentId: string | null, targetIndex: number) => void
   onDeleteRow: (rowId: string) => void
-  onCommitTextEdit: (rowId: string, patch: Partial<TreeEditLike>) => void
-  onCommitEdit: (rowId: string, patch: Partial<TreeEditLike>) => void
-  onFieldFocus: (rowId: string) => void
-  onFieldBlur: (rowId: string) => void
-  onTitleKeyDown: (
-    event: KeyboardEvent<HTMLInputElement>,
-    rowId: string,
-  ) => void
-  onTitleBlurExtra: (rowId: string) => void
-  renderRatingCells: (params: {
-    row: TreeRowLike
-    edit: TreeEditLike
-    isParentRow: boolean
-    rowId: string
-    onCommitEdit: (patch: Partial<TreeEditLike>) => void
-  }) => ReactNode
-}
-
-function autoGrowTextarea(target: HTMLTextAreaElement) {
-  target.style.height = "auto"
-  target.style.height = `${target.scrollHeight}px`
 }
 
 export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
@@ -229,13 +230,13 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
           </thead>
           <tbody>
             {props.rows.map((row) => {
-              const edit = props.edits[row.id]
-              if (!edit) {
+              const rowUi = props.rowUiById[row.id]
+              if (!rowUi) {
                 return null
               }
               const hasMultilineField =
-                edit.currentProblems.includes("\n") ||
-                edit.solutionVariants.includes("\n")
+                rowUi.currentProblems.value.includes("\n") ||
+                rowUi.solutionVariants.value.includes("\n")
               const rowClassName = [
                 props.draggedRowId === row.id ? "drag-source" : "",
                 props.dropIntent?.type === "between" &&
@@ -250,17 +251,7 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                 .filter(Boolean)
                 .join(" ")
               const rowRenderSignature = `${row.id}:${row.parentId ?? "root"}:${row.siblingOrder}:${row.depth}`
-              const editRenderSignature = [
-                edit.title,
-                edit.object,
-                edit.overcomplication,
-                edit.importance,
-                edit.blocksMoney,
-                edit.currentProblems,
-                edit.solutionVariants,
-                edit.possiblyRemovable ? "1" : "0",
-              ].join("::")
-              const isParentRow = row.children.length > 0
+              const editRenderSignature = rowUi.renderSignature
               return (
                 <MemoWorkRow
                   key={row.id}
@@ -297,139 +288,88 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                       </button>
                       <input
                         className="input-title"
-                        key={`title:${row.id}:${edit.title}`}
-                        ref={(node) =>
-                          props.registerTitleInputRef(row.id, node)
-                        }
+                        key={`title:${row.id}:${rowUi.title.value}`}
+                        ref={rowUi.title.registerInputRef}
                         style={{
                           paddingInlineStart: `${
                             row.depth * props.rowTreeIndentPx +
                             props.workContentIndentPx
                           }px`,
                         }}
-                        defaultValue={edit.title}
+                        defaultValue={rowUi.title.value}
                         placeholder="Название"
                         aria-label="Название"
-                        onFocus={() => props.onFieldFocus(row.id)}
-                        onKeyDown={(event) =>
-                          props.onTitleKeyDown(event, row.id)
+                        onFocus={rowUi.title.onFocus}
+                        onKeyDown={rowUi.title.onKeyDown}
+                        onBlur={(event) =>
+                          rowUi.title.onBlur(event.currentTarget.value)
                         }
-                        onBlur={(event) => {
-                          props.onCommitTextEdit(row.id, {
-                            title: event.currentTarget.value,
-                          })
-                          props.onFieldBlur(row.id)
-                          props.onTitleBlurExtra(row.id)
-                        }}
                       />
                     </div>
                   </td>
                   <td className="object-col">
                     <input
                       className="input-object"
-                      key={`object:${row.id}:${edit.object}`}
-                      defaultValue={edit.object}
+                      key={`object:${row.id}:${rowUi.object.value}`}
+                      defaultValue={rowUi.object.value}
                       placeholder="Объект"
                       aria-label="Объект"
-                      onFocus={() => props.onFieldFocus(row.id)}
-                      onBlur={(event) => {
-                        props.onCommitTextEdit(row.id, {
-                          object: event.currentTarget.value,
-                        })
-                        props.onFieldBlur(row.id)
-                      }}
+                      onFocus={rowUi.object.onFocus}
+                      onBlur={(event) =>
+                        rowUi.object.onBlur(event.currentTarget.value)
+                      }
                     />
                   </td>
-                  {props.renderRatingCells({
-                    row,
-                    edit,
-                    isParentRow,
-                    rowId: row.id,
-                    onCommitEdit: (patch) => props.onCommitEdit(row.id, patch),
-                  })}
+                  {rowUi.ratingCells}
                   <td className="problems-col">
                     <textarea
                       className="textarea-list"
-                      ref={(node) =>
-                        props.registerTextareaRef(
-                          `currentProblems:${row.id}`,
-                          node,
-                        )
-                      }
-                      key={`currentProblems:${row.id}:${edit.currentProblems}`}
+                      ref={rowUi.currentProblems.registerTextareaRef}
+                      key={`currentProblems:${row.id}:${rowUi.currentProblems.value}`}
                       rows={1}
-                      defaultValue={edit.currentProblems}
+                      defaultValue={rowUi.currentProblems.value}
                       placeholder="Проблемы"
                       aria-label="Проблемы по строкам"
-                      onFocus={() => props.onFieldFocus(row.id)}
-                      onBlur={(event) => {
-                        props.onCommitTextEdit(row.id, {
-                          currentProblems: event.currentTarget.value,
-                        })
-                        props.onFieldBlur(row.id)
-                      }}
-                      onKeyDown={(event) => {
-                        if (
-                          event.key === "Enter" &&
-                          (event.ctrlKey || event.metaKey)
-                        ) {
-                          event.preventDefault()
-                          props.onCommitTextEdit(row.id, {
-                            currentProblems: event.currentTarget.value,
-                          })
-                        }
-                      }}
-                      onInput={(event) => autoGrowTextarea(event.currentTarget)}
+                      onFocus={rowUi.currentProblems.onFocus}
+                      onBlur={(event) =>
+                        rowUi.currentProblems.onBlur(event.currentTarget.value)
+                      }
+                      onKeyDown={rowUi.currentProblems.onKeyDown}
+                      onInput={(event: FormEvent<HTMLTextAreaElement>) =>
+                        rowUi.currentProblems.onInput?.(event.currentTarget)
+                      }
                     />
                   </td>
                   <td className="solutions-col">
                     <textarea
                       className="textarea-list"
-                      ref={(node) =>
-                        props.registerTextareaRef(
-                          `solutionVariants:${row.id}`,
-                          node,
-                        )
-                      }
-                      key={`solutionVariants:${row.id}:${edit.solutionVariants}`}
+                      ref={rowUi.solutionVariants.registerTextareaRef}
+                      key={`solutionVariants:${row.id}:${rowUi.solutionVariants.value}`}
                       rows={1}
-                      defaultValue={edit.solutionVariants}
+                      defaultValue={rowUi.solutionVariants.value}
                       placeholder="Решения"
                       aria-label="Решения по строкам"
-                      onFocus={() => props.onFieldFocus(row.id)}
-                      onBlur={(event) => {
-                        props.onCommitTextEdit(row.id, {
-                          solutionVariants: event.currentTarget.value,
-                        })
-                        props.onFieldBlur(row.id)
-                      }}
-                      onKeyDown={(event) => {
-                        if (
-                          event.key === "Enter" &&
-                          (event.ctrlKey || event.metaKey)
-                        ) {
-                          event.preventDefault()
-                          props.onCommitTextEdit(row.id, {
-                            solutionVariants: event.currentTarget.value,
-                          })
-                        }
-                      }}
-                      onInput={(event) => autoGrowTextarea(event.currentTarget)}
+                      onFocus={rowUi.solutionVariants.onFocus}
+                      onBlur={(event) =>
+                        rowUi.solutionVariants.onBlur(event.currentTarget.value)
+                      }
+                      onKeyDown={rowUi.solutionVariants.onKeyDown}
+                      onInput={(event: FormEvent<HTMLTextAreaElement>) =>
+                        rowUi.solutionVariants.onInput?.(event.currentTarget)
+                      }
                     />
                   </td>
                   <td className="removable-col">
                     <label className="possibly-removable-control">
                       <input
                         type="checkbox"
-                        checked={edit.possiblyRemovable}
+                        checked={rowUi.possiblyRemovable.checked}
                         aria-label="Возможно убрать"
                         onChange={(event) =>
-                          props.onCommitEdit(row.id, {
-                            possiblyRemovable: event.target.checked,
-                          })
+                          rowUi.possiblyRemovable.onChange(event.target.checked)
                         }
-                        onFocus={() => props.onFieldFocus(row.id)}
-                        onBlur={() => props.onFieldBlur(row.id)}
+                        onFocus={rowUi.possiblyRemovable.onFocus}
+                        onBlur={rowUi.possiblyRemovable.onBlur}
                       />
                     </label>
                   </td>

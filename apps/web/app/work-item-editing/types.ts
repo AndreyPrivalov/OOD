@@ -39,6 +39,5 @@ export type RowEditPatch = {
 export type RowEditMeta = {
   isDirty: boolean
   isFocused: boolean
-  lastLocalRevision: number
-  lastAckRevision: number
+  hasUnackedChanges: boolean
 }

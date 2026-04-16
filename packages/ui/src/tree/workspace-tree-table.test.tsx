@@ -31,16 +31,46 @@ describe("WorkspaceTreeTable", () => {
           blocksMoney: 1,
         },
       ],
-      edits: {
+      rowUiById: {
         "row-1": {
-          title: "Первая работа",
-          object: "Объект A",
-          overcomplication: "2",
-          importance: "4",
-          blocksMoney: "1",
-          currentProblems: "Проблема",
-          solutionVariants: "Решение",
-          possiblyRemovable: false,
+          title: {
+            value: "Первая работа",
+            registerInputRef: () => {},
+            onFocus: () => {},
+            onBlur: () => {},
+            onKeyDown: () => {},
+          },
+          object: {
+            value: "Объект A",
+            onFocus: () => {},
+            onBlur: () => {},
+          },
+          currentProblems: {
+            value: "Проблема",
+            registerTextareaRef: () => {},
+            onFocus: () => {},
+            onBlur: () => {},
+          },
+          solutionVariants: {
+            value: "Решение",
+            registerTextareaRef: () => {},
+            onFocus: () => {},
+            onBlur: () => {},
+          },
+          possiblyRemovable: {
+            checked: false,
+            onFocus: () => {},
+            onBlur: () => {},
+            onChange: () => {},
+          },
+          ratingCells: (
+            <>
+              <td className="score-col">R1</td>
+              <td className="score-col">R2</td>
+              <td className="score-col">R3</td>
+            </>
+          ),
+          renderSignature: "sig",
         },
       },
       numberingById: new Map([["row-1", "1"]]),
@@ -96,27 +126,12 @@ describe("WorkspaceTreeTable", () => {
       tableWrapRef: { current: null },
       tableRef: { current: null },
       registerRowElementRef: () => {},
-      registerTitleInputRef: () => {},
-      registerTextareaRef: () => {},
       onHandlePointerDown: () => {},
       onHandlePointerMove: () => {},
       onHandlePointerUp: () => {},
       onHandlePointerCancel: () => {},
       onCreateAtPosition: () => {},
       onDeleteRow: () => {},
-      onCommitTextEdit: () => {},
-      onCommitEdit: () => {},
-      onFieldFocus: () => {},
-      onFieldBlur: () => {},
-      onTitleKeyDown: () => {},
-      onTitleBlurExtra: () => {},
-      renderRatingCells: () => (
-        <>
-          <td className="score-col">R1</td>
-          <td className="score-col">R2</td>
-          <td className="score-col">R3</td>
-        </>
-      ),
     })
     const text = collectText(rendered).join(" ")
 

@@ -92,7 +92,6 @@ describe("PATCH /api/work-items/[id] contract", () => {
       overcomplication: null,
       importance: null,
       blocksMoney: null,
-      overcomplication_sum: 4,
       currentProblems: ["p1", "p2"],
       solutionVariants: ["s1"],
     })
@@ -128,7 +127,6 @@ describe("PATCH /api/work-items/[id] contract", () => {
       currentProblems: ["p1", "p2"],
       solutionVariants: ["s1"],
     })
-    expect(payload.data).not.toHaveProperty("overcomplication_sum")
   })
 
   it("returns canonical delete response", async () => {

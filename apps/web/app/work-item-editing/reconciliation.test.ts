@@ -7,6 +7,7 @@ import {
 describe("buildRowPatchFromServer", () => {
   it("keeps only supported server fields and sanitizes string lists", () => {
     const patch = buildRowPatchFromServer({
+      id: "server-row-1",
       title: "Next title",
       object: null,
       possiblyRemovable: true,
@@ -17,6 +18,7 @@ describe("buildRowPatchFromServer", () => {
     })
 
     expect(patch).toEqual({
+      id: "server-row-1",
       title: "Next title",
       object: null,
       possiblyRemovable: true,

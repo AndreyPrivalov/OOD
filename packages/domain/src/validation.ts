@@ -20,7 +20,7 @@ export const RatingSchema = z.union(
 
 export const CreateWorkItemInputSchema = z.object({
   workspaceId: z.string().min(1),
-  title: z.string().optional(),
+  title: z.string(),
   object: z.string().nullable().optional(),
   possiblyRemovable: z.boolean().optional(),
   parentId: z.string().nullable().optional(),
@@ -49,6 +49,7 @@ export const MoveWorkItemInputSchema = z.object({
 })
 
 export function validateCreateWorkItemInput(input: CreateWorkItemInput) {
+  assertNonEmptyTitle(input.title)
   for (const field of ratingFieldKeys) {
     assertRating(field, input[field])
   }
@@ -56,8 +57,8 @@ export function validateCreateWorkItemInput(input: CreateWorkItemInput) {
 }
 
 export function validateUpdateWorkItemInput(input: UpdateWorkItemInput) {
-  if (typeof input.title === "string" && input.title.trim().length === 0) {
-    throw new DomainError(DomainErrorCode.EMPTY_TITLE, "Title cannot be empty")
+  if (typeof input.title === "string") {
+    assertNonEmptyTitle(input.title)
   }
   for (const field of ratingFieldKeys) {
     assertRating(field, input[field])
@@ -84,5 +85,11 @@ function assertRating(field: RatingFieldKey, value: number | null | undefined) {
       DomainErrorCode.INVALID_NUMERIC_RANGE,
       `${field} should be an integer between 0 and 5`,
     )
+  }
+}
+
+function assertNonEmptyTitle(title: string) {
+  if (title.trim().length === 0) {
+    throw new DomainError(DomainErrorCode.EMPTY_TITLE, "Title cannot be empty")
   }
 }

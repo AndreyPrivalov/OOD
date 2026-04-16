@@ -1,45 +1,22 @@
 "use client"
 
 import {
-  WorkspaceRatingCell,
-  type WorkspaceTreeTableProps,
+  type WorkspaceTreeRowUiModel,
   workspaceRatingFieldConfigs,
 } from "@ood/ui"
-import {
-  type KeyboardEvent,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react"
-import {
-  buildTreeNumbering,
-  flattenTree,
-  patchTreeRow,
-} from "../state/workspace-tree-state"
-import {
-  type FlatRowLike,
-  type OverlayIndicator,
-  buildInsertLanes,
-  withLaneAnchors,
-} from "../tree-interactions"
-import { patchWorkItem } from "../work-item-client"
-import {
-  type EditState,
-  buildEditState,
-  useWorkItemEditing,
-} from "../work-item-editing"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useWorkspaceContext } from "../workspaces/use-workspace-context"
 import { WorkspaceSwitcher } from "../workspaces/workspace-switcher"
-import { useWorkspaceDragDrop } from "./use-workspace-drag-drop"
 import {
   useTableFrameConstants,
   useWorkspaceLayout,
 } from "./use-workspace-layout"
-import { useWorkspaceTreeData } from "./use-workspace-tree-data"
-
-const DEV_METRICS_SAMPLE_LIMIT = 40
+import { useWorkspaceDndOverlayComposition } from "./workspace-client-composition/use-dnd-overlay-composition"
+import {
+  useWorkspaceEditingComposition,
+  useWorkspaceEditingStateComposition,
+} from "./workspace-client-composition/use-editing-composition"
+import { useWorkspaceTreeDataComposition } from "./workspace-client-composition/use-tree-data-composition"
 
 function getMedian(values: number[]): number | null {
   if (values.length === 0) {
@@ -51,6 +28,11 @@ function getMedian(values: number[]): number | null {
     return (sorted[middle - 1] + sorted[middle]) / 2
   }
   return sorted[middle]
+}
+
+function autoGrowTextarea(target: HTMLTextAreaElement) {
+  target.style.height = "auto"
+  target.style.height = `${target.scrollHeight}px`
 }
 
 export function useWorkspaceClientComposition() {
@@ -65,29 +47,16 @@ export function useWorkspaceClientComposition() {
     createWorkspace,
     openWorkspace,
   } = useWorkspaceContext()
+
   const [pendingFocusRowId, setPendingFocusRowId] = useState<string | null>(
     null,
   )
   const [escapeCancellableRowId, setEscapeCancellableRowId] = useState<
     string | null
   >(null)
-  const patchLatenciesRef = useRef<number[]>([])
-  const inputToPaintRef = useRef<number[]>([])
-  const editsRef = useRef<Record<string, EditState>>({})
   const discardPendingSaveRef = useRef<(id: string) => void>(() => {})
 
-  const {
-    tree,
-    setTree,
-    isLoading,
-    errorText,
-    setErrorText,
-    createRowAtPosition,
-    deleteRow,
-    moveRow,
-    toErrorText,
-    refreshCount,
-  } = useWorkspaceTreeData({
+  const treeData = useWorkspaceTreeDataComposition({
     currentWorkspaceId,
     discardPendingSave: (id) => {
       discardPendingSaveRef.current(id)
@@ -104,170 +73,62 @@ export function useWorkspaceClientComposition() {
     },
   })
 
-  const rows = useMemo(() => flattenTree(tree), [tree])
-  const numberingById = useMemo(() => buildTreeNumbering(tree), [tree])
-  const siblingsByParent = useMemo(() => {
-    const map = new Map<string | null, typeof rows>()
-    for (const row of rows) {
-      const bucket = map.get(row.parentId) ?? []
-      bucket.push(row)
-      map.set(row.parentId, bucket)
-    }
-    for (const bucket of map.values()) {
-      bucket.sort((a, b) => a.siblingOrder - b.siblingOrder)
-    }
-    return map
-  }, [rows])
-  const rowsById = useMemo(() => {
-    const map = new Map<string, (typeof rows)[number]>()
-    for (const row of rows) {
-      map.set(row.id, row)
-    }
-    return map
-  }, [rows])
+  const editingState = useWorkspaceEditingStateComposition(treeData.rows)
 
   const layout = useWorkspaceLayout({
-    getEditForRow: (row) => editsRef.current[row.id] ?? buildEditState(row),
+    getEditForRow: editingState.getEditForRow,
     isDev,
-    rows,
+    rows: treeData.rows,
   })
 
-  const {
-    edits,
-    commitEdit,
-    commitTextEdit,
-    discardPendingSave,
-    flushPendingEdits,
-    handleFieldBlur,
-    handleFieldFocus,
-  } = useWorkItemEditing({
+  const editing = useWorkspaceEditingComposition({
+    deleteRow: treeData.deleteRow,
+    escapeCancellableRowId,
+    focusTitleInput: layout.focusTitleInput,
     isDev,
-    rows,
-    rowsById,
-    patchRow: (rowId, patch) => {
-      setTree((currentTree) => patchTreeRow(currentTree, rowId, patch))
-    },
-    reportError: setErrorText,
-    saveRow: patchWorkItem,
-    toErrorText,
-    recordInputToPaint: (durationMs) => {
-      inputToPaintRef.current.push(durationMs)
-      if (inputToPaintRef.current.length > DEV_METRICS_SAMPLE_LIMIT) {
-        inputToPaintRef.current.shift()
-      }
-    },
-    recordPatchLatency: (latency) => {
-      patchLatenciesRef.current.push(latency)
-      if (patchLatenciesRef.current.length > DEV_METRICS_SAMPLE_LIMIT) {
-        patchLatenciesRef.current.shift()
-      }
-    },
+    pendingFocusRowId,
+    reportError: treeData.setErrorText,
+    rows: treeData.rows,
+    rowsById: treeData.rowsById,
+    saveRow: treeData.saveRow,
     scheduleTextColumnWidthRecalc: layout.scheduleTextColumnWidthRecalc,
+    setEscapeCancellableRowId,
+    setPendingFocusRowId,
+    setTree: treeData.setTree,
+    syncEditsRef: editingState.syncEditsRef,
+    toErrorText: treeData.toErrorText,
+    onDiscardPendingSaveReady: (handler) => {
+      discardPendingSaveRef.current = handler
+    },
   })
 
-  useEffect(() => {
-    editsRef.current = edits
-  }, [edits])
-
-  useEffect(() => {
-    discardPendingSaveRef.current = discardPendingSave
-  }, [discardPendingSave])
-
-  useEffect(() => {
-    if (!pendingFocusRowId) {
-      return
-    }
-    if (layout.focusTitleInput(pendingFocusRowId)) {
-      setPendingFocusRowId(null)
-    }
-  }, [layout, pendingFocusRowId])
-
-  const {
-    FRAME_X_PX,
-    LEFT_GUTTER_WIDTH_PX,
-    WORK_CONTENT_INDENT_PX,
-    CELL_INLINE_PAD_PX,
-    STRUCTURE_LINE_WIDTH_PX,
-    CONTENT_START_X_PX,
-    TREE_LEVEL_OFFSET_PX,
-  } = useTableFrameConstants()
-
-  const dnd = useWorkspaceDragDrop({
-    rowsById,
-    siblingsByParent,
+  const dndOverlay = useWorkspaceDndOverlayComposition({
+    moveRow: treeData.moveRow,
+    rowAnchors: layout.rowAnchors,
+    rows: treeData.rows,
+    rowsById: treeData.rowsById,
     scheduleOverlayRecalc: layout.scheduleOverlayRecalc,
-    moveRow,
+    siblingsByParent: treeData.siblingsByParent,
+    tableHeaderBottom: layout.tableHeaderBottom,
   })
 
-  const baseInsertLanes = useMemo(
-    () =>
-      buildInsertLanes(
-        rows,
-        siblingsByParent as Map<string | null, FlatRowLike[]>,
-      ),
-    [rows, siblingsByParent],
+  const readInputToPaintMedian = useCallback(
+    () => getMedian(editing.inputToPaintRef.current),
+    [editing.inputToPaintRef],
   )
-  const insertLanes = useMemo(
-    () =>
-      withLaneAnchors(
-        baseInsertLanes,
-        layout.rowAnchors,
-        layout.tableHeaderBottom,
-      ),
-    [baseInsertLanes, layout.rowAnchors, layout.tableHeaderBottom],
+
+  const readPatchLatencyMedian = useCallback(
+    () => getMedian(editing.patchLatenciesRef.current),
+    [editing.patchLatenciesRef],
   )
-  const visibleInsertLanes = useMemo(
-    () => insertLanes.filter((lane) => lane.anchorY !== null),
-    [insertLanes],
-  )
-  const overlayAddIndicators = useMemo<OverlayIndicator[]>(() => {
-    if (dnd.interactionMode !== "idle" || dnd.isDragPrimed) {
-      return []
-    }
-    return visibleInsertLanes.map((lane) => ({
-      kind: "add",
-      laneId: lane.id,
-      y: lane.anchorY ?? 0,
-      parentId: lane.parentId,
-      targetIndex: lane.targetIndex,
-      showPlus: true,
-    }))
-  }, [dnd.interactionMode, dnd.isDragPrimed, visibleInsertLanes])
-  const overlayDropY = useMemo(() => {
-    const dropIntent = dnd.dropIntent
-    if (dnd.interactionMode !== "dragging" || !dropIntent) {
-      return null
-    }
-    if (dropIntent.type === "between") {
-      const rowAnchor = layout.rowAnchors[dropIntent.rowId]
-      if (!rowAnchor) {
-        return null
-      }
-      return dropIntent.position === "before" ? rowAnchor.top : rowAnchor.bottom
-    }
-    if (dropIntent.type === "root-start") {
-      const firstRootId = (siblingsByParent.get(null) ?? [])[0]?.id
-      const rootTop = firstRootId
-        ? layout.rowAnchors[firstRootId]?.top
-        : undefined
-      return rootTop ?? layout.tableHeaderBottom
-    }
-    return null
-  }, [
-    dnd.dropIntent,
-    dnd.interactionMode,
-    layout.rowAnchors,
-    layout.tableHeaderBottom,
-    siblingsByParent,
-  ])
 
   useEffect(() => {
     if (!isDev || typeof window === "undefined") {
       return
     }
     const timer = window.setInterval(() => {
-      const medianInputToPaint = getMedian(inputToPaintRef.current)
-      const medianPatch = getMedian(patchLatenciesRef.current)
+      const medianInputToPaint = readInputToPaintMedian()
+      const medianPatch = readPatchLatencyMedian()
       console.debug(
         "[workspace perf]",
         JSON.stringify({
@@ -278,70 +139,46 @@ export function useWorkspaceClientComposition() {
               : Number(medianInputToPaint.toFixed(1)),
           medianPatchLatencyMs:
             medianPatch === null ? null : Number(medianPatch.toFixed(1)),
-          refreshCount,
+          refreshCount: treeData.refreshCount,
         }),
       )
     }, 5000)
     return () => {
       window.clearInterval(timer)
     }
-  }, [isDev, layout.overlayRecalcCount, refreshCount])
-
-  const handleTitleBlur = useCallback(
-    (rowId: string) => {
-      if (escapeCancellableRowId === rowId) {
-        setEscapeCancellableRowId(null)
-      }
-    },
-    [escapeCancellableRowId],
-  )
-
-  const handleTitleKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLInputElement>, rowId: string) => {
-      if (event.key !== "Escape") {
-        return
-      }
-      if (escapeCancellableRowId !== rowId) {
-        return
-      }
-      event.preventDefault()
-      event.stopPropagation()
-      discardPendingSave(rowId)
-      setEscapeCancellableRowId(null)
-      void deleteRow(rowId)
-    },
-    [deleteRow, discardPendingSave, escapeCancellableRowId],
-  )
+  }, [
+    isDev,
+    layout.overlayRecalcCount,
+    readInputToPaintMedian,
+    readPatchLatencyMedian,
+    treeData.refreshCount,
+  ])
 
   const handleOpenWorkspace = useCallback(
     (workspaceId: string) => {
       if (workspaceId === currentWorkspaceId) {
         return
       }
-      flushPendingEdits()
-      setErrorText("")
+      editing.flushPendingEdits()
+      treeData.setErrorText("")
       openWorkspace(workspaceId)
     },
-    [currentWorkspaceId, flushPendingEdits, openWorkspace, setErrorText],
+    [
+      currentWorkspaceId,
+      editing.flushPendingEdits,
+      openWorkspace,
+      treeData.setErrorText,
+    ],
   )
 
   const handleCreateWorkspace = useCallback(
     async (name: string) => {
-      flushPendingEdits()
-      setErrorText("")
+      editing.flushPendingEdits()
+      treeData.setErrorText("")
       await createWorkspace(name)
     },
-    [createWorkspace, flushPendingEdits, setErrorText],
+    [createWorkspace, editing.flushPendingEdits, treeData.setErrorText],
   )
-
-  const currentWorkspaceName = currentWorkspace?.name ?? "Рабочее пространство"
-  const rowEdits = useMemo(() => {
-    const next: Record<string, EditState> = {}
-    for (const row of rows) {
-      next[row.id] = edits[row.id] ?? buildEditState(row)
-    }
-    return next
-  }, [edits, rows])
 
   const renderSwitcher = useCallback(
     ({
@@ -367,36 +204,114 @@ export function useWorkspaceClientComposition() {
     [handleCreateWorkspace, handleOpenWorkspace],
   )
 
-  const renderRatingCells = useCallback<
-    WorkspaceTreeTableProps["renderRatingCells"]
-  >(
-    ({ edit, isParentRow, onCommitEdit, row }) => (
-      <>
-        <WorkspaceRatingCell
-          field={workspaceRatingFieldConfigs[0]}
-          row={row}
-          editState={edit}
-          isParentRow={isParentRow}
-          onChange={(value) => onCommitEdit({ overcomplication: value })}
-        />
-        <WorkspaceRatingCell
-          field={workspaceRatingFieldConfigs[1]}
-          row={row}
-          editState={edit}
-          isParentRow={isParentRow}
-          onChange={(value) => onCommitEdit({ importance: value })}
-        />
-        <WorkspaceRatingCell
-          field={workspaceRatingFieldConfigs[2]}
-          row={row}
-          editState={edit}
-          isParentRow={isParentRow}
-          onChange={(value) => onCommitEdit({ blocksMoney: value })}
-        />
-      </>
-    ),
-    [],
-  )
+  const {
+    FRAME_X_PX,
+    LEFT_GUTTER_WIDTH_PX,
+    WORK_CONTENT_INDENT_PX,
+    CELL_INLINE_PAD_PX,
+    STRUCTURE_LINE_WIDTH_PX,
+    CONTENT_START_X_PX,
+    TREE_LEVEL_OFFSET_PX,
+  } = useTableFrameConstants()
+
+  const currentWorkspaceName = currentWorkspace?.name ?? "Рабочее пространство"
+  const rowUiById = useMemo<Record<string, WorkspaceTreeRowUiModel>>(() => {
+    const next: Record<string, WorkspaceTreeRowUiModel> = {}
+
+    for (const row of treeData.rows) {
+      const edit = editing.rowEdits[row.id]
+      if (!edit) {
+        continue
+      }
+      const rowId = row.id
+      next[rowId] = {
+        title: {
+          value: edit.title,
+          registerInputRef: (node) => layout.registerTitleInputRef(rowId, node),
+          onFocus: () => editing.handleFieldFocus(rowId),
+          onBlur: (value) => {
+            editing.commitTextEdit(rowId, { title: value })
+            editing.handleFieldBlur(rowId)
+            editing.handleTitleBlur(rowId)
+          },
+          onKeyDown: (event) => editing.handleTitleKeyDown(event, rowId),
+        },
+        object: {
+          value: edit.object,
+          onFocus: () => editing.handleFieldFocus(rowId),
+          onBlur: (value) => {
+            editing.commitTextEdit(rowId, { object: value })
+            editing.handleFieldBlur(rowId)
+          },
+        },
+        currentProblems: {
+          value: edit.currentProblems,
+          registerTextareaRef: (node) =>
+            layout.registerTextareaRef(`currentProblems:${rowId}`, node),
+          onFocus: () => editing.handleFieldFocus(rowId),
+          onBlur: (value) => {
+            editing.commitTextEdit(rowId, { currentProblems: value })
+            editing.handleFieldBlur(rowId)
+          },
+          onKeyDown: (event) => {
+            if (event.key !== "Enter" || (!event.ctrlKey && !event.metaKey)) {
+              return
+            }
+            event.preventDefault()
+            editing.commitTextEdit(rowId, {
+              currentProblems: event.currentTarget.value,
+            })
+          },
+          onInput: autoGrowTextarea,
+        },
+        solutionVariants: {
+          value: edit.solutionVariants,
+          registerTextareaRef: (node) =>
+            layout.registerTextareaRef(`solutionVariants:${rowId}`, node),
+          onFocus: () => editing.handleFieldFocus(rowId),
+          onBlur: (value) => {
+            editing.commitTextEdit(rowId, { solutionVariants: value })
+            editing.handleFieldBlur(rowId)
+          },
+          onKeyDown: (event) => {
+            if (event.key !== "Enter" || (!event.ctrlKey && !event.metaKey)) {
+              return
+            }
+            event.preventDefault()
+            editing.commitTextEdit(rowId, {
+              solutionVariants: event.currentTarget.value,
+            })
+          },
+          onInput: autoGrowTextarea,
+        },
+        possiblyRemovable: {
+          checked: edit.possiblyRemovable,
+          onChange: (checked) =>
+            editing.commitEdit(rowId, { possiblyRemovable: checked }),
+          onFocus: () => editing.handleFieldFocus(rowId),
+          onBlur: () => editing.handleFieldBlur(rowId),
+        },
+        ratingCells: editing.renderRatingCells({
+          edit,
+          isParentRow: row.children.length > 0,
+          row,
+          onCommitEdit: (patch) => editing.commitEdit(rowId, patch),
+        }),
+        renderSignature: [
+          edit.title,
+          edit.object,
+          edit.overcomplication,
+          edit.importance,
+          edit.blocksMoney,
+          edit.currentProblems,
+          edit.solutionVariants,
+          edit.possiblyRemovable ? "1" : "0",
+        ].join("::"),
+      }
+    }
+
+    return next
+  }, [editing, layout, treeData.rows])
 
   return {
     currentWorkspaceId,
@@ -405,15 +320,15 @@ export function useWorkspaceClientComposition() {
     workspaceErrorText,
     workspaces,
     currentWorkspaceName,
-    errorText,
-    isLoading,
-    rows,
-    numberingById,
-    rowEdits,
-    dnd,
+    errorText: treeData.errorText,
+    isLoading: treeData.isLoading,
+    rows: treeData.rows,
+    numberingById: treeData.numberingById,
+    rowUiById,
+    dnd: dndOverlay.dnd,
     layout,
-    overlayAddIndicators,
-    overlayDropY,
+    overlayAddIndicators: dndOverlay.overlayAddIndicators,
+    overlayDropY: dndOverlay.overlayDropY,
     tableFrame: {
       FRAME_X_PX,
       LEFT_GUTTER_WIDTH_PX,
@@ -424,16 +339,9 @@ export function useWorkspaceClientComposition() {
       TREE_LEVEL_OFFSET_PX,
     },
     handlers: {
-      handleTitleBlur,
-      handleTitleKeyDown,
-      createRowAtPosition,
-      deleteRow,
-      commitTextEdit,
-      commitEdit,
-      handleFieldFocus,
-      handleFieldBlur,
+      createRowAtPosition: treeData.createRowAtPosition,
+      deleteRow: treeData.deleteRow,
       renderSwitcher,
-      renderRatingCells,
     },
     workspaceRatingFieldConfigs,
   }

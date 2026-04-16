@@ -34,7 +34,7 @@ export function WorkspaceClient() {
           ) : null}
           <WorkspaceTreeTable
             rows={vm.rows}
-            edits={vm.rowEdits}
+            rowUiById={vm.rowUiById}
             numberingById={vm.numberingById}
             draggedRowId={vm.dnd.draggedRowId}
             dropIntent={vm.dnd.dropIntent}
@@ -54,8 +54,6 @@ export function WorkspaceClient() {
             tableWrapRef={vm.layout.tableWrapRef}
             tableRef={vm.layout.tableRef}
             registerRowElementRef={vm.layout.registerRowElementRef}
-            registerTitleInputRef={vm.layout.registerTitleInputRef}
-            registerTextareaRef={vm.layout.registerTextareaRef}
             onHandlePointerDown={vm.dnd.handleHandlePointerDown}
             onHandlePointerMove={vm.dnd.handleHandlePointerMove}
             onHandlePointerUp={vm.dnd.handleHandlePointerUp}
@@ -66,13 +64,6 @@ export function WorkspaceClient() {
             onDeleteRow={(rowId) => {
               void vm.handlers.deleteRow(rowId)
             }}
-            onCommitTextEdit={vm.handlers.commitTextEdit}
-            onCommitEdit={vm.handlers.commitEdit}
-            onFieldFocus={vm.handlers.handleFieldFocus}
-            onFieldBlur={vm.handlers.handleFieldBlur}
-            onTitleKeyDown={vm.handlers.handleTitleKeyDown}
-            onTitleBlurExtra={vm.handlers.handleTitleBlur}
-            renderRatingCells={vm.handlers.renderRatingCells}
           />
         </section>
       </div>

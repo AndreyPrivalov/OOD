@@ -1,6 +1,8 @@
+import { sql } from "drizzle-orm"
 import {
   type AnyPgColumn,
   boolean,
+  check,
   integer,
   jsonb,
   pgTable,
@@ -19,27 +21,36 @@ export const workspaces = pgTable("workspaces", {
     .defaultNow(),
 })
 
-export const workItems = pgTable("work_items", {
-  id: text("id").primaryKey(),
-  workspaceId: text("workspace_id")
-    .notNull()
-    .references(() => workspaces.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  object: text("object"),
-  possiblyRemovable: boolean("possibly_removable").notNull().default(false),
-  parentId: text("parent_id").references((): AnyPgColumn => workItems.id, {
-    onDelete: "cascade",
+export const workItems = pgTable(
+  "work_items",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    object: text("object"),
+    possiblyRemovable: boolean("possibly_removable").notNull().default(false),
+    parentId: text("parent_id").references((): AnyPgColumn => workItems.id, {
+      onDelete: "cascade",
+    }),
+    siblingOrder: integer("sibling_order").notNull().default(0),
+    overcomplication: integer("overcomplication"),
+    importance: integer("importance"),
+    blocksMoney: integer("blocks_money"),
+    currentProblems: jsonb("current_problems").notNull().default([]),
+    solutionVariants: jsonb("solution_variants").notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    workItemsTitleNotEmpty: check(
+      "work_items_title_not_empty",
+      sql`btrim(${table.title}) <> ''`,
+    ),
   }),
-  siblingOrder: integer("sibling_order").notNull().default(0),
-  overcomplication: integer("overcomplication"),
-  importance: integer("importance"),
-  blocksMoney: integer("blocks_money"),
-  currentProblems: jsonb("current_problems").notNull().default([]),
-  solutionVariants: jsonb("solution_variants").notNull().default([]),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-})
+)

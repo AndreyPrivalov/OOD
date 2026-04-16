@@ -8,6 +8,7 @@ import {
 } from "./reconciliation"
 import { buildPatchPayload } from "./save-payload"
 import { LocalFirstRowQueue, type RevisionedValue } from "./save-queue"
+import { readSaveRowDeferredError } from "./save-result"
 import type {
   EditState,
   EditableWorkItemPatch,
@@ -50,6 +51,8 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
   )
   const rowMetaRef = useRef<Map<string, RowEditMeta>>(new Map())
   const editsRef = useRef<Record<string, EditState>>({})
+  const rowsByIdRef = useRef(rowsById)
+  rowsByIdRef.current = rowsById
 
   useEffect(() => {
     editsRef.current = edits
@@ -73,8 +76,7 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
     const created: RowEditMeta = {
       isDirty: false,
       isFocused: false,
-      lastLocalRevision: 0,
-      lastAckRevision: 0,
+      hasUnackedChanges: false,
     }
     rowMetaRef.current.set(rowId, created)
     return created
@@ -85,16 +87,43 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
     queue?.clearQueued()
   }, [])
 
+  const remapRowState = useCallback((fromRowId: string, toRowId: string) => {
+    if (fromRowId === toRowId) {
+      return
+    }
+
+    const queue = rowQueuesRef.current.get(fromRowId)
+    if (queue) {
+      rowQueuesRef.current.delete(fromRowId)
+      rowQueuesRef.current.set(toRowId, queue)
+    }
+
+    const meta = rowMetaRef.current.get(fromRowId)
+    if (meta) {
+      rowMetaRef.current.delete(fromRowId)
+      rowMetaRef.current.set(toRowId, meta)
+    }
+
+    setEdits((current) => {
+      if (!(fromRowId in current)) {
+        return current
+      }
+      const fromEdit = current[fromRowId]
+      const next = { ...current }
+      delete next[fromRowId]
+      if (!(toRowId in next)) {
+        next[toRowId] = fromEdit
+      }
+      return next
+    })
+  }, [])
+
   const markRowCleanIfSettled = useCallback(
     (id: string) => {
       const queue = rowQueuesRef.current.get(id)
       const meta = getRowMeta(id)
       const hasPending = queue?.hasPending() ?? false
-      if (
-        !hasPending &&
-        meta.lastAckRevision >= meta.lastLocalRevision &&
-        !meta.isFocused
-      ) {
+      if (!hasPending && !meta.isFocused && !meta.hasUnackedChanges) {
         meta.isDirty = false
       }
     },
@@ -102,27 +131,38 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
   )
 
   const runRowSaveRequest = useCallback(
-    async (id: string, request: RevisionedValue<EditState>) => {
+    async (
+      id: string,
+      request: RevisionedValue<EditState>,
+      fallbackRow?: Row,
+    ) => {
+      let activeRowId = id
       const queue = getRowQueue(id)
-      const currentRow = rowsById.get(id)
+      const currentRow = rowsByIdRef.current.get(activeRowId) ?? fallbackRow
       if (!currentRow) {
-        queue.acknowledge(request.revision)
-        markRowCleanIfSettled(id)
+        const ackResult = queue.acknowledge(request.revision)
+        const meta = getRowMeta(activeRowId)
+        if (ackResult.acknowledged && !queue.hasPending()) {
+          meta.hasUnackedChanges = false
+        }
+        if (ackResult.nextRequest) {
+          void runRowSaveRequest(activeRowId, ackResult.nextRequest)
+        }
+        markRowCleanIfSettled(activeRowId)
         return
       }
 
       const payload = buildPatchPayload(currentRow, request.value)
       if (Object.keys(payload).length === 0) {
         const ackResult = queue.acknowledge(request.revision)
-        const meta = getRowMeta(id)
-        meta.lastAckRevision = Math.max(
-          meta.lastAckRevision,
-          queue.getLastAckRevision(),
-        )
-        if (ackResult.nextRequest) {
-          void runRowSaveRequest(id, ackResult.nextRequest)
+        const meta = getRowMeta(activeRowId)
+        if (ackResult.acknowledged && !queue.hasPending()) {
+          meta.hasUnackedChanges = false
         }
-        markRowCleanIfSettled(id)
+        if (ackResult.nextRequest) {
+          void runRowSaveRequest(activeRowId, ackResult.nextRequest, currentRow)
+        }
+        markRowCleanIfSettled(activeRowId)
         return
       }
 
@@ -130,7 +170,20 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
         isDev && typeof performance !== "undefined" ? performance.now() : 0
 
       try {
-        const updated = (await saveRow(id, payload)) as Partial<Row>
+        const saveResult = await saveRow(activeRowId, payload)
+        const deferredSaveError = readSaveRowDeferredError(saveResult)
+        const updated =
+          saveResult && typeof saveResult === "object"
+            ? (saveResult as Partial<Row>)
+            : null
+        const updatedId =
+          updated && typeof updated === "object" && "id" in updated
+            ? updated.id
+            : undefined
+        const nextRowId =
+          typeof updatedId === "string" && updatedId.length > 0
+            ? updatedId
+            : activeRowId
 
         if (isDev && typeof performance !== "undefined") {
           const latency = Math.max(0, performance.now() - startedAt)
@@ -138,11 +191,10 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
         }
 
         const ackResult = queue.acknowledge(request.revision)
-        const meta = getRowMeta(id)
-        meta.lastAckRevision = Math.max(
-          meta.lastAckRevision,
-          queue.getLastAckRevision(),
-        )
+        const meta = getRowMeta(activeRowId)
+        if (ackResult.acknowledged && !queue.hasPending()) {
+          meta.hasUnackedChanges = false
+        }
 
         if (!ackResult.stale && ackResult.shouldApply && updated) {
           const patch = buildRowPatchFromServer(updated)
@@ -150,18 +202,38 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
             Object.keys(patch).length > 0 &&
             !isServerPatchEchoingPayload(patch, payload)
           ) {
-            patchRow(id, patch)
+            patchRow(activeRowId, patch)
           }
         }
-        if (ackResult.nextRequest) {
-          void runRowSaveRequest(id, ackResult.nextRequest)
+
+        if (nextRowId !== activeRowId) {
+          remapRowState(activeRowId, nextRowId)
+          activeRowId = nextRowId
         }
-        reportError("")
-        markRowCleanIfSettled(id)
+
+        const nextRowSnapshot = {
+          ...currentRow,
+          ...updated,
+          id: activeRowId,
+        } as Row
+
+        if (ackResult.nextRequest) {
+          void runRowSaveRequest(
+            activeRowId,
+            ackResult.nextRequest,
+            nextRowSnapshot,
+          )
+        }
+        if (deferredSaveError) {
+          reportError(toErrorText(deferredSaveError))
+        } else {
+          reportError("")
+        }
+        markRowCleanIfSettled(activeRowId)
       } catch (error) {
         const nextRequest = queue.fail(request.revision)
         if (nextRequest) {
-          void runRowSaveRequest(id, nextRequest)
+          void runRowSaveRequest(activeRowId, nextRequest, currentRow)
         }
         reportError(toErrorText(error))
       }
@@ -174,7 +246,7 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
       patchRow,
       reportError,
       recordPatchLatency,
-      rowsById,
+      remapRowState,
       saveRow,
       toErrorText,
     ],
@@ -196,13 +268,10 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
   const persistRowEdit = useCallback(
     (id: string, nextEdit: EditState) => {
       const queue = getRowQueue(id)
-      const revisioned = queue.enqueue(nextEdit)
+      queue.enqueue(nextEdit)
       const meta = getRowMeta(id)
       meta.isDirty = true
-      meta.lastLocalRevision = Math.max(
-        meta.lastLocalRevision,
-        revisioned.revision,
-      )
+      meta.hasUnackedChanges = true
       startQueuedSave(id)
     },
     [getRowMeta, getRowQueue, startQueuedSave],
@@ -210,14 +279,14 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
 
   const persistCurrentEdit = useCallback(
     (id: string) => {
-      const currentRow = rowsById.get(id)
+      const currentRow = rowsByIdRef.current.get(id)
       if (!currentRow) {
         return
       }
       const nextEdit = editsRef.current[id] ?? buildEditState(currentRow)
       persistRowEdit(id, nextEdit)
     },
-    [persistRowEdit, rowsById],
+    [persistRowEdit],
   )
 
   const flushPendingEdits = useCallback(() => {
@@ -245,7 +314,7 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
         updateOptions?.recalcColumnWidths ?? false
       let nextEditToPersist: EditState | null = null
       setEdits((current) => {
-        const fallbackRow = rowsById.get(id)
+        const fallbackRow = rowsByIdRef.current.get(id)
         const base =
           current[id] ?? (fallbackRow ? buildEditState(fallbackRow) : null)
         if (!base) {
@@ -282,7 +351,6 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
       isDev,
       persistRowEdit,
       recordInputToPaint,
-      rowsById,
       scheduleTextColumnWidthRecalc,
     ],
   )
@@ -335,7 +403,9 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
         const meta = getRowMeta(row.id)
         const queue = rowQueuesRef.current.get(row.id)
         const hasPending = queue?.hasPending() ?? false
-        const protectDraft = meta.isDirty && (meta.isFocused || hasPending)
+        const protectDraft =
+          meta.isDirty &&
+          (meta.isFocused || hasPending || meta.hasUnackedChanges)
 
         if (!currentEdit) {
           next[row.id] = serverEdit
