@@ -35,10 +35,11 @@ describe("WorkspaceTreeTable", () => {
         "row-1": {
           title: {
             value: "Первая работа",
-            registerInputRef: () => {},
+            registerTextareaRef: () => {},
             onFocus: () => {},
             onBlur: () => {},
             onKeyDown: () => {},
+            onInput: () => {},
           },
           object: {
             value: "Объект A",

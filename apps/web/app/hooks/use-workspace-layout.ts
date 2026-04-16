@@ -31,14 +31,15 @@ export type TableColumnWidths = {
 
 const TREE_LEVEL_OFFSET_PX = 24
 const MAX_COLUMN_CHARS = 70
+const FIXED_TEXT_COLUMN_WIDTH_CH = 20
 const STABLE_TABLE_COLUMN_WIDTHS: TableColumnWidths = {
-  work: "420px",
+  work: `${FIXED_TEXT_COLUMN_WIDTH_CH}ch`,
   object: "260px",
   overcomplication: "15ch",
   importance: "15ch",
   blocksMoney: "15ch",
-  currentProblems: "34ch",
-  solutionVariants: "34ch",
+  currentProblems: `${FIXED_TEXT_COLUMN_WIDTH_CH}ch`,
+  solutionVariants: `${FIXED_TEXT_COLUMN_WIDTH_CH}ch`,
   removable: "15ch",
 }
 
@@ -64,7 +65,7 @@ type UseWorkspaceLayoutOptions = {
 export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions) {
   const { getEditForRow, isDev, rows } = options
   const rowElementRefs = useRef<Map<string, HTMLTableRowElement>>(new Map())
-  const titleInputRefs = useRef<Map<string, HTMLInputElement>>(new Map())
+  const titleInputRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map())
   const textareaRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map())
   const overlayRafRef = useRef<number | null>(null)
   const columnWidthRafRef = useRef<number | null>(null)
@@ -92,37 +93,21 @@ export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions) {
   ].join(":")
 
   const recomputeTextColumnWidths = useCallback(() => {
-    let maxTitle = 0
     let maxObject = 0
-    let maxProblems = 0
-    let maxSolutions = 0
 
     for (const row of rows) {
       const edit = getEditForRow(row)
-      const depthChars = Math.ceil((row.depth * TREE_LEVEL_OFFSET_PX) / 10)
-      maxTitle = Math.max(
-        maxTitle,
-        maxLineLengthWithSpaces(edit.title) + depthChars,
-      )
       maxObject = Math.max(maxObject, maxLineLengthWithSpaces(edit.object))
-      maxProblems = Math.max(
-        maxProblems,
-        maxLineLengthWithSpaces(edit.currentProblems),
-      )
-      maxSolutions = Math.max(
-        maxSolutions,
-        maxLineLengthWithSpaces(edit.solutionVariants),
-      )
     }
 
     const next: TableColumnWidths = {
-      work: `${clampColumnChars(maxTitle, 24)}ch`,
+      work: STABLE_TABLE_COLUMN_WIDTHS.work,
       object: `${clampColumnChars(maxObject, 16)}ch`,
       overcomplication: STABLE_TABLE_COLUMN_WIDTHS.overcomplication,
       importance: STABLE_TABLE_COLUMN_WIDTHS.importance,
       blocksMoney: STABLE_TABLE_COLUMN_WIDTHS.blocksMoney,
-      currentProblems: `${clampColumnChars(maxProblems, 18)}ch`,
-      solutionVariants: `${clampColumnChars(maxSolutions, 18)}ch`,
+      currentProblems: STABLE_TABLE_COLUMN_WIDTHS.currentProblems,
+      solutionVariants: STABLE_TABLE_COLUMN_WIDTHS.solutionVariants,
       removable: STABLE_TABLE_COLUMN_WIDTHS.removable,
     }
 
@@ -178,6 +163,9 @@ export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions) {
     }
     textareaAutoGrowRafRef.current = requestAnimationFrame(() => {
       textareaAutoGrowRafRef.current = null
+      for (const titleField of titleInputRefs.current.values()) {
+        autoGrowTextarea(titleField)
+      }
       for (const textarea of textareaRefs.current.values()) {
         autoGrowTextarea(textarea)
       }
@@ -331,12 +319,13 @@ export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions) {
   }, [])
 
   const registerTitleInputRef = useCallback(
-    (rowId: string, node: HTMLInputElement | null) => {
+    (rowId: string, node: HTMLTextAreaElement | null) => {
       if (!node) {
         titleInputRefs.current.delete(rowId)
         return
       }
       titleInputRefs.current.set(rowId, node)
+      autoGrowTextarea(node)
     },
     [],
   )
@@ -404,7 +393,7 @@ export function useTableFrameConstants() {
       CELL_INLINE_PAD_PX: 14,
       STRUCTURE_LINE_WIDTH_PX: 2,
       CONTENT_START_X_PX: 28,
-      TREE_LEVEL_OFFSET_PX: 24,
+      TREE_LEVEL_OFFSET_PX,
     }),
     [],
   )

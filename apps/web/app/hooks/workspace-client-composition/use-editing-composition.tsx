@@ -152,7 +152,17 @@ export function useWorkspaceEditingComposition(
   )
 
   const handleTitleKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLInputElement>, rowId: string) => {
+    (event: KeyboardEvent<HTMLTextAreaElement>, rowId: string) => {
+      if (
+        event.key === "Enter" &&
+        !event.shiftKey &&
+        !event.ctrlKey &&
+        !event.metaKey
+      ) {
+        event.preventDefault()
+        event.currentTarget.blur()
+        return
+      }
       if (event.key !== "Escape") {
         return
       }

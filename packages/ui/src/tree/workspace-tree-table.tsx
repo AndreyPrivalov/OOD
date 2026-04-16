@@ -28,8 +28,9 @@ type FieldControl = {
 }
 
 type TitleFieldControl = FieldControl & {
-  registerInputRef: (node: HTMLInputElement | null) => void
-  onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void
+  registerTextareaRef: (node: HTMLTextAreaElement | null) => void
+  onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void
+  onInput?: (target: HTMLTextAreaElement) => void
 }
 
 type TextareaFieldControl = FieldControl & {
@@ -235,6 +236,7 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                 return null
               }
               const hasMultilineField =
+                rowUi.title.value.includes("\n") ||
                 rowUi.currentProblems.value.includes("\n") ||
                 rowUi.solutionVariants.value.includes("\n")
               const rowClassName = [
@@ -286,22 +288,26 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                       >
                         <i className="ri-draggable" aria-hidden />
                       </button>
-                      <input
-                        className="input-title"
+                      <textarea
+                        className="input-title textarea-list"
                         data-row-field="title"
                         key={`title:${row.id}:${rowUi.title.value}`}
-                        ref={rowUi.title.registerInputRef}
+                        ref={rowUi.title.registerTextareaRef}
                         style={{
                           paddingInlineStart: `${
                             row.depth * props.rowTreeIndentPx +
                             props.workContentIndentPx
                           }px`,
                         }}
+                        rows={1}
                         defaultValue={rowUi.title.value}
                         placeholder="Название"
                         aria-label="Название"
                         onFocus={rowUi.title.onFocus}
                         onKeyDown={rowUi.title.onKeyDown}
+                        onInput={(event: FormEvent<HTMLTextAreaElement>) =>
+                          rowUi.title.onInput?.(event.currentTarget)
+                        }
                         onBlur={(event) =>
                           rowUi.title.onBlur(event.currentTarget.value)
                         }

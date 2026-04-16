@@ -275,7 +275,8 @@ export function useWorkspaceClientComposition() {
       next[rowId] = {
         title: {
           value: edit.title,
-          registerInputRef: (node) => layout.registerTitleInputRef(rowId, node),
+          registerTextareaRef: (node) =>
+            layout.registerTitleInputRef(rowId, node),
           onFocus: () => editing.handleFieldFocus(rowId),
           onBlur: (value) => {
             editing.commitTextEdit(rowId, { title: value })
@@ -283,6 +284,7 @@ export function useWorkspaceClientComposition() {
             editing.handleTitleBlur(rowId)
           },
           onKeyDown: (event) => editing.handleTitleKeyDown(event, rowId),
+          onInput: autoGrowTextarea,
         },
         object: {
           value: edit.object,
