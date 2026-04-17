@@ -36,7 +36,10 @@ Monorepo for MVP web app that manages a hierarchical list of work items.
 corepack enable
 corepack prepare pnpm@9.12.2 --activate
 ```
-3. Install and start `Docker Desktop` for macOS (Apple Silicon).
+3. Install Homebrew and PostgreSQL:
+```bash
+brew install postgresql@16
+```
 
 ## Local setup
 
@@ -58,11 +61,11 @@ NEXT_PUBLIC_APP_NAME=OOD Work Hierarchy
 
 ## Database
 
-1. Start PostgreSQL via Docker Compose:
+1. Ensure PostgreSQL is installed and start service:
 ```bash
-docker compose up -d
-# or
-pnpm db:up
+pnpm db:ensure
+# or explicitly
+pnpm db:start
 ```
 2. Run migrations:
 ```bash
@@ -73,8 +76,6 @@ pnpm db:migrate
 ```bash
 pnpm dev:with-db
 ```
-
-If `docker` command is not found, install Docker Desktop and ensure engine status is `Running`.
 
 ## Run and view result
 
@@ -97,6 +98,8 @@ You should see:
 
 - `zsh: command not found: node` -> Node.js is not installed.
 - `zsh: command not found: pnpm` -> run Corepack commands above.
-- `zsh: command not found: docker` -> Docker Desktop is not installed or PATH is not updated.
+- `brew: command not found` -> Homebrew is not installed.
+- `Formula postgresql@16 is not installed.` -> run `brew install postgresql@16`.
+- `Error: Formula \`postgresql@16\` is not installed.` -> install formula and retry `pnpm db:start`.
 - `DATABASE_URL is required` -> missing env in `apps/web/.env.local`.
-- DB connection errors -> verify Postgres is running and credentials are correct.
+- DB connection errors -> verify Postgres is running (`brew services list`) and credentials in `DATABASE_URL` are correct.
