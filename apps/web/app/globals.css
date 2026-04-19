@@ -30,7 +30,6 @@
   --number-title-gap: 6px;
   --number-anchor-left: -28px;
   --number-slot-width: 40px;
-  --add-lane-visible-length: 160px;
   --separator-line-width: 1px;
   --separator-line-color: var(--line);
   --structure-line-width: 2px;
@@ -362,16 +361,6 @@ button:focus-visible {
   width: var(--object-col-width, 260px);
 }
 
-.work-table th.actions-col,
-.work-table td.actions-col {
-  width: 44px;
-  min-width: 44px;
-  max-width: 44px;
-  padding-left: 0;
-  padding-right: 0;
-  overflow: visible;
-}
-
 .work-table th.work-col,
 .work-table td.work-col {
   position: sticky;
@@ -581,44 +570,44 @@ button:focus-visible {
   position: absolute;
   left: 0;
   right: 0;
-  height: 26px;
+  height: 30px;
   transform: translateY(-50%);
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .overlay-add-line {
   position: absolute;
   left: var(--content-start-x);
-  width: var(--add-lane-visible-length);
+  right: 0;
   top: 50%;
   transform: translateY(-50%);
-  border-top: 1px solid transparent;
+  border-top: 2px solid transparent;
   transition: border-color 120ms ease, border-top-width 120ms ease;
   pointer-events: none;
 }
 
 .overlay-add-hotspot {
   position: absolute;
-  left: calc(var(--content-start-x) + var(--add-lane-visible-length) - 24px);
+  left: calc(var(--content-start-x) - 18px);
   top: 50%;
-  width: 48px;
-  height: 48px;
+  width: 42px;
+  height: 42px;
   transform: translateY(-50%);
   pointer-events: auto;
   background: transparent;
-  z-index: 1;
+  z-index: 2;
 }
 
 .overlay-add-plus {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   transform: translate(-50%, -50%);
   border: 0;
-  border-radius: 999px;
-  background: var(--interaction-color);
+  border-radius: 6px;
+  background: var(--accent);
   color: var(--bg);
   display: inline-flex;
   align-items: center;
@@ -635,24 +624,12 @@ button:focus-visible {
 
 .overlay-add-hotspot:hover + .overlay-add-line,
 .overlay-add-hotspot:focus-within + .overlay-add-line {
-  border-top-color: var(--interaction-color);
-  border-top-width: var(--interaction-stroke);
-}
-
-.overlay-add-lane:hover .overlay-add-line,
-.overlay-add-lane:focus-within .overlay-add-line {
-  border-top-color: var(--interaction-color);
-  border-top-width: var(--interaction-stroke);
+  border-top-color: var(--accent);
+  border-top-width: 2px;
 }
 
 .overlay-add-hotspot:hover .overlay-add-plus,
 .overlay-add-hotspot:focus-within .overlay-add-plus {
-  opacity: 1;
-  filter: brightness(0.96);
-}
-
-.overlay-add-lane:hover .overlay-add-plus,
-.overlay-add-lane:focus-within .overlay-add-plus {
   opacity: 1;
   filter: brightness(0.96);
 }
@@ -722,14 +699,6 @@ button:focus-visible {
   font-size: var(--text-main);
   font-weight: 400;
   color: var(--fg);
-}
-
-.cell-actions {
-  display: flex;
-  align-items: center;
-  position: relative;
-  height: var(--table-control-height);
-  overflow: visible;
 }
 
 .btn {
@@ -805,12 +774,28 @@ button:focus-visible {
   color: var(--danger);
 }
 
+.work-col-actions {
+  position: absolute;
+  top: 4px;
+  right: 0;
+  width: var(--table-control-height);
+  height: var(--table-control-height);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.work-col-actions .delete-handle {
+  right: 0;
+  pointer-events: auto;
+}
+
 .input-title {
   min-width: 8ch;
   width: 100%;
   max-width: none;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  padding-right: calc(var(--table-control-height) + 4px);
 }
 
 .input-object {
