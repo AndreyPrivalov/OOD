@@ -125,6 +125,10 @@ button:focus-visible {
   gap: var(--space-4);
 }
 
+.section-column-start {
+  padding-left: var(--content-start-x);
+}
+
 .section-head {
   display: grid;
   gap: var(--space-2);

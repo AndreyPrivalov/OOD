@@ -19,12 +19,14 @@ export function WorkspaceClient() {
           isCreatingWorkspace={vm.isCreatingWorkspace}
           isWorkspaceLoading={vm.isWorkspaceLoading}
           workspaceErrorText={vm.workspaceErrorText}
+          className="section section-column-start"
           workspaces={vm.workspaces}
           renderSwitcher={vm.handlers.renderSwitcher}
         />
         <WorkspaceTitlePanel
           title={vm.currentWorkspaceName}
           errorText={vm.errorText}
+          className="section section-column-start"
         />
         <section className="section">
           {vm.isLoading ? <p className="list-loading">Загрузка</p> : null}
