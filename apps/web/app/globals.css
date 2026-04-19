@@ -452,7 +452,7 @@ button:focus-visible {
 
 .work-number {
   position: absolute;
-  left: calc(var(--work-content-indent) + var(--number-anchor-left) + 20px);
+  left: calc(var(--work-content-indent) + var(--number-anchor-left) + 16px);
   top: 50%;
   transform: translateY(-50%);
   min-width: var(--number-slot-width);
@@ -480,9 +480,9 @@ button:focus-visible {
 .drag-handle {
   position: absolute;
   left: calc(var(--work-content-indent) + var(--number-anchor-left) - 2px);
-  top: 0;
-  transform: none;
-  width: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
   height: var(--table-control-height);
   border: 0;
   border-radius: 0;
@@ -490,7 +490,7 @@ button:focus-visible {
   color: var(--fg);
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   padding: 0;
   opacity: 0;
   visibility: hidden;
