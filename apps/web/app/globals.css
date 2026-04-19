@@ -339,11 +339,12 @@ button:focus-visible {
 }
 
 .work-table tbody tr.row-created td {
-  animation: row-fade-in 220ms ease-out;
+  animation: row-fade-in 180ms ease-out;
 }
 
 .work-table tbody tr.row-shift-down td {
-  animation: row-shift-down 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: row-shift-down 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform;
 }
 
 @keyframes row-fade-in {

@@ -358,7 +358,7 @@ export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions) {
     if (!titleInput) {
       return false
     }
-    titleInput.focus()
+    titleInput.focus({ preventScroll: true })
     titleInput.setSelectionRange(0, titleInput.value.length)
     return true
   }, [])

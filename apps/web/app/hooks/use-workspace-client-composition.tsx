@@ -158,7 +158,7 @@ export function useWorkspaceClientComposition() {
       setRecentlyCreatedRowId((current) =>
         current === recentlyCreatedRowId ? null : current,
       )
-    }, 280)
+    }, 240)
     return () => {
       window.clearTimeout(timer)
     }
@@ -172,7 +172,7 @@ export function useWorkspaceClientComposition() {
       setInsertAnimationTarget((current) =>
         current === insertAnimationTarget ? null : current,
       )
-    }, 280)
+    }, 240)
     return () => {
       window.clearTimeout(timer)
     }
