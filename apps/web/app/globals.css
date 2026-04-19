@@ -359,11 +359,14 @@ button:focus-visible {
   width: var(--object-col-width, 260px);
 }
 
-.work-table th:nth-child(9) {
-  width: 0;
-  min-width: 0;
+.work-table th.actions-col,
+.work-table td:last-child {
+  width: 44px;
+  min-width: 44px;
+  max-width: 44px;
   padding-left: 0;
   padding-right: 0;
+  overflow: visible;
 }
 
 .work-table .work-col {
@@ -773,17 +776,9 @@ button:focus-visible {
   width: var(--table-control-height);
 }
 
-.work-table td:last-child {
-  width: 0;
-  min-width: 0;
-  padding-left: 0;
-  padding-right: 0;
-  overflow: visible;
-}
-
 .delete-handle {
   position: absolute;
-  right: -22px;
+  right: 0;
   top: 0;
   transform: none;
   font-size: 20px;
