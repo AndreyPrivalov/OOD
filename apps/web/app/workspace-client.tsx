@@ -19,7 +19,7 @@ export function WorkspaceClient() {
           isCreatingWorkspace={vm.isCreatingWorkspace}
           isWorkspaceLoading={vm.isWorkspaceLoading}
           workspaceErrorText={vm.workspaceErrorText}
-          className="section section-column-start"
+          className="section section-column-start workspace-switcher-row"
           workspaces={vm.workspaces}
           renderSwitcher={vm.handlers.renderSwitcher}
         />

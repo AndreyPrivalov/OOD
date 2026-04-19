@@ -129,6 +129,11 @@ button:focus-visible {
   padding-left: var(--content-start-x);
 }
 
+.workspace-switcher-row {
+  margin-top: -8px;
+  margin-bottom: 12px;
+}
+
 .section-head {
   display: grid;
   gap: var(--space-2);
