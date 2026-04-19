@@ -457,7 +457,8 @@ button:focus-visible {
   transform: translateY(-50%);
   min-width: var(--number-slot-width);
   color: var(--muted);
-  font-family: var(--font-sans), "Segoe UI", sans-serif;
+  font-family: var(--font-serif), Georgia, serif;
+  font-style: italic;
   font-size: var(--text-secondary);
   line-height: 1;
   white-space: nowrap;
