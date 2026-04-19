@@ -332,6 +332,7 @@ button:focus-visible {
   vertical-align: top;
   background: transparent;
   position: relative;
+  z-index: 1;
   box-sizing: border-box;
 }
 
@@ -401,7 +402,7 @@ button:focus-visible {
 .work-table td.work-col {
   position: sticky;
   left: 0;
-  z-index: 3;
+  z-index: 10;
   background: var(--bg);
   background-clip: padding-box;
   width: var(--work-col-width, 420px);
@@ -416,7 +417,7 @@ button:focus-visible {
 }
 
 .work-table th.work-col {
-  z-index: 4;
+  z-index: 11;
   padding-left: var(--content-start-x);
 }
 
@@ -538,33 +539,41 @@ button:focus-visible {
 }
 
 .drag-handle i {
-  width: 4px;
-  height: 4px;
+  font-size: 18px;
   line-height: 1;
-  border-radius: 50%;
-  background: currentColor;
-  display: block;
-  box-shadow: 0 6px 0 currentColor, 0 12px 0 currentColor;
-}
-
-.drag-handle i::before {
-  content: "";
+  font-style: normal;
 }
 
 .work-table tbody tr.drop-nest-target td {
-  box-shadow: inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent);
+  box-shadow: none;
+}
+
+.work-table tbody tr.drop-nest-target td::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-top: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+  pointer-events: none;
+  z-index: 7;
 }
 
 .work-table tbody tr.drop-nest-target td:first-child {
-  box-shadow: inset 2px 0 0 var(--accent), inset 0 2px 0 var(--accent), inset 0
-    -2px 0 var(--accent);
+  box-shadow: none;
+}
+
+.work-table tbody tr.drop-nest-target td:last-child {
+  box-shadow: none;
+}
+
+.work-table tbody tr.drop-nest-target td:first-child::after {
+  border-left: 2px solid var(--accent);
   border-top-left-radius: 8px;
   border-bottom-left-radius: 8px;
 }
 
-.work-table tbody tr.drop-nest-target td:last-child {
-  box-shadow: inset -2px 0 0 var(--accent), inset 0 2px 0 var(--accent), inset 0
-    -2px 0 var(--accent);
+.work-table tbody tr.drop-nest-target td:last-child::after {
+  border-right: 2px solid var(--accent);
   border-top-right-radius: 8px;
   border-bottom-right-radius: 8px;
 }
@@ -590,7 +599,7 @@ button:focus-visible {
 }
 
 .work-table tbody tr.drop-nest-target td.work-col {
-  z-index: 4;
+  z-index: auto;
 }
 
 .work-table-wrap {
@@ -627,7 +636,7 @@ button:focus-visible {
 
 .overlay-add-hotspot {
   position: absolute;
-  left: calc((var(--frame-x) * -1) - 6px);
+  left: calc(var(--frame-x) * -1);
   top: 50%;
   width: 72px;
   height: 20px;
@@ -694,10 +703,10 @@ button:focus-visible {
   max-width: min(72vw, 640px);
   min-height: 34px;
   padding: 7px 10px;
-  border: 1px solid rgba(19, 25, 32, 0.14);
+  border: 0;
   border-radius: 8px;
-  background: rgba(250, 246, 244, 0.96);
-  box-shadow: 0 8px 18px rgba(19, 25, 32, 0.18);
+  background: rgba(250, 246, 244, 0.74);
+  box-shadow: none;
 }
 
 .drag-preview-number {
