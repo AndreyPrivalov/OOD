@@ -608,14 +608,14 @@ button:focus-visible {
   position: absolute;
   left: 0;
   right: 0;
-  height: 30px;
+  height: 20px;
   transform: translateY(-50%);
   pointer-events: none;
 }
 
 .overlay-add-line {
   position: absolute;
-  left: calc(var(--lane-content-start-x, var(--content-start-x)) - 4px);
+  left: calc((var(--frame-x) * -1) + 28px);
   right: 0;
   top: 50%;
   transform: translateY(-50%);
@@ -626,10 +626,10 @@ button:focus-visible {
 
 .overlay-add-hotspot {
   position: absolute;
-  left: calc(var(--lane-content-start-x, var(--content-start-x)) - 48px);
+  left: calc((var(--frame-x) * -1) - 6px);
   top: 50%;
-  width: 70px;
-  height: 56px;
+  width: 72px;
+  height: 20px;
   transform: translateY(-50%);
   pointer-events: auto;
   background: transparent;
@@ -638,7 +638,7 @@ button:focus-visible {
 
 .overlay-add-plus {
   position: absolute;
-  left: 33px;
+  left: 17px;
   top: 50%;
   width: 22px;
   height: 22px;
