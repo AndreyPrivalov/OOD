@@ -99,9 +99,9 @@ type DragPreviewLike = {
   numbering: string
 }
 
-type InsertAnimationTargetLike = {
-  parentId: string | null
-  targetIndex: number
+type OverlayNestTargetLike = {
+  top: number
+  height: number
 }
 
 type RatingHeader = {
@@ -306,9 +306,8 @@ export type WorkspaceTreeTableProps = {
   overlayHeight: number
   overlayAddIndicators: OverlayIndicatorLike[]
   overlayDropY: number | null
+  overlayNestTarget: OverlayNestTargetLike | null
   dragPreview: DragPreviewLike | null
-  recentlyCreatedRowId: string | null
-  insertAnimationTarget: InsertAnimationTargetLike | null
   listScrollRef: React.RefObject<HTMLDivElement>
   tableWrapRef: React.RefObject<HTMLDivElement>
   tableRef: React.RefObject<HTMLTableElement>
@@ -415,13 +414,6 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                 rowUi.currentProblems.value.includes("\n") ||
                 rowUi.solutionVariants.value.includes("\n")
               const rowClassName = [
-                props.recentlyCreatedRowId === row.id ? "row-created" : "",
-                props.insertAnimationTarget &&
-                props.recentlyCreatedRowId !== row.id &&
-                row.parentId === props.insertAnimationTarget.parentId &&
-                row.siblingOrder >= props.insertAnimationTarget.targetIndex
-                  ? "row-shift-down"
-                  : "",
                 props.draggedRowId === row.id ? "drag-source" : "",
                 props.dropIntent?.type === "between" &&
                 props.dropIntent.rowId === row.id
@@ -585,6 +577,16 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
               aria-hidden
               style={{
                 top: `${Math.round(props.overlayDropY)}px`,
+              }}
+            />
+          ) : null}
+          {props.overlayNestTarget ? (
+            <div
+              className="overlay-drop-nest"
+              aria-hidden
+              style={{
+                top: `${Math.round(props.overlayNestTarget.top)}px`,
+                height: `${Math.round(props.overlayNestTarget.height)}px`,
               }}
             />
           ) : null}

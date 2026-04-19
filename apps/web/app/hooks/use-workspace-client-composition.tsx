@@ -36,11 +36,6 @@ function autoGrowTextarea(target: HTMLTextAreaElement) {
   target.style.height = `${target.scrollHeight}px`
 }
 
-type InsertAnimationTarget = {
-  parentId: string | null
-  targetIndex: number
-}
-
 export function useWorkspaceClientComposition() {
   const isDev = process.env.NODE_ENV !== "production"
   const {
@@ -61,11 +56,6 @@ export function useWorkspaceClientComposition() {
   const [pendingFocusRowId, setPendingFocusRowId] = useState<string | null>(
     null,
   )
-  const [recentlyCreatedRowId, setRecentlyCreatedRowId] = useState<
-    string | null
-  >(null)
-  const [insertAnimationTarget, setInsertAnimationTarget] =
-    useState<InsertAnimationTarget | null>(null)
   const [escapeCancellableRowId, setEscapeCancellableRowId] = useState<
     string | null
   >(null)
@@ -79,7 +69,6 @@ export function useWorkspaceClientComposition() {
     isDev,
     onCreateFocusRow: (rowId) => {
       setPendingFocusRowId(rowId)
-      setRecentlyCreatedRowId(rowId)
       setEscapeCancellableRowId(rowId)
     },
     onDeleteRow: (rowId) => {
@@ -149,34 +138,6 @@ export function useWorkspaceClientComposition() {
     () => getMedian(editing.patchLatenciesRef.current),
     [editing.patchLatenciesRef],
   )
-
-  useEffect(() => {
-    if (!recentlyCreatedRowId || typeof window === "undefined") {
-      return
-    }
-    const timer = window.setTimeout(() => {
-      setRecentlyCreatedRowId((current) =>
-        current === recentlyCreatedRowId ? null : current,
-      )
-    }, 240)
-    return () => {
-      window.clearTimeout(timer)
-    }
-  }, [recentlyCreatedRowId])
-
-  useEffect(() => {
-    if (!insertAnimationTarget || typeof window === "undefined") {
-      return
-    }
-    const timer = window.setTimeout(() => {
-      setInsertAnimationTarget((current) =>
-        current === insertAnimationTarget ? null : current,
-      )
-    }, 240)
-    return () => {
-      window.clearTimeout(timer)
-    }
-  }, [insertAnimationTarget])
 
   useEffect(() => {
     if (!isDev || typeof window === "undefined") {
@@ -252,19 +213,6 @@ export function useWorkspaceClientComposition() {
       await deleteWorkspace(workspaceId)
     },
     [deleteWorkspace, editing.flushPendingEdits, treeData.setErrorText],
-  )
-
-  const handleCreateRowAtPosition = useCallback(
-    async (parentId: string | null, targetIndex: number) => {
-      setInsertAnimationTarget({ parentId, targetIndex })
-      if (typeof window !== "undefined") {
-        await new Promise<void>((resolve) => {
-          window.requestAnimationFrame(() => resolve())
-        })
-      }
-      await treeData.createRowAtPosition(parentId, targetIndex)
-    },
-    [treeData.createRowAtPosition],
   )
 
   const commitActiveFieldBeforeLeave = useCallback(() => {
@@ -468,8 +416,7 @@ export function useWorkspaceClientComposition() {
     layout,
     overlayAddIndicators: dndOverlay.overlayAddIndicators,
     overlayDropY: dndOverlay.overlayDropY,
-    recentlyCreatedRowId,
-    insertAnimationTarget,
+    overlayNestTarget: dndOverlay.overlayNestTarget,
     tableFrame: {
       FRAME_X_PX,
       LEFT_GUTTER_WIDTH_PX,
@@ -480,7 +427,7 @@ export function useWorkspaceClientComposition() {
       TREE_LEVEL_OFFSET_PX,
     },
     handlers: {
-      createRowAtPosition: handleCreateRowAtPosition,
+      createRowAtPosition: treeData.createRowAtPosition,
       deleteRow: treeData.deleteRow,
       renderSwitcher,
     },

@@ -63,8 +63,7 @@ export function WorkspaceClient() {
             overlayHeight={vm.layout.overlayHeight}
             overlayAddIndicators={vm.overlayAddIndicators}
             overlayDropY={vm.overlayDropY}
-            recentlyCreatedRowId={vm.recentlyCreatedRowId}
-            insertAnimationTarget={vm.insertAnimationTarget}
+            overlayNestTarget={vm.overlayNestTarget}
             listScrollRef={vm.layout.listScrollRef}
             tableWrapRef={vm.layout.tableWrapRef}
             tableRef={vm.layout.tableRef}
