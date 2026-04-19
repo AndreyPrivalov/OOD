@@ -142,6 +142,12 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
                     ]
                       .filter(Boolean)
                       .join(" ")}
+                    onDoubleClick={() => {
+                      if (isDeleting || isRenaming || props.isCreating) {
+                        return
+                      }
+                      beginRename(workspace)
+                    }}
                     onClick={() => props.onOpenWorkspace(workspace.id)}
                     role="tab"
                     type="button"
@@ -150,15 +156,6 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
                   </button>
 
                   <div className="workspace-inline-actions">
-                    <button
-                      aria-label={`Переименовать пространство ${workspace.name}`}
-                      className="workspace-inline-action"
-                      disabled={isDeleting || isRenaming || props.isCreating}
-                      onClick={() => beginRename(workspace)}
-                      type="button"
-                    >
-                      <i aria-hidden className="ri-pencil-line" />
-                    </button>
                     <button
                       aria-label={`Удалить пространство ${workspace.name}`}
                       className="workspace-inline-action"
