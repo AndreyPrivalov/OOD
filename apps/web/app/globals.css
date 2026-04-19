@@ -3,6 +3,7 @@
   --bg: #faf6f4;
   --fg: #131920;
   --muted: #5e646b;
+  --placeholder: #8a8f93;
   --line: #e0dbd9;
   --line-strong: #e0dbd9;
   --accent: #ff6325;
@@ -87,6 +88,12 @@ textarea {
   font-size: var(--text-main);
   font-weight: 400;
   line-height: 1.4;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--placeholder);
+  opacity: 1;
 }
 
 input {
@@ -674,7 +681,7 @@ button:focus-visible {
   height: 26px;
   border: 0;
   background: transparent;
-  color: var(--line);
+  color: var(--placeholder);
   cursor: pointer;
   padding: 0;
   display: inline-flex;
