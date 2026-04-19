@@ -19,17 +19,34 @@ export function buildInsertLanes(
   }
 
   const lanes: InsertLane[] = []
-  for (const row of rows) {
-    const siblings = siblingsByParent.get(row.parentId) ?? []
+  const firstRow = rows[0]
+  const firstSiblings = siblingsByParent.get(firstRow.parentId) ?? []
+  const firstSiblingIndex = firstSiblings.findIndex(
+    (candidate) => candidate.id === firstRow.id,
+  )
+  lanes.push({
+    id: `lane:before:${firstRow.id}`,
+    parentId: firstRow.parentId,
+    depth: firstRow.depth,
+    targetIndex: firstSiblingIndex < 0 ? 0 : firstSiblingIndex,
+    anchorRowId: firstRow.id,
+    anchorPlacement: "before",
+    anchorY: null,
+  })
+
+  for (let index = 1; index < rows.length; index += 1) {
+    const upperRow = rows[index - 1]
+    const lowerRow = rows[index]
+    const siblings = siblingsByParent.get(upperRow.parentId) ?? []
     const siblingIndex = siblings.findIndex(
-      (candidate) => candidate.id === row.id,
+      (candidate) => candidate.id === upperRow.id,
     )
     lanes.push({
-      id: `lane:before:${row.id}`,
-      parentId: row.parentId,
-      depth: row.depth,
-      targetIndex: siblingIndex < 0 ? 0 : siblingIndex,
-      anchorRowId: row.id,
+      id: `lane:between:${upperRow.id}:${lowerRow.id}`,
+      parentId: upperRow.parentId,
+      depth: upperRow.depth,
+      targetIndex: siblingIndex < 0 ? 0 : siblingIndex + 1,
+      anchorRowId: lowerRow.id,
       anchorPlacement: "before",
       anchorY: null,
     })

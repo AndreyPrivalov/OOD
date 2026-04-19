@@ -45,14 +45,14 @@ describe("buildInsertLanes", () => {
 
     expect(lanes.map((lane) => lane.id)).toEqual([
       "lane:before:root-a",
-      "lane:before:child-a1",
-      "lane:before:root-b",
+      "lane:between:root-a:child-a1",
+      "lane:between:child-a1:root-b",
       "lane:after:root-b",
     ])
 
     expect(lanes[0]).toMatchObject({ parentId: null, targetIndex: 0 })
-    expect(lanes[1]).toMatchObject({ parentId: "root-a", targetIndex: 0 })
-    expect(lanes[2]).toMatchObject({ parentId: null, targetIndex: 1 })
+    expect(lanes[1]).toMatchObject({ parentId: null, targetIndex: 1 })
+    expect(lanes[2]).toMatchObject({ parentId: "root-a", targetIndex: 1 })
     expect(lanes[3]).toMatchObject({ parentId: null, targetIndex: 2 })
   })
 
@@ -66,7 +66,10 @@ describe("buildInsertLanes", () => {
     const lanes = buildInsertLanes(rows, siblings)
 
     expect(lanes[0]).toMatchObject({ id: "lane:before:r1", targetIndex: 1 })
-    expect(lanes[1]).toMatchObject({ id: "lane:before:r2", targetIndex: 0 })
+    expect(lanes[1]).toMatchObject({
+      id: "lane:between:r1:r2",
+      targetIndex: 2,
+    })
   })
 })
 
