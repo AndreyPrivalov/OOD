@@ -1,10 +1,11 @@
 import {
   type CSSProperties,
-  type FormEvent,
   type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
   memo,
+  useEffect,
+  useState,
 } from "react"
 
 type TreeRowLike = {
@@ -123,6 +124,144 @@ type MemoRowProps = {
   ) => void
   children: ReactNode
 }
+
+type EditableInputFieldProps = {
+  className: string
+  dataRowField: string
+  placeholder: string
+  ariaLabel: string
+  control: FieldControl
+}
+
+const EditableInputField = memo(function EditableInputField(
+  props: EditableInputFieldProps,
+) {
+  const [draftValue, setDraftValue] = useState(props.control.value)
+  const [isFocused, setIsFocused] = useState(false)
+
+  useEffect(() => {
+    if (!isFocused) {
+      setDraftValue(props.control.value)
+    }
+  }, [props.control.value, isFocused])
+
+  return (
+    <input
+      className={props.className}
+      data-row-field={props.dataRowField}
+      value={draftValue}
+      placeholder={props.placeholder}
+      aria-label={props.ariaLabel}
+      onFocus={() => {
+        setIsFocused(true)
+        props.control.onFocus()
+      }}
+      onChange={(event) => {
+        setDraftValue(event.currentTarget.value)
+      }}
+      onBlur={() => {
+        setIsFocused(false)
+        props.control.onBlur(draftValue)
+      }}
+    />
+  )
+})
+
+type EditableTextareaFieldProps = {
+  className: string
+  dataRowField: string
+  placeholder: string
+  ariaLabel: string
+  control: TextareaFieldControl
+}
+
+const EditableTextareaField = memo(function EditableTextareaField(
+  props: EditableTextareaFieldProps,
+) {
+  const [draftValue, setDraftValue] = useState(props.control.value)
+  const [isFocused, setIsFocused] = useState(false)
+
+  useEffect(() => {
+    if (!isFocused) {
+      setDraftValue(props.control.value)
+    }
+  }, [props.control.value, isFocused])
+
+  return (
+    <textarea
+      className={props.className}
+      data-row-field={props.dataRowField}
+      ref={props.control.registerTextareaRef}
+      rows={1}
+      value={draftValue}
+      placeholder={props.placeholder}
+      aria-label={props.ariaLabel}
+      onFocus={() => {
+        setIsFocused(true)
+        props.control.onFocus()
+      }}
+      onBlur={() => {
+        setIsFocused(false)
+        props.control.onBlur(draftValue)
+      }}
+      onKeyDown={props.control.onKeyDown}
+      onChange={(event) => {
+        setDraftValue(event.currentTarget.value)
+        props.control.onInput?.(event.currentTarget)
+      }}
+    />
+  )
+})
+
+type EditableTitleFieldProps = {
+  control: TitleFieldControl
+  rowDepth: number
+  rowTreeIndentPx: number
+  workContentIndentPx: number
+}
+
+const EditableTitleField = memo(function EditableTitleField(
+  props: EditableTitleFieldProps,
+) {
+  const [draftValue, setDraftValue] = useState(props.control.value)
+  const [isFocused, setIsFocused] = useState(false)
+
+  useEffect(() => {
+    if (!isFocused) {
+      setDraftValue(props.control.value)
+    }
+  }, [props.control.value, isFocused])
+
+  return (
+    <textarea
+      className="input-title textarea-list"
+      data-row-field="title"
+      ref={props.control.registerTextareaRef}
+      style={{
+        paddingInlineStart: `${
+          props.rowDepth * props.rowTreeIndentPx + props.workContentIndentPx
+        }px`,
+      }}
+      rows={1}
+      value={draftValue}
+      placeholder="Название"
+      aria-label="Название"
+      onFocus={() => {
+        setIsFocused(true)
+        props.control.onFocus()
+      }}
+      onKeyDown={props.control.onKeyDown}
+      onChange={(event) => {
+        setDraftValue(event.currentTarget.value)
+        props.control.onInput?.(event.currentTarget)
+      }}
+      onBlur={() => {
+        setIsFocused(false)
+        props.control.onBlur(draftValue)
+      }}
+    />
+  )
+})
 
 const MemoWorkRow = memo(
   function MemoWorkRow(props: MemoRowProps) {
@@ -331,29 +470,11 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                       >
                         <i className="ri-draggable" aria-hidden />
                       </button>
-                      <textarea
-                        className="input-title textarea-list"
-                        data-row-field="title"
-                        key={`title:${row.id}:${rowUi.title.value}`}
-                        ref={rowUi.title.registerTextareaRef}
-                        style={{
-                          paddingInlineStart: `${
-                            row.depth * props.rowTreeIndentPx +
-                            props.workContentIndentPx
-                          }px`,
-                        }}
-                        rows={1}
-                        defaultValue={rowUi.title.value}
-                        placeholder="Название"
-                        aria-label="Название"
-                        onFocus={rowUi.title.onFocus}
-                        onKeyDown={rowUi.title.onKeyDown}
-                        onInput={(event: FormEvent<HTMLTextAreaElement>) =>
-                          rowUi.title.onInput?.(event.currentTarget)
-                        }
-                        onBlur={(event) =>
-                          rowUi.title.onBlur(event.currentTarget.value)
-                        }
+                      <EditableTitleField
+                        control={rowUi.title}
+                        rowDepth={row.depth}
+                        rowTreeIndentPx={props.rowTreeIndentPx}
+                        workContentIndentPx={props.workContentIndentPx}
                       />
                       <div className="work-col-actions">
                         <button
@@ -369,58 +490,31 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                     </div>
                   </td>
                   <td className="object-col">
-                    <input
+                    <EditableInputField
                       className="input-object"
-                      data-row-field="object"
-                      key={`object:${row.id}:${rowUi.object.value}`}
-                      defaultValue={rowUi.object.value}
+                      dataRowField="object"
+                      control={rowUi.object}
                       placeholder="Объект"
-                      aria-label="Объект"
-                      onFocus={rowUi.object.onFocus}
-                      onBlur={(event) =>
-                        rowUi.object.onBlur(event.currentTarget.value)
-                      }
+                      ariaLabel="Объект"
                     />
                   </td>
                   {rowUi.ratingCells}
                   <td className="problems-col">
-                    <textarea
+                    <EditableTextareaField
                       className="textarea-list"
-                      data-row-field="currentProblems"
-                      ref={rowUi.currentProblems.registerTextareaRef}
-                      key={`currentProblems:${row.id}:${rowUi.currentProblems.value}`}
-                      rows={1}
-                      defaultValue={rowUi.currentProblems.value}
+                      dataRowField="currentProblems"
+                      control={rowUi.currentProblems}
                       placeholder="Проблемы"
-                      aria-label="Проблемы по строкам"
-                      onFocus={rowUi.currentProblems.onFocus}
-                      onBlur={(event) =>
-                        rowUi.currentProblems.onBlur(event.currentTarget.value)
-                      }
-                      onKeyDown={rowUi.currentProblems.onKeyDown}
-                      onInput={(event: FormEvent<HTMLTextAreaElement>) =>
-                        rowUi.currentProblems.onInput?.(event.currentTarget)
-                      }
+                      ariaLabel="Проблемы по строкам"
                     />
                   </td>
                   <td className="solutions-col">
-                    <textarea
+                    <EditableTextareaField
                       className="textarea-list"
-                      data-row-field="solutionVariants"
-                      ref={rowUi.solutionVariants.registerTextareaRef}
-                      key={`solutionVariants:${row.id}:${rowUi.solutionVariants.value}`}
-                      rows={1}
-                      defaultValue={rowUi.solutionVariants.value}
+                      dataRowField="solutionVariants"
+                      control={rowUi.solutionVariants}
                       placeholder="Решения"
-                      aria-label="Решения по строкам"
-                      onFocus={rowUi.solutionVariants.onFocus}
-                      onBlur={(event) =>
-                        rowUi.solutionVariants.onBlur(event.currentTarget.value)
-                      }
-                      onKeyDown={rowUi.solutionVariants.onKeyDown}
-                      onInput={(event: FormEvent<HTMLTextAreaElement>) =>
-                        rowUi.solutionVariants.onInput?.(event.currentTarget)
-                      }
+                      ariaLabel="Решения по строкам"
                     />
                   </td>
                   <td className="removable-col">
