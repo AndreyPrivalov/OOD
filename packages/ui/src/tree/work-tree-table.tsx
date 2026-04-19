@@ -24,7 +24,7 @@ export function WorkTreeTable(props: WorkTreeTableProps) {
   }
 
   return (
-    <div className={props.className} style={{ display: "grid", gap: "6px" }}>
+    <div className={props.className} style={{ display: "grid", gap: "9px" }}>
       <header
         style={headerGridStyle}
         aria-label="Заголовок таблицы дерева работ"
