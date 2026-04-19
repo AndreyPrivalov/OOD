@@ -31,15 +31,16 @@ export type TableColumnWidths = {
 
 const TREE_LEVEL_OFFSET_PX = 24
 const MAX_COLUMN_CHARS = 70
-const FIXED_TEXT_COLUMN_WIDTH_CH = 20
+const FIXED_WORK_COLUMN_WIDTH_CH = 50
+const FIXED_MULTILINE_COLUMN_WIDTH_CH = 35
 const STABLE_TABLE_COLUMN_WIDTHS: TableColumnWidths = {
-  work: `${FIXED_TEXT_COLUMN_WIDTH_CH}ch`,
+  work: `${FIXED_WORK_COLUMN_WIDTH_CH}ch`,
   object: "260px",
   overcomplication: "15ch",
   importance: "15ch",
   blocksMoney: "15ch",
-  currentProblems: `${FIXED_TEXT_COLUMN_WIDTH_CH}ch`,
-  solutionVariants: `${FIXED_TEXT_COLUMN_WIDTH_CH}ch`,
+  currentProblems: `${FIXED_MULTILINE_COLUMN_WIDTH_CH}ch`,
+  solutionVariants: `${FIXED_MULTILINE_COLUMN_WIDTH_CH}ch`,
   removable: "15ch",
 }
 

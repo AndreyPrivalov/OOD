@@ -8,4 +8,7 @@ script = ""
 [[actions]]
 name = "Запустить"
 icon = "run"
-command = "npm install npm run"
+command = '''
+pnpm install
+pnpm dev
+'''
