@@ -339,7 +339,8 @@ button:focus-visible {
 }
 
 .work-table tbody tr.row-created td {
-  animation: row-fade-in 180ms ease-out;
+  opacity: 0;
+  animation: row-fade-in 180ms ease-out forwards;
 }
 
 .work-table tbody tr.row-shift-down td {
