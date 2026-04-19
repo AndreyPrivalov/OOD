@@ -91,6 +91,13 @@ type TableColumnWidthsLike = {
   removable: string
 }
 
+type DragPreviewLike = {
+  x: number
+  y: number
+  title: string
+  numbering: string
+}
+
 type RatingHeader = {
   key: string
   headerLabel: string
@@ -155,6 +162,8 @@ export type WorkspaceTreeTableProps = {
   overlayHeight: number
   overlayAddIndicators: OverlayIndicatorLike[]
   overlayDropY: number | null
+  dragPreview: DragPreviewLike | null
+  recentlyCreatedRowId: string | null
   listScrollRef: React.RefObject<HTMLDivElement>
   tableWrapRef: React.RefObject<HTMLDivElement>
   tableRef: React.RefObject<HTMLTableElement>
@@ -261,6 +270,7 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                 rowUi.currentProblems.value.includes("\n") ||
                 rowUi.solutionVariants.value.includes("\n")
               const rowClassName = [
+                props.recentlyCreatedRowId === row.id ? "row-created" : "",
                 props.draggedRowId === row.id ? "drag-source" : "",
                 props.dropIntent?.type === "between" &&
                 props.dropIntent.rowId === row.id
@@ -470,6 +480,25 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
             />
           ) : null}
         </div>
+        {props.dragPreview ? (
+          <div
+            className="drag-preview"
+            aria-hidden
+            style={{
+              left: `${Math.round(props.dragPreview.x)}px`,
+              top: `${Math.round(props.dragPreview.y)}px`,
+            }}
+          >
+            {props.dragPreview.numbering ? (
+              <span className="drag-preview-number">
+                {props.dragPreview.numbering}
+              </span>
+            ) : null}
+            <span className="drag-preview-title">
+              {props.dragPreview.title.trim() || "Без названия"}
+            </span>
+          </div>
+        ) : null}
       </div>
     </div>
   )

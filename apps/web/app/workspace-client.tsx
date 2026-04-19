@@ -39,6 +39,18 @@ export function WorkspaceClient() {
             numberingById={vm.numberingById}
             draggedRowId={vm.dnd.draggedRowId}
             dropIntent={vm.dnd.dropIntent}
+            dragPreview={
+              vm.dnd.dragPreviewPosition && vm.dnd.draggedRowId
+                ? {
+                    x: vm.dnd.dragPreviewPosition.x,
+                    y: vm.dnd.dragPreviewPosition.y,
+                    title:
+                      vm.rowUiById[vm.dnd.draggedRowId]?.title.value ??
+                      "Без названия",
+                    numbering: vm.numberingById.get(vm.dnd.draggedRowId) ?? "",
+                  }
+                : null
+            }
             tableColumnWidths={vm.layout.tableColumnWidths}
             ratingHeaders={vm.workspaceRatingFieldConfigs}
             rowTreeIndentPx={vm.tableFrame.TREE_LEVEL_OFFSET_PX}
@@ -51,6 +63,7 @@ export function WorkspaceClient() {
             overlayHeight={vm.layout.overlayHeight}
             overlayAddIndicators={vm.overlayAddIndicators}
             overlayDropY={vm.overlayDropY}
+            recentlyCreatedRowId={vm.recentlyCreatedRowId}
             listScrollRef={vm.layout.listScrollRef}
             tableWrapRef={vm.layout.tableWrapRef}
             tableRef={vm.layout.tableRef}

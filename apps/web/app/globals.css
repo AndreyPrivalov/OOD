@@ -338,6 +338,27 @@ button:focus-visible {
   padding-top: 9px;
 }
 
+.work-table tbody tr.row-created td {
+  animation: row-create-enter 340ms ease-out;
+}
+
+@keyframes row-create-enter {
+  0% {
+    background: rgba(255, 99, 37, 0.16);
+    transform: translateY(3px);
+  }
+  100% {
+    background: transparent;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .work-table tbody tr.row-created td {
+    animation: none;
+  }
+}
+
 .work-table th {
   text-align: left;
   font-size: var(--text-secondary);
@@ -494,7 +515,7 @@ button:focus-visible {
 .work-table tbody tr.drag-source .drag-handle {
   opacity: 1;
   visibility: visible;
-  color: var(--interaction-color);
+  color: var(--fg);
 }
 
 .drag-handle:active {
@@ -502,32 +523,35 @@ button:focus-visible {
 }
 
 .drag-handle i {
-  font-size: 18px;
+  width: 4px;
+  height: 4px;
   line-height: 1;
-  font-style: normal;
-  letter-spacing: -1px;
+  border-radius: 50%;
+  background: currentColor;
+  display: block;
+  box-shadow: 0 6px 0 currentColor, 0 12px 0 currentColor;
 }
 
 .drag-handle i::before {
-  content: "\22EE\22EE";
+  content: "";
 }
 
 .work-table tbody tr.drop-nest-target td {
-  box-shadow: inset 0 var(--interaction-stroke) 0 var(--interaction-color),
-    inset 0 calc(var(--interaction-stroke) * -1) 0 var(--interaction-color);
+  box-shadow: inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent);
 }
 
 .work-table tbody tr.drop-nest-target td:first-child {
-  box-shadow: inset var(--interaction-stroke) 0 0 var(--interaction-color),
-    inset 0 var(--interaction-stroke) 0 var(--interaction-color), inset 0
-    calc(var(--interaction-stroke) * -1) 0 var(--interaction-color);
+  box-shadow: inset 2px 0 0 var(--accent), inset 0 2px 0 var(--accent), inset 0
+    -2px 0 var(--accent);
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
 }
 
 .work-table tbody tr.drop-nest-target td:last-child {
-  box-shadow: inset calc(var(--interaction-stroke) * -1) 0 0
-    var(--interaction-color), inset 0 var(--interaction-stroke) 0
-    var(--interaction-color), inset 0 calc(var(--interaction-stroke) * -1) 0
-    var(--interaction-color);
+  box-shadow: inset -2px 0 0 var(--accent), inset 0 2px 0 var(--accent), inset 0
+    -2px 0 var(--accent);
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 8px;
 }
 
 .work-table tbody tr.drop-nest-target td.work-col::after {
@@ -636,12 +660,47 @@ button:focus-visible {
 
 .overlay-drop-line {
   position: absolute;
-  left: var(--content-start-x);
+  left: 0;
   right: 0;
-  height: var(--interaction-stroke);
-  background: var(--interaction-color);
-  transform: translateY(calc(var(--interaction-stroke) / -2));
+  height: 2px;
+  background: var(--accent);
+  transform: translateY(-1px);
   pointer-events: none;
+}
+
+.drag-preview {
+  position: fixed;
+  z-index: 50;
+  transform: translate(16px, 16px);
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(72vw, 640px);
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid rgba(19, 25, 32, 0.14);
+  border-radius: 8px;
+  background: rgba(250, 246, 244, 0.96);
+  box-shadow: 0 8px 18px rgba(19, 25, 32, 0.18);
+}
+
+.drag-preview-number {
+  color: var(--muted);
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: var(--text-secondary);
+  font-style: italic;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.drag-preview-title {
+  color: var(--fg);
+  font-size: var(--text-main);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .rating-control {

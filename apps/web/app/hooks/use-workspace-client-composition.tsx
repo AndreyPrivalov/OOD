@@ -56,6 +56,9 @@ export function useWorkspaceClientComposition() {
   const [pendingFocusRowId, setPendingFocusRowId] = useState<string | null>(
     null,
   )
+  const [recentlyCreatedRowId, setRecentlyCreatedRowId] = useState<
+    string | null
+  >(null)
   const [escapeCancellableRowId, setEscapeCancellableRowId] = useState<
     string | null
   >(null)
@@ -69,6 +72,7 @@ export function useWorkspaceClientComposition() {
     isDev,
     onCreateFocusRow: (rowId) => {
       setPendingFocusRowId(rowId)
+      setRecentlyCreatedRowId(rowId)
       setEscapeCancellableRowId(rowId)
     },
     onDeleteRow: (rowId) => {
@@ -138,6 +142,20 @@ export function useWorkspaceClientComposition() {
     () => getMedian(editing.patchLatenciesRef.current),
     [editing.patchLatenciesRef],
   )
+
+  useEffect(() => {
+    if (!recentlyCreatedRowId || typeof window === "undefined") {
+      return
+    }
+    const timer = window.setTimeout(() => {
+      setRecentlyCreatedRowId((current) =>
+        current === recentlyCreatedRowId ? null : current,
+      )
+    }, 560)
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [recentlyCreatedRowId])
 
   useEffect(() => {
     if (!isDev || typeof window === "undefined") {
@@ -416,6 +434,7 @@ export function useWorkspaceClientComposition() {
     layout,
     overlayAddIndicators: dndOverlay.overlayAddIndicators,
     overlayDropY: dndOverlay.overlayDropY,
+    recentlyCreatedRowId,
     tableFrame: {
       FRAME_X_PX,
       LEFT_GUTTER_WIDTH_PX,
