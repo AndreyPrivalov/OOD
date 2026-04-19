@@ -577,7 +577,7 @@ button:focus-visible {
 
 .overlay-add-line {
   position: absolute;
-  left: var(--content-start-x);
+  left: calc(var(--content-start-x) - 4px);
   right: 0;
   top: 50%;
   transform: translateY(-50%);
