@@ -4,12 +4,18 @@ import {
   type RefObject,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react"
 import type { FlatRow } from "../state/workspace-tree-state"
-import type { RowAnchor } from "../tree-interactions"
+import {
+  type RowAnchorMap,
+  applyMeasuredRowAnchor,
+  parseRowIdFromTextareaKey,
+  removeRowAnchor,
+} from "./workspace-layout/row-measurement-layer"
 
 type TextEditLike = {
   title: string
@@ -65,18 +71,23 @@ type UseWorkspaceLayoutOptions = {
 
 export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions) {
   const { getEditForRow, isDev, rows } = options
+  const rowOrder = useMemo(() => rows.map((row) => row.id), [rows])
+  const rowOrderRef = useRef<readonly string[]>(rowOrder)
+  const rowOrderSignature = useMemo(() => rowOrder.join("|"), [rowOrder])
   const rowElementRefs = useRef<Map<string, HTMLTableRowElement>>(new Map())
   const titleInputRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map())
   const textareaRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map())
+  const rowResizeObserverRef = useRef<ResizeObserver | null>(null)
+  const pendingRowMeasurementIdsRef = useRef<Set<string>>(new Set())
+  const rowMeasurementRafRef = useRef<number | null>(null)
   const overlayRafRef = useRef<number | null>(null)
   const columnWidthRafRef = useRef<number | null>(null)
-  const textareaAutoGrowRafRef = useRef<number | null>(null)
   const tableWrapRef = useRef<HTMLDivElement | null>(null)
   const tableRef = useRef<HTMLTableElement | null>(null)
   const listScrollRef = useRef<HTMLDivElement | null>(null)
   const viewportScrollbarRef = useRef<HTMLDivElement | null>(null)
   const syncScrollRef = useRef(false)
-  const [rowAnchors, setRowAnchors] = useState<Record<string, RowAnchor>>({})
+  const [rowAnchors, setRowAnchors] = useState<RowAnchorMap>({})
   const [tableHeaderBottom, setTableHeaderBottom] = useState(0)
   const [overlayHeight, setOverlayHeight] = useState(0)
   const [viewportScrollbarWidth, setViewportScrollbarWidth] = useState(0)
@@ -85,12 +96,10 @@ export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions) {
   const [tableColumnWidths, setTableColumnWidths] = useState<TableColumnWidths>(
     STABLE_TABLE_COLUMN_WIDTHS,
   )
-  const textareaLayoutSignature = [
-    tableColumnWidths.work,
-    tableColumnWidths.object,
-    tableColumnWidths.currentProblems,
-    tableColumnWidths.solutionVariants,
-  ].join(":")
+
+  useEffect(() => {
+    rowOrderRef.current = rowOrder
+  }, [rowOrder])
 
   const recomputeTextColumnWidths = useCallback(() => {
     let maxObject = 0
@@ -153,26 +162,7 @@ export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions) {
     }
   }, [])
 
-  useEffect(() => {
-    void textareaLayoutSignature
-    if (typeof window === "undefined") {
-      return
-    }
-    if (textareaAutoGrowRafRef.current !== null) {
-      cancelAnimationFrame(textareaAutoGrowRafRef.current)
-    }
-    textareaAutoGrowRafRef.current = requestAnimationFrame(() => {
-      textareaAutoGrowRafRef.current = null
-      for (const titleField of titleInputRefs.current.values()) {
-        autoGrowTextarea(titleField)
-      }
-      for (const textarea of textareaRefs.current.values()) {
-        autoGrowTextarea(textarea)
-      }
-    })
-  }, [textareaLayoutSignature])
-
-  const recalcOverlayGeometry = useCallback(() => {
+  const recalcStaticOverlayGeometry = useCallback(() => {
     const wrapElement = tableWrapRef.current
     const tableElement = tableRef.current
     if (!wrapElement || !tableElement) {
@@ -183,27 +173,106 @@ export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions) {
     }
 
     const wrapRect = wrapElement.getBoundingClientRect()
-    const nextAnchors: Record<string, RowAnchor> = {}
-    for (const row of rows) {
-      const rowElement = rowElementRefs.current.get(row.id)
-      if (!rowElement) {
-        continue
-      }
-      const rect = rowElement.getBoundingClientRect()
-      nextAnchors[row.id] = {
-        top: Math.round(rect.top - wrapRect.top),
-        bottom: Math.round(rect.bottom - wrapRect.top),
-      }
+    const theadRect = tableElement.tHead?.getBoundingClientRect()
+    const nextHeaderBottom = theadRect
+      ? Math.round(theadRect.bottom - wrapRect.top)
+      : 0
+    setTableHeaderBottom((current) =>
+      current === nextHeaderBottom ? current : nextHeaderBottom,
+    )
+    const tableRect = tableElement.getBoundingClientRect()
+    const nextOverlayHeight = Math.round(tableRect.height)
+    setOverlayHeight((current) =>
+      current === nextOverlayHeight ? current : nextOverlayHeight,
+    )
+  }, [isDev])
+
+  const flushRowMeasurements = useCallback(() => {
+    const wrapElement = tableWrapRef.current
+    if (!wrapElement) {
+      return
+    }
+    const measurementIds = Array.from(pendingRowMeasurementIdsRef.current)
+    if (measurementIds.length === 0) {
+      return
+    }
+    pendingRowMeasurementIdsRef.current.clear()
+    const wrapRect = wrapElement.getBoundingClientRect()
+    const measured = measurementIds
+      .map((rowId) => {
+        const rowElement = rowElementRefs.current.get(rowId)
+        if (!rowElement) {
+          return null
+        }
+        const rect = rowElement.getBoundingClientRect()
+        return {
+          rowId,
+          anchor: {
+            top: Math.round(rect.top - wrapRect.top),
+            bottom: Math.round(rect.bottom - wrapRect.top),
+          },
+        }
+      })
+      .filter(
+        (
+          entry,
+        ): entry is {
+          rowId: string
+          anchor: { top: number; bottom: number }
+        } => entry !== null,
+      )
+
+    if (measured.length === 0) {
+      return
     }
 
-    const theadRect = tableElement.tHead?.getBoundingClientRect()
-    setTableHeaderBottom(
-      theadRect ? Math.round(theadRect.bottom - wrapRect.top) : 0,
+    const measuredById = new Map<string, { top: number; bottom: number }>(
+      measured.map((entry) => [entry.rowId, entry.anchor]),
     )
-    setRowAnchors(nextAnchors)
-    const tableRect = tableElement.getBoundingClientRect()
-    setOverlayHeight(Math.round(tableRect.height))
-  }, [isDev, rows])
+    const currentRowOrder = rowOrderRef.current
+    const rowIndexById = new Map(
+      currentRowOrder.map((rowId, index) => [rowId, index]),
+    )
+    const orderedIds = [...measuredById.keys()].sort(
+      (left, right) =>
+        (rowIndexById.get(left) ?? Number.POSITIVE_INFINITY) -
+        (rowIndexById.get(right) ?? Number.POSITIVE_INFINITY),
+    )
+
+    setRowAnchors((current) => {
+      let next = current
+      for (const rowId of orderedIds) {
+        const anchor = measuredById.get(rowId)
+        if (!anchor) {
+          continue
+        }
+        next = applyMeasuredRowAnchor(next, currentRowOrder, rowId, anchor)
+      }
+      return next
+    })
+  }, [])
+
+  const scheduleRowMeasurement = useCallback(
+    (rowIds: Iterable<string>) => {
+      if (typeof window === "undefined") {
+        return
+      }
+      for (const rowId of rowIds) {
+        pendingRowMeasurementIdsRef.current.add(rowId)
+      }
+      if (pendingRowMeasurementIdsRef.current.size === 0) {
+        return
+      }
+      if (rowMeasurementRafRef.current !== null) {
+        cancelAnimationFrame(rowMeasurementRafRef.current)
+      }
+      rowMeasurementRafRef.current = requestAnimationFrame(() => {
+        rowMeasurementRafRef.current = null
+        flushRowMeasurements()
+      })
+    },
+    [flushRowMeasurements],
+  )
 
   const scheduleOverlayRecalc = useCallback(() => {
     if (typeof window === "undefined") {
@@ -214,31 +283,80 @@ export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions) {
     }
     overlayRafRef.current = requestAnimationFrame(() => {
       overlayRafRef.current = null
-      recalcOverlayGeometry()
+      recalcStaticOverlayGeometry()
     })
-  }, [recalcOverlayGeometry])
+  }, [recalcStaticOverlayGeometry])
 
   useEffect(() => {
     scheduleOverlayRecalc()
   }, [scheduleOverlayRecalc])
 
   useEffect(() => {
-    const handleScroll = () => {
+    const handleResize = () => {
       scheduleOverlayRecalc()
     }
-    window.addEventListener("resize", handleScroll)
-    window.addEventListener("scroll", handleScroll, { passive: true })
+    window.addEventListener("resize", handleResize)
     return () => {
-      window.removeEventListener("resize", handleScroll)
-      window.removeEventListener("scroll", handleScroll)
+      window.removeEventListener("resize", handleResize)
       if (overlayRafRef.current !== null) {
         cancelAnimationFrame(overlayRafRef.current)
       }
-      if (textareaAutoGrowRafRef.current !== null) {
-        cancelAnimationFrame(textareaAutoGrowRafRef.current)
+      if (rowMeasurementRafRef.current !== null) {
+        cancelAnimationFrame(rowMeasurementRafRef.current)
       }
     }
   }, [scheduleOverlayRecalc])
+
+  useLayoutEffect(() => {
+    void rowOrderSignature
+    scheduleRowMeasurement(rowOrderRef.current)
+  }, [rowOrderSignature, scheduleRowMeasurement])
+
+  useEffect(() => {
+    if (typeof ResizeObserver === "undefined") {
+      return
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      const changedRowIds = new Set<string>()
+      for (const entry of entries) {
+        const target = entry.target
+        if (target instanceof HTMLTableRowElement) {
+          const rowId = target.dataset.rowId
+          if (rowId) {
+            changedRowIds.add(rowId)
+          }
+          continue
+        }
+        const row = target.closest("tr[data-row-id]")
+        const rowId = row?.getAttribute("data-row-id")
+        if (rowId) {
+          changedRowIds.add(rowId)
+        }
+      }
+      if (changedRowIds.size > 0) {
+        scheduleRowMeasurement(changedRowIds)
+      }
+      scheduleOverlayRecalc()
+    })
+
+    rowResizeObserverRef.current = observer
+
+    for (const rowElement of rowElementRefs.current.values()) {
+      observer.observe(rowElement)
+    }
+    for (const titleInput of titleInputRefs.current.values()) {
+      observer.observe(titleInput)
+    }
+    for (const textarea of textareaRefs.current.values()) {
+      observer.observe(textarea)
+    }
+
+    return () => {
+      observer.disconnect()
+      rowResizeObserverRef.current = null
+    }
+  }, [scheduleOverlayRecalc, scheduleRowMeasurement])
 
   const recalcViewportScrollbar = useCallback(() => {
     const listElement = listScrollRef.current
@@ -320,37 +438,59 @@ export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions) {
 
   const registerTitleInputRef = useCallback(
     (rowId: string, node: HTMLTextAreaElement | null) => {
+      const previousNode = titleInputRefs.current.get(rowId)
+      if (previousNode && previousNode !== node) {
+        rowResizeObserverRef.current?.unobserve(previousNode)
+      }
       if (!node) {
         titleInputRefs.current.delete(rowId)
         return
       }
       titleInputRefs.current.set(rowId, node)
+      rowResizeObserverRef.current?.observe(node)
       autoGrowTextarea(node)
+      scheduleRowMeasurement([rowId])
     },
-    [],
+    [scheduleRowMeasurement],
   )
 
   const registerRowElementRef = useCallback(
     (rowId: string, node: HTMLTableRowElement | null) => {
+      const previousNode = rowElementRefs.current.get(rowId)
+      if (previousNode && previousNode !== node) {
+        rowResizeObserverRef.current?.unobserve(previousNode)
+      }
       if (!node) {
         rowElementRefs.current.delete(rowId)
+        setRowAnchors((current) => removeRowAnchor(current, rowId))
         return
       }
       rowElementRefs.current.set(rowId, node)
+      rowResizeObserverRef.current?.observe(node)
+      scheduleRowMeasurement([rowId])
     },
-    [],
+    [scheduleRowMeasurement],
   )
 
   const registerTextareaRef = useCallback(
     (key: string, node: HTMLTextAreaElement | null) => {
+      const rowId = parseRowIdFromTextareaKey(key)
+      const previousNode = textareaRefs.current.get(key)
+      if (previousNode && previousNode !== node) {
+        rowResizeObserverRef.current?.unobserve(previousNode)
+      }
       if (!node) {
         textareaRefs.current.delete(key)
         return
       }
       textareaRefs.current.set(key, node)
+      rowResizeObserverRef.current?.observe(node)
       autoGrowTextarea(node)
+      if (rowId) {
+        scheduleRowMeasurement([rowId])
+      }
     },
-    [],
+    [scheduleRowMeasurement],
   )
 
   const focusTitleInput = useCallback((rowId: string) => {
