@@ -86,7 +86,6 @@ export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions) {
     STABLE_TABLE_COLUMN_WIDTHS,
   )
   const textareaLayoutSignature = [
-    rows.length,
     tableColumnWidths.work,
     tableColumnWidths.object,
     tableColumnWidths.currentProblems,
