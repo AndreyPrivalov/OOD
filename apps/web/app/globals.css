@@ -334,6 +334,10 @@ button:focus-visible {
   position: relative;
 }
 
+.work-table tbody tr:first-child td {
+  padding-top: 9px;
+}
+
 .work-table th {
   text-align: left;
   font-size: var(--text-secondary);
@@ -447,7 +451,8 @@ button:focus-visible {
   transform: translateY(-50%);
   min-width: var(--number-slot-width);
   color: var(--muted);
-  font-size: 13px;
+  font-family: var(--font-sans), "Segoe UI", sans-serif;
+  font-size: var(--text-main);
   line-height: 1;
   white-space: nowrap;
   text-align: left;
@@ -706,8 +711,8 @@ button:focus-visible {
   align-items: center;
   min-height: var(--table-control-height);
   margin-top: 2px;
-  font-family: var(--font-serif), Georgia, serif;
-  font-size: var(--text-secondary);
+  font-family: var(--font-sans), "Segoe UI", sans-serif;
+  font-size: var(--text-main);
   font-weight: 400;
   color: var(--fg);
 }
