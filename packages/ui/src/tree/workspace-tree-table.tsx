@@ -173,6 +173,12 @@ export type WorkspaceTreeTableProps = {
 }
 
 export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
+  const ratingColumnWidthByKey: Record<string, string> = {
+    overcomplication: props.tableColumnWidths.overcomplication,
+    importance: props.tableColumnWidths.importance,
+    blocksMoney: props.tableColumnWidths.blocksMoney,
+  }
+
   return (
     <div className="list" ref={props.listScrollRef}>
       <div className="work-table-wrap" ref={props.tableWrapRef}>
@@ -211,6 +217,22 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
             .filter(Boolean)
             .join(" ")}
         >
+          <colgroup>
+            <col style={{ width: props.tableColumnWidths.work }} />
+            <col style={{ width: props.tableColumnWidths.object }} />
+            {props.ratingHeaders.map((field) => (
+              <col
+                key={field.key}
+                style={{
+                  width: ratingColumnWidthByKey[field.key] ?? "15ch",
+                }}
+              />
+            ))}
+            <col style={{ width: props.tableColumnWidths.currentProblems }} />
+            <col style={{ width: props.tableColumnWidths.solutionVariants }} />
+            <col style={{ width: props.tableColumnWidths.removable }} />
+            <col style={{ width: "44px" }} />
+          </colgroup>
           <thead>
             <tr>
               <th className="work-col">Работа</th>
@@ -383,7 +405,7 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                       />
                     </label>
                   </td>
-                  <td>
+                  <td className="actions-col">
                     <div className="cell-actions">
                       <button
                         type="button"

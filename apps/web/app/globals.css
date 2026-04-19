@@ -317,8 +317,10 @@ button:focus-visible {
 
 .work-table {
   width: max-content;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   table-layout: fixed;
+  isolation: isolate;
   --interaction-stroke: var(--structure-line-width);
   --interaction-color: var(--structure-line-color);
 }
@@ -330,6 +332,7 @@ button:focus-visible {
   vertical-align: top;
   background: transparent;
   position: relative;
+  box-sizing: border-box;
 }
 
 .work-table tbody tr:first-child td {
@@ -360,7 +363,7 @@ button:focus-visible {
 }
 
 .work-table th.actions-col,
-.work-table td:last-child {
+.work-table td.actions-col {
   width: 44px;
   min-width: 44px;
   max-width: 44px;
@@ -369,11 +372,14 @@ button:focus-visible {
   overflow: visible;
 }
 
-.work-table .work-col {
+.work-table th.work-col,
+.work-table td.work-col {
   position: sticky;
   left: 0;
-  z-index: 2;
+  z-index: 3;
   background: var(--bg);
+  background-clip: padding-box;
+  box-shadow: 1px 0 0 var(--line);
   width: var(--work-col-width, 420px);
   min-width: var(--work-col-width, 420px);
   max-width: var(--work-col-width, 420px);
@@ -386,7 +392,7 @@ button:focus-visible {
 }
 
 .work-table th.work-col {
-  z-index: 3;
+  z-index: 4;
   padding-left: var(--content-start-x);
 }
 
