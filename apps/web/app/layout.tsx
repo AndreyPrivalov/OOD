@@ -9,7 +9,7 @@ const commissioner = Commissioner({
 })
 
 const gentiumBookPlus = Gentium_Book_Plus({
-  weight: ["400", "700"],
+  weight: "400",
   subsets: ["latin", "cyrillic"],
   variable: "--font-serif",
   display: "swap",

@@ -64,7 +64,7 @@ h2,
 h3 {
   margin: 0;
   font-family: var(--font-serif), Georgia, serif;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--fg);
 }
 
@@ -136,6 +136,7 @@ button:focus-visible {
     var(--content-start-x)
   );
   color: var(--muted);
+  font-family: var(--font-serif), Georgia, serif;
   font-size: var(--text-secondary);
   line-height: 1.35;
 }
@@ -151,6 +152,7 @@ button:focus-visible {
 .error-text {
   margin: 0;
   color: var(--danger);
+  font-family: var(--font-serif), Georgia, serif;
   font-size: var(--text-secondary);
   line-height: 1.35;
 }
@@ -198,6 +200,7 @@ button:focus-visible {
 .list-empty,
 .list-loading {
   color: var(--muted);
+  font-family: var(--font-serif), Georgia, serif;
   margin: 0;
   font-size: var(--text-secondary);
   line-height: 1.35;
@@ -211,6 +214,7 @@ button:focus-visible {
 .workspace-inline-empty {
   margin: 0;
   color: var(--muted);
+  font-family: var(--font-serif), Georgia, serif;
   font-size: var(--text-secondary);
   line-height: 1.35;
 }
@@ -234,7 +238,8 @@ button:focus-visible {
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: 16px;
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: var(--text-secondary);
   line-height: 1.2;
   padding: 2px 4px;
   cursor: pointer;
@@ -264,7 +269,7 @@ button:focus-visible {
   border-radius: var(--radius-sm);
   padding: 0 8px;
   font: inherit;
-  font-size: 16px;
+  font-size: var(--text-secondary);
   line-height: 1.2;
 }
 
@@ -331,11 +336,11 @@ button:focus-visible {
 
 .work-table th {
   text-align: left;
-  font-size: 13px;
+  font-size: var(--text-secondary);
   line-height: 1.35;
   font-family: var(--font-serif), Georgia, serif;
   font-style: italic;
-  font-weight: 700;
+  font-weight: 400;
   color: var(--muted);
   letter-spacing: 0.01em;
 }
@@ -701,6 +706,8 @@ button:focus-visible {
   align-items: center;
   min-height: var(--table-control-height);
   margin-top: 2px;
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: var(--text-secondary);
   font-weight: 400;
   color: var(--fg);
 }
