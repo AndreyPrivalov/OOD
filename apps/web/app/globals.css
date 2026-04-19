@@ -588,7 +588,7 @@ button:focus-visible {
 
 .overlay-add-hotspot {
   position: absolute;
-  left: calc(var(--content-start-x) - 38px);
+  left: calc(var(--content-start-x) - 36px);
   top: 50%;
   width: 42px;
   height: 42px;
