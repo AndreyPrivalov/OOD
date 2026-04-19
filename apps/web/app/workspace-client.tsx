@@ -23,8 +23,7 @@ export function WorkspaceClient() {
           renderSwitcher={vm.handlers.renderSwitcher}
         />
         <WorkspaceTitlePanel
-          title="Работы"
-          currentWorkspaceName={vm.currentWorkspaceName}
+          title={vm.currentWorkspaceName}
           errorText={vm.errorText}
         />
         <section className="section">

@@ -21,7 +21,7 @@
   --space-6: 32px;
   --radius-sm: 4px;
   --radius-md: 4px;
-  --frame-x: 24px;
+  --frame-x: 44px;
   --left-gutter-width: 64px;
   --cell-inline-pad: 14px;
   --work-content-indent: 14px;
@@ -135,25 +135,8 @@ button:focus-visible {
   line-height: 1.05;
 }
 
-.workspace-context {
-  margin: 0;
-  padding-left: calc(
-    var(--frame-x) +
-    var(--left-gutter-width) +
-    var(--content-start-x)
-  );
-  color: var(--muted);
-  font-family: var(--font-serif), Georgia, serif;
-  font-size: var(--text-secondary);
-  line-height: 1.35;
-}
-
 .works-title {
-  padding-left: calc(
-    var(--frame-x) +
-    var(--left-gutter-width) +
-    var(--content-start-x)
-  );
+  padding-left: 0;
 }
 
 .error-text {
@@ -167,8 +150,7 @@ button:focus-visible {
 .list {
   overflow-x: auto;
   overflow-y: hidden;
-  padding-left: calc(var(--frame-x) + var(--left-gutter-width));
-  padding-right: var(--frame-x);
+  padding-inline: 0;
   scrollbar-width: none;
 }
 
