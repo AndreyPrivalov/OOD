@@ -687,11 +687,9 @@ button:focus-visible {
 }
 
 .rating-icon-btn.is-active {
-  color: var(--accent);
+  color: var(--fg);
 }
 
-.rating-control.rating-tone-low .rating-icon-btn.is-active,
-.rating-control.rating-tone-mid .rating-icon-btn.is-active,
 .rating-control.rating-tone-high .rating-icon-btn.is-active {
   color: var(--accent);
 }
