@@ -1,13 +1,13 @@
 :root {
   color-scheme: light;
-  --bg: #ffffff;
-  --fg: #181715;
-  --muted: #5f5a53;
-  --line: #d8d4cf;
-  --line-strong: #c8c3bc;
-  --accent: #2f4f45;
-  --danger: #8d2d2d;
-  --focus: #425e56;
+  --bg: #faf6f4;
+  --fg: #131920;
+  --muted: #5e646b;
+  --line: #e1dddb;
+  --line-strong: #e1dddb;
+  --accent: #ff6325;
+  --danger: #ff6325;
+  --focus: #ff6325;
   --text-main: 20px;
   --text-secondary: 15px;
   --control-height: 44px;
@@ -31,9 +31,9 @@
   --number-slot-width: 40px;
   --add-lane-visible-length: 160px;
   --separator-line-width: 1px;
-  --separator-line-color: #f0ede8;
+  --separator-line-color: var(--line);
   --structure-line-width: 2px;
-  --structure-line-color: #181715;
+  --structure-line-color: var(--line);
 }
 
 * {
@@ -81,7 +81,7 @@ textarea {
   max-width: 100%;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  background: #fff;
+  background: var(--bg);
   color: var(--fg);
   padding: 9px 12px;
   font-size: var(--text-main);
@@ -187,8 +187,8 @@ button:focus-visible {
   overflow-x: auto;
   overflow-y: hidden;
   pointer-events: auto;
-  background: rgba(255, 255, 255, 0.94);
-  border-top: 1px solid #ece8e2;
+  background: rgba(250, 246, 244, 0.94);
+  border-top: 1px solid var(--line);
 }
 
 .viewport-scrollbar-spacer {
@@ -299,7 +299,7 @@ button:focus-visible {
 .workspace-inline-action:hover,
 .workspace-inline-action:focus-visible {
   color: var(--fg);
-  background: #f0efec;
+  background: rgba(225, 221, 219, 0.72);
 }
 
 .workspace-inline-item-create {
@@ -361,7 +361,7 @@ button:focus-visible {
   position: sticky;
   left: 0;
   z-index: 2;
-  background: #fff;
+  background: var(--bg);
   width: var(--work-col-width, 420px);
   min-width: var(--work-col-width, 420px);
   max-width: var(--work-col-width, 420px);
@@ -439,7 +439,7 @@ button:focus-visible {
   top: 50%;
   transform: translateY(-50%);
   min-width: var(--number-slot-width);
-  color: #a7a198;
+  color: var(--muted);
   font-size: 13px;
   line-height: 1;
   white-space: nowrap;
@@ -468,7 +468,7 @@ button:focus-visible {
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #181715;
+  color: var(--fg);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -600,7 +600,7 @@ button:focus-visible {
   border: 0;
   border-radius: 999px;
   background: var(--interaction-color);
-  color: #fff;
+  color: var(--bg);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -629,15 +629,13 @@ button:focus-visible {
 .overlay-add-hotspot:hover .overlay-add-plus,
 .overlay-add-hotspot:focus-within .overlay-add-plus {
   opacity: 1;
-  background: #27453d;
-  color: #fff;
+  filter: brightness(0.96);
 }
 
 .overlay-add-lane:hover .overlay-add-plus,
 .overlay-add-lane:focus-within .overlay-add-plus {
   opacity: 1;
-  background: #27453d;
-  color: #fff;
+  filter: brightness(0.96);
 }
 
 .overlay-drop-line {
@@ -664,7 +662,7 @@ button:focus-visible {
   height: 26px;
   border: 0;
   background: transparent;
-  color: #c6c1ba;
+  color: var(--line);
   cursor: pointer;
   padding: 0;
   display: inline-flex;
@@ -681,7 +679,7 @@ button:focus-visible {
 }
 
 .rating-icon-btn:hover {
-  color: #8a847d;
+  color: var(--muted);
 }
 
 .rating-icon-btn:focus-visible {
@@ -692,16 +690,10 @@ button:focus-visible {
   color: var(--accent);
 }
 
-.rating-control.rating-tone-low .rating-icon-btn.is-active {
-  color: #1f8a3b;
-}
-
-.rating-control.rating-tone-mid .rating-icon-btn.is-active {
-  color: #b86100;
-}
-
+.rating-control.rating-tone-low .rating-icon-btn.is-active,
+.rating-control.rating-tone-mid .rating-icon-btn.is-active,
 .rating-control.rating-tone-high .rating-icon-btn.is-active {
-  color: #b0212a;
+  color: var(--accent);
 }
 
 .score-summary {
@@ -727,7 +719,7 @@ button:focus-visible {
   border-radius: var(--radius-md);
   padding: 0 10px;
   cursor: pointer;
-  background: #fff;
+  background: var(--bg);
   color: var(--fg);
   display: inline-flex;
   align-items: center;
@@ -740,21 +732,21 @@ button:focus-visible {
 }
 
 .btn-secondary {
-  background: #fff;
+  background: var(--bg);
   color: var(--fg);
 }
 
 .btn-secondary:hover {
-  background: #f3f3f3;
+  background: rgba(225, 221, 219, 0.72);
 }
 
 .btn-primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--bg);
 }
 
 .btn-primary:hover {
-  background: #28453c;
+  filter: brightness(0.96);
 }
 
 .btn-icon {
@@ -837,7 +829,7 @@ button:focus-visible {
   padding: 0;
   border: 0;
   border-radius: 6px;
-  background: #d7d2cb;
+  background: var(--line);
   cursor: pointer;
   display: grid;
   place-content: center;
@@ -849,12 +841,12 @@ button:focus-visible {
   height: 12px;
   transform: scale(0);
   transition: transform 100ms ease;
-  box-shadow: inset 1em 1em #ffffff;
+  box-shadow: inset 1em 1em var(--bg);
   clip-path: polygon(14% 44%, 0 59%, 43% 100%, 100% 17%, 84% 2%, 40% 70%);
 }
 
 .possibly-removable-control input[type="checkbox"]:checked {
-  background: #000000;
+  background: var(--fg);
 }
 
 .possibly-removable-control input[type="checkbox"]:checked::before {

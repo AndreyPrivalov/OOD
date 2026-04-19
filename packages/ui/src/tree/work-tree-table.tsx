@@ -61,7 +61,7 @@ const headerGridStyle: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "2fr 2fr 120px 120px 120px",
   fontWeight: 700,
-  borderBottom: "1px solid #d8d4cf",
+  borderBottom: "1px solid var(--line)",
   paddingBottom: "6px",
 }
 
@@ -70,6 +70,6 @@ const rowGridStyle: CSSProperties = {
   gridTemplateColumns: "2fr 2fr 120px 120px 120px",
   alignItems: "center",
   gap: "8px",
-  borderBottom: "1px solid #d8d4cf",
+  borderBottom: "1px solid var(--line)",
   padding: "6px 0",
 }
