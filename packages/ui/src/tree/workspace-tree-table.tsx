@@ -469,6 +469,9 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                   className="overlay-add-plus"
                   aria-label="Добавить работу между строками"
                   title="Добавить работу"
+                  onPointerDown={(event) => {
+                    event.preventDefault()
+                  }}
                   onClick={() =>
                     props.onCreateAtPosition(
                       indicator.parentId,

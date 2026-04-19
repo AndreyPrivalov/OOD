@@ -257,6 +257,11 @@ export function useWorkspaceClientComposition() {
   const handleCreateRowAtPosition = useCallback(
     async (parentId: string | null, targetIndex: number) => {
       setInsertAnimationTarget({ parentId, targetIndex })
+      if (typeof window !== "undefined") {
+        await new Promise<void>((resolve) => {
+          window.requestAnimationFrame(() => resolve())
+        })
+      }
       await treeData.createRowAtPosition(parentId, targetIndex)
     },
     [treeData.createRowAtPosition],
