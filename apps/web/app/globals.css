@@ -9,7 +9,7 @@
   --danger: #ff6325;
   --focus: #ff6325;
   --text-main: 20px;
-  --text-secondary: 15px;
+  --text-secondary: 17px;
   --control-height: 44px;
   --table-control-height: 32px;
   --space-1: 4px;
@@ -333,7 +333,9 @@ button:focus-visible {
   text-align: left;
   font-size: 13px;
   line-height: 1.35;
-  font-weight: 400;
+  font-family: var(--font-serif), Georgia, serif;
+  font-style: italic;
+  font-weight: 700;
   color: var(--muted);
   letter-spacing: 0.01em;
 }
