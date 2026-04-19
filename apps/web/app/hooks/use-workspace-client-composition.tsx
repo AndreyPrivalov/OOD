@@ -107,14 +107,26 @@ export function useWorkspaceClientComposition() {
     },
   })
 
+  const {
+    FRAME_X_PX,
+    LEFT_GUTTER_WIDTH_PX,
+    WORK_CONTENT_INDENT_PX,
+    CELL_INLINE_PAD_PX,
+    STRUCTURE_LINE_WIDTH_PX,
+    CONTENT_START_X_PX,
+    TREE_LEVEL_OFFSET_PX,
+  } = useTableFrameConstants()
+
   const dndOverlay = useWorkspaceDndOverlayComposition({
     moveRow: treeData.moveRow,
     rowAnchors: layout.rowAnchors,
     rows: treeData.rows,
     rowsById: treeData.rowsById,
+    rowTreeIndentPx: TREE_LEVEL_OFFSET_PX,
     scheduleOverlayRecalc: layout.scheduleOverlayRecalc,
     siblingsByParent: treeData.siblingsByParent,
     tableHeaderBottom: layout.tableHeaderBottom,
+    workContentIndentPx: WORK_CONTENT_INDENT_PX,
   })
 
   const readInputToPaintMedian = useCallback(
@@ -284,16 +296,6 @@ export function useWorkspaceClientComposition() {
       isRenamingWorkspaceId,
     ],
   )
-
-  const {
-    FRAME_X_PX,
-    LEFT_GUTTER_WIDTH_PX,
-    WORK_CONTENT_INDENT_PX,
-    CELL_INLINE_PAD_PX,
-    STRUCTURE_LINE_WIDTH_PX,
-    CONTENT_START_X_PX,
-    TREE_LEVEL_OFFSET_PX,
-  } = useTableFrameConstants()
 
   const currentWorkspaceName = currentWorkspace?.name ?? "Рабочее пространство"
   const rowUiById = useMemo<Record<string, WorkspaceTreeRowUiModel>>(() => {

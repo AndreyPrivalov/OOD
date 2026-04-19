@@ -117,6 +117,7 @@ describe("WorkspaceTreeTable", () => {
           kind: "add",
           laneId: "lane-1",
           y: 40,
+          contentStartXPx: 80,
           parentId: null,
           targetIndex: 0,
           showPlus: true,

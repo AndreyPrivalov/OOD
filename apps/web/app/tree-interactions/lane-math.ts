@@ -9,6 +9,7 @@ export function buildInsertLanes(
       {
         id: "lane:empty-root",
         parentId: null,
+        depth: 0,
         targetIndex: 0,
         anchorRowId: null,
         anchorPlacement: "empty",
@@ -26,6 +27,7 @@ export function buildInsertLanes(
     lanes.push({
       id: `lane:before:${row.id}`,
       parentId: row.parentId,
+      depth: row.depth,
       targetIndex: siblingIndex < 0 ? 0 : siblingIndex,
       anchorRowId: row.id,
       anchorPlacement: "before",
@@ -38,6 +40,7 @@ export function buildInsertLanes(
   lanes.push({
     id: `lane:after:${lastRow.id}`,
     parentId: lastRow.parentId,
+    depth: lastRow.depth,
     targetIndex: lastSiblings.length,
     anchorRowId: lastRow.id,
     anchorPlacement: "after-last",

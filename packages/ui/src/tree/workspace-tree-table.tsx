@@ -74,6 +74,7 @@ type OverlayIndicatorLike = {
   kind: "add" | "drop"
   laneId: string
   y: number
+  contentStartXPx: number
   parentId: string | null
   targetIndex: number
   showPlus: boolean
@@ -231,7 +232,6 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
             <col style={{ width: props.tableColumnWidths.currentProblems }} />
             <col style={{ width: props.tableColumnWidths.solutionVariants }} />
             <col style={{ width: props.tableColumnWidths.removable }} />
-            <col style={{ width: "44px" }} />
           </colgroup>
           <thead>
             <tr>
@@ -248,7 +248,6 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
               <th className="problems-col">Проблемы</th>
               <th className="solutions-col">Решения</th>
               <th className="removable-col">Возможно убрать</th>
-              <th className="actions-col" aria-label="Удаление" />
             </tr>
           </thead>
           <tbody>
@@ -334,6 +333,17 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                           rowUi.title.onBlur(event.currentTarget.value)
                         }
                       />
+                      <div className="work-col-actions">
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-icon delete-handle"
+                          onClick={() => props.onDeleteRow(row.id)}
+                          aria-label="Удалить"
+                          title="Удалить"
+                        >
+                          <i className="ri-delete-bin-line" aria-hidden />
+                        </button>
+                      </div>
                     </div>
                   </td>
                   <td className="object-col">
@@ -405,19 +415,6 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                       />
                     </label>
                   </td>
-                  <td className="actions-col">
-                    <div className="cell-actions">
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-icon delete-handle"
-                        onClick={() => props.onDeleteRow(row.id)}
-                        aria-label="Удалить"
-                        title="Удалить"
-                      >
-                        <i className="ri-delete-bin-line" aria-hidden />
-                      </button>
-                    </div>
-                  </td>
                 </MemoWorkRow>
               )
             })}
@@ -437,7 +434,12 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
             <div
               key={indicator.laneId}
               className="overlay-add-lane"
-              style={{ top: `${indicator.y}px` }}
+              style={
+                {
+                  top: `${indicator.y}px`,
+                  "--lane-content-start-x": `${indicator.contentStartXPx}px`,
+                } as CSSProperties
+              }
             >
               <div className="overlay-add-hotspot" aria-hidden>
                 <button

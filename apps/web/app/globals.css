@@ -577,7 +577,7 @@ button:focus-visible {
 
 .overlay-add-line {
   position: absolute;
-  left: calc(var(--content-start-x) - 4px);
+  left: calc(var(--lane-content-start-x, var(--content-start-x)) - 4px);
   right: 0;
   top: 50%;
   transform: translateY(-50%);
@@ -588,7 +588,7 @@ button:focus-visible {
 
 .overlay-add-hotspot {
   position: absolute;
-  left: calc(var(--content-start-x) - 36px);
+  left: calc(var(--lane-content-start-x, var(--content-start-x)) - 36px);
   top: 50%;
   width: 42px;
   height: 42px;

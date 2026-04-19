@@ -19,9 +19,11 @@ type UseWorkspaceDndOverlayCompositionOptions = {
   rowAnchors: Record<string, { top: number; bottom: number }>
   rows: FlatRow[]
   rowsById: Map<string, FlatRow>
+  rowTreeIndentPx: number
   scheduleOverlayRecalc: () => void
   siblingsByParent: Map<string | null, FlatRow[]>
   tableHeaderBottom: number
+  workContentIndentPx: number
 }
 
 export function useWorkspaceDndOverlayComposition(
@@ -32,9 +34,11 @@ export function useWorkspaceDndOverlayComposition(
     rowAnchors,
     rows,
     rowsById,
+    rowTreeIndentPx,
     scheduleOverlayRecalc,
     siblingsByParent,
     tableHeaderBottom,
+    workContentIndentPx,
   } = options
 
   const dnd = useWorkspaceDragDrop({
@@ -71,11 +75,19 @@ export function useWorkspaceDndOverlayComposition(
       kind: "add",
       laneId: lane.id,
       y: lane.anchorY ?? 0,
+      contentStartXPx:
+        workContentIndentPx + Math.max(0, lane.depth) * rowTreeIndentPx,
       parentId: lane.parentId,
       targetIndex: lane.targetIndex,
       showPlus: true,
     }))
-  }, [dnd.interactionMode, dnd.isDragPrimed, visibleInsertLanes])
+  }, [
+    dnd.interactionMode,
+    dnd.isDragPrimed,
+    rowTreeIndentPx,
+    visibleInsertLanes,
+    workContentIndentPx,
+  ])
 
   const overlayDropY = useMemo(() => {
     const dropIntent = dnd.dropIntent

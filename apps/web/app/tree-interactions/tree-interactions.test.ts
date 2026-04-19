@@ -35,9 +35,9 @@ describe("buildInsertLanes", () => {
 
   it("computes parent and index for root and nested lanes", () => {
     const rows: FlatRowLike[] = [
-      { id: "root-a", parentId: null, siblingOrder: 0 },
-      { id: "child-a1", parentId: "root-a", siblingOrder: 0 },
-      { id: "root-b", parentId: null, siblingOrder: 1 },
+      { id: "root-a", parentId: null, depth: 0, siblingOrder: 0 },
+      { id: "child-a1", parentId: "root-a", depth: 1, siblingOrder: 0 },
+      { id: "root-b", parentId: null, depth: 0, siblingOrder: 1 },
     ]
     const siblings = createSiblingBuckets(rows)
 
@@ -58,8 +58,8 @@ describe("buildInsertLanes", () => {
 
   it("uses sibling ordering source of truth for target indexes", () => {
     const rows: FlatRowLike[] = [
-      { id: "r1", parentId: null, siblingOrder: 1 },
-      { id: "r2", parentId: null, siblingOrder: 0 },
+      { id: "r1", parentId: null, depth: 0, siblingOrder: 1 },
+      { id: "r2", parentId: null, depth: 0, siblingOrder: 0 },
     ]
     const siblings = createSiblingBuckets(rows)
 
@@ -73,8 +73,8 @@ describe("buildInsertLanes", () => {
 describe("withLaneAnchors", () => {
   it("assigns anchorY for before/after/empty lanes", () => {
     const rows: FlatRowLike[] = [
-      { id: "a", parentId: null, siblingOrder: 0 },
-      { id: "b", parentId: null, siblingOrder: 1 },
+      { id: "a", parentId: null, depth: 0, siblingOrder: 0 },
+      { id: "b", parentId: null, depth: 0, siblingOrder: 1 },
     ]
     const lanes = buildInsertLanes(rows, createSiblingBuckets(rows))
     const anchored = withLaneAnchors(
@@ -95,6 +95,7 @@ describe("withLaneAnchors", () => {
         {
           id: "lane:empty-root",
           parentId: null,
+          depth: 0,
           targetIndex: 0,
           anchorRowId: null,
           anchorPlacement: "empty",
