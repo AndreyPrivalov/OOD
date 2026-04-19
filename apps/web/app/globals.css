@@ -328,7 +328,7 @@ button:focus-visible {
 .work-table th,
 .work-table td {
   border-bottom: 0;
-  padding: 4px var(--cell-inline-pad);
+  padding: 0 var(--cell-inline-pad);
   vertical-align: top;
   background: transparent;
   position: relative;
@@ -379,7 +379,6 @@ button:focus-visible {
   z-index: 3;
   background: var(--bg);
   background-clip: padding-box;
-  box-shadow: 1px 0 0 var(--line);
   width: var(--work-col-width, 420px);
   min-width: var(--work-col-width, 420px);
   max-width: var(--work-col-width, 420px);
@@ -459,7 +458,7 @@ button:focus-visible {
   min-width: var(--number-slot-width);
   color: var(--muted);
   font-family: var(--font-sans), "Segoe UI", sans-serif;
-  font-size: var(--text-main);
+  font-size: var(--text-secondary);
   line-height: 1;
   white-space: nowrap;
   text-align: left;
@@ -882,15 +881,17 @@ button:focus-visible {
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  padding-top: 6px;
-  padding-bottom: 6px;
+  padding-top: 4px;
+  padding-bottom: 4px;
   padding-left: 0;
   padding-right: 0;
   text-align: left;
 }
 
-.work-table td input {
-  height: var(--table-control-height);
+.work-table td input:not([type="checkbox"]) {
+  height: auto;
+  min-height: var(--table-control-height);
+  line-height: 1.4;
 }
 
 .work-table th.removable-col,
