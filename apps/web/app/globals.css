@@ -158,7 +158,8 @@ button:focus-visible {
 .list {
   overflow-x: auto;
   overflow-y: hidden;
-  padding-inline: 0;
+  margin-inline: calc(var(--frame-x) * -1);
+  padding-inline: var(--frame-x);
   scrollbar-width: none;
 }
 
