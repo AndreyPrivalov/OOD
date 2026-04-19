@@ -216,12 +216,23 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
         onDeleteRow(id)
         return
       }
+
+      const previousTree = treeRef.current
+      const optimisticTree = removeLocalRow(previousTree, id)
+      if (optimisticTree === previousTree) {
+        return
+      }
+
+      discardPendingSave(id)
+      setTree(optimisticTree)
+      onDeleteRow(id)
+
       try {
-        discardPendingSave(id)
         await deleteWorkItem(id)
-        onDeleteRow(id)
-        await refreshTree()
+        setErrorText("")
       } catch (error) {
+        setTree(previousTree)
+        void refreshTree({ silent: true })
         setErrorText(toErrorText(error))
       }
     },
@@ -272,23 +283,32 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
 
   const moveRow = useCallback(
     async (id: string, targetParentId: string | null, targetIndex: number) => {
-      if (isLocalDraftRowId(id)) {
-        setTree((current) =>
-          applyOptimisticMove(current, id, targetParentId, targetIndex),
-        )
+      const previousTree = treeRef.current
+      const optimisticTree = applyOptimisticMove(
+        previousTree,
+        id,
+        targetParentId,
+        targetIndex,
+      )
+      if (optimisticTree === previousTree) {
         return
       }
+
+      if (isLocalDraftRowId(id)) {
+        setTree(optimisticTree)
+        return
+      }
+
+      setTree(optimisticTree)
       try {
-        setTree((current) =>
-          applyOptimisticMove(current, id, targetParentId, targetIndex),
-        )
         await moveWorkItem(id, {
           targetParentId,
           targetIndex,
         })
-        await refreshTree({ silent: true })
         setErrorText("")
       } catch (error) {
+        setTree(previousTree)
+        void refreshTree({ silent: true })
         setErrorText(toErrorText(error))
       }
     },
