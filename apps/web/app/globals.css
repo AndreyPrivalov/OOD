@@ -588,10 +588,10 @@ button:focus-visible {
 
 .overlay-add-hotspot {
   position: absolute;
-  left: calc(var(--lane-content-start-x, var(--content-start-x)) - 36px);
+  left: calc(var(--lane-content-start-x, var(--content-start-x)) - 48px);
   top: 50%;
-  width: 42px;
-  height: 42px;
+  width: 70px;
+  height: 56px;
   transform: translateY(-50%);
   pointer-events: auto;
   background: transparent;
@@ -600,7 +600,7 @@ button:focus-visible {
 
 .overlay-add-plus {
   position: absolute;
-  left: 50%;
+  left: 33px;
   top: 50%;
   width: 22px;
   height: 22px;
