@@ -118,6 +118,7 @@ export function useWorkspaceClientComposition() {
   } = useTableFrameConstants()
 
   const dndOverlay = useWorkspaceDndOverlayComposition({
+    contentStartXPx: CONTENT_START_X_PX,
     moveRow: treeData.moveRow,
     rowAnchors: layout.rowAnchors,
     rows: treeData.rows,
@@ -126,7 +127,6 @@ export function useWorkspaceClientComposition() {
     scheduleOverlayRecalc: layout.scheduleOverlayRecalc,
     siblingsByParent: treeData.siblingsByParent,
     tableHeaderBottom: layout.tableHeaderBottom,
-    workContentIndentPx: WORK_CONTENT_INDENT_PX,
   })
 
   const readInputToPaintMedian = useCallback(
