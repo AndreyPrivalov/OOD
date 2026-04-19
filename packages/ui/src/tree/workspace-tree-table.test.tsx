@@ -126,6 +126,7 @@ describe("WorkspaceTreeTable", () => {
       overlayDropY: null,
       dragPreview: null,
       recentlyCreatedRowId: null,
+      insertAnimationTarget: null,
       listScrollRef: { current: null },
       tableWrapRef: { current: null },
       tableRef: { current: null },

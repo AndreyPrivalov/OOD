@@ -98,6 +98,11 @@ type DragPreviewLike = {
   numbering: string
 }
 
+type InsertAnimationTargetLike = {
+  parentId: string | null
+  targetIndex: number
+}
+
 type RatingHeader = {
   key: string
   headerLabel: string
@@ -164,6 +169,7 @@ export type WorkspaceTreeTableProps = {
   overlayDropY: number | null
   dragPreview: DragPreviewLike | null
   recentlyCreatedRowId: string | null
+  insertAnimationTarget: InsertAnimationTargetLike | null
   listScrollRef: React.RefObject<HTMLDivElement>
   tableWrapRef: React.RefObject<HTMLDivElement>
   tableRef: React.RefObject<HTMLTableElement>
@@ -271,6 +277,12 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                 rowUi.solutionVariants.value.includes("\n")
               const rowClassName = [
                 props.recentlyCreatedRowId === row.id ? "row-created" : "",
+                props.insertAnimationTarget &&
+                props.recentlyCreatedRowId !== row.id &&
+                row.parentId === props.insertAnimationTarget.parentId &&
+                row.siblingOrder >= props.insertAnimationTarget.targetIndex
+                  ? "row-shift-down"
+                  : "",
                 props.draggedRowId === row.id ? "drag-source" : "",
                 props.dropIntent?.type === "between" &&
                 props.dropIntent.rowId === row.id
