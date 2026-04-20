@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { buildEditState, isSameEditState } from "./edit-state"
-import { buildRowPatchFromServer } from "./reconciliation"
+import {
+  buildRowPatchFromServer,
+  isServerPatchEchoingPayload,
+} from "./reconciliation"
 import { buildPatchPayload } from "./save-payload"
 import { LocalFirstRowQueue, type RevisionedValue } from "./save-queue"
 import { readSaveRowDeferredError } from "./save-result"
@@ -195,7 +198,10 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
 
         if (!ackResult.stale && ackResult.shouldApply && updated) {
           const patch = buildRowPatchFromServer(updated)
-          if (Object.keys(patch).length > 0) {
+          if (
+            Object.keys(patch).length > 0 &&
+            !isServerPatchEchoingPayload(patch, payload)
+          ) {
             patchRow(activeRowId, patch)
           }
         }
