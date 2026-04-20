@@ -4,17 +4,28 @@ import {
   DomainError,
   DomainErrorCode,
   type MoveWorkItemInput,
+  type RestoreWorkItemBranchInput,
   type UpdateWorkItemInput,
   type WorkItem,
+  type WorkItemMetricValueEntry,
   type WorkTreeReadNode,
   type Workspace,
   type WorkspaceId,
+  type WorkspaceMetric,
+  type WorkspaceMetricValue,
   assertNoCycle,
   buildTree,
   validateCreateWorkItemInput,
+  validateUpsertWorkspaceMetricInput,
   withScoreSums,
 } from "@ood/domain"
 import type { WorkItemRepository } from "./repository"
+import type {
+  CreateWorkspaceMetricInput,
+  SetWorkItemMetricValueInput,
+  UpdateWorkspaceMetricInput,
+  WorkspaceMetricRepository,
+} from "./workspace-metric-repository"
 import type {
   CreateWorkspaceInput,
   RenameWorkspaceInput,
@@ -25,11 +36,15 @@ import { DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME } from "./workspace-store"
 type InMemoryStore = {
   byWorkspace: Map<WorkspaceId, WorkItem[]>
   workspaces: Map<WorkspaceId, Workspace>
+  metricsByWorkspace: Map<WorkspaceId, WorkspaceMetric[]>
+  metricValuesByWorkItem: Map<string, Map<string, WorkspaceMetricValue>>
 }
 
 const memoryStore: InMemoryStore = {
   byWorkspace: new Map(),
   workspaces: new Map(),
+  metricsByWorkspace: new Map(),
+  metricValuesByWorkItem: new Map(),
 }
 
 function clampIndex(index: number, maxLength: number): number {
@@ -84,6 +99,20 @@ function ensureWorkspace(
     updatedAt: now,
   }
   memoryStore.workspaces.set(workspaceId, created)
+  if (!memoryStore.metricsByWorkspace.has(workspaceId)) {
+    memoryStore.metricsByWorkspace.set(workspaceId, [])
+  }
+  return created
+}
+
+function getWorkspaceMetrics(workspaceId: WorkspaceId): WorkspaceMetric[] {
+  ensureWorkspace(workspaceId)
+  const metrics = memoryStore.metricsByWorkspace.get(workspaceId)
+  if (metrics) {
+    return metrics
+  }
+  const created: WorkspaceMetric[] = []
+  memoryStore.metricsByWorkspace.set(workspaceId, created)
   return created
 }
 
@@ -109,6 +138,20 @@ function descendantsFor(items: WorkItem[]): Map<string, Set<string>> {
     result.set(item.id, visited)
   }
   return result
+}
+
+function flattenRestoreIds(root: RestoreWorkItemBranchInput["root"]) {
+  const ids: string[] = []
+  const queue = [root]
+  while (queue.length > 0) {
+    const current = queue.shift()
+    if (!current) {
+      continue
+    }
+    ids.push(current.id)
+    queue.push(...current.children)
+  }
+  return ids
 }
 
 export class InMemoryWorkItemRepository implements WorkItemRepository {
@@ -267,6 +310,9 @@ export class InMemoryWorkItemRepository implements WorkItemRepository {
     const workspaceItems = getWorkspaceItems(item.workspaceId)
     const descendants = descendantsFor(workspaceItems)
     const toDelete = new Set<string>([id, ...(descendants.get(id) ?? [])])
+    for (const itemId of toDelete) {
+      memoryStore.metricValuesByWorkItem.delete(itemId)
+    }
     const kept = workspaceItems.filter((row) => !toDelete.has(row.id))
     memoryStore.byWorkspace.set(item.workspaceId, kept)
     const siblings = kept
@@ -275,6 +321,84 @@ export class InMemoryWorkItemRepository implements WorkItemRepository {
     siblings.forEach((row, index) => {
       row.siblingOrder = index
     })
+  }
+
+  async restoreBranch(
+    input: RestoreWorkItemBranchInput,
+  ): Promise<Record<string, string>> {
+    const workspaceItems = getWorkspaceItems(input.workspaceId)
+
+    if (input.targetParentId) {
+      const parent = workspaceItems.find(
+        (item) => item.id === input.targetParentId,
+      )
+      if (!parent) {
+        throw new DomainError(
+          DomainErrorCode.PARENT_NOT_FOUND,
+          "Target parent not found",
+        )
+      }
+    }
+
+    const snapshotIds = flattenRestoreIds(input.root)
+    const existing = workspaceItems.find((item) =>
+      snapshotIds.includes(item.id),
+    )
+    if (existing) {
+      throw new DomainError(
+        DomainErrorCode.INVALID_MOVE_TARGET,
+        "Cannot restore branch with ids that already exist",
+      )
+    }
+
+    const targetSiblings = workspaceItems
+      .filter((row) => row.parentId === input.targetParentId)
+      .sort((a, b) => a.siblingOrder - b.siblingOrder)
+    const targetIndex = clampIndex(input.targetIndex, targetSiblings.length)
+    const targetOrder = targetSiblings.map((row) => row.id)
+    targetOrder.splice(targetIndex, 0, input.root.id)
+
+    const now = new Date()
+    const created: WorkItem[] = []
+
+    function visit(
+      node: RestoreWorkItemBranchInput["root"],
+      parentId: string | null,
+      siblingOrder: number,
+    ) {
+      created.push({
+        id: node.id,
+        workspaceId: node.workspaceId,
+        title: node.title,
+        object: node.object,
+        possiblyRemovable: node.possiblyRemovable,
+        parentId,
+        siblingOrder,
+        overcomplication:
+          (node.overcomplication as WorkItem["overcomplication"]) ?? null,
+        importance: (node.importance as WorkItem["importance"]) ?? null,
+        blocksMoney: (node.blocksMoney as WorkItem["blocksMoney"]) ?? null,
+        currentProblems: [...node.currentProblems],
+        solutionVariants: [...node.solutionVariants],
+        createdAt: now,
+        updatedAt: now,
+      })
+
+      node.children.forEach((child, index) => {
+        visit(child, node.id, index)
+      })
+    }
+
+    visit(input.root, input.targetParentId, targetIndex)
+    workspaceItems.push(...created)
+    targetOrder.forEach((id, index) => {
+      const item = workspaceItems.find((row) => row.id === id)
+      if (item) {
+        item.siblingOrder = index
+      }
+    })
+
+    return Object.fromEntries(snapshotIds.map((id) => [id, id]))
   }
 }
 
@@ -316,13 +440,141 @@ export class InMemoryWorkspaceRepository implements WorkspaceRepository {
       return false
     }
 
+    const workspaceItems = memoryStore.byWorkspace.get(id) ?? []
+    for (const item of workspaceItems) {
+      memoryStore.metricValuesByWorkItem.delete(item.id)
+    }
     memoryStore.workspaces.delete(id)
     memoryStore.byWorkspace.delete(id)
+    memoryStore.metricsByWorkspace.delete(id)
     return true
+  }
+}
+
+export class InMemoryWorkspaceMetricRepository
+  implements WorkspaceMetricRepository
+{
+  async listMetrics(workspaceId: WorkspaceId): Promise<WorkspaceMetric[]> {
+    return [...(memoryStore.metricsByWorkspace.get(workspaceId) ?? [])]
+  }
+
+  async createMetric(
+    input: CreateWorkspaceMetricInput,
+  ): Promise<WorkspaceMetric> {
+    const normalized = validateUpsertWorkspaceMetricInput({
+      shortName: input.shortName,
+      description: input.description,
+    })
+    const metrics = getWorkspaceMetrics(input.workspaceId)
+    const now = new Date()
+    const created: WorkspaceMetric = {
+      id: randomUUID(),
+      workspaceId: input.workspaceId,
+      shortName: normalized.shortName,
+      description: normalized.description,
+      createdAt: now,
+      updatedAt: now,
+    }
+    metrics.push(created)
+    return { ...created }
+  }
+
+  async updateMetric(
+    metricId: string,
+    input: UpdateWorkspaceMetricInput,
+  ): Promise<WorkspaceMetric | null> {
+    const normalized = validateUpsertWorkspaceMetricInput({
+      shortName: input.shortName,
+      description: input.description,
+    })
+    for (const metrics of memoryStore.metricsByWorkspace.values()) {
+      const metric = metrics.find((item) => item.id === metricId)
+      if (!metric) {
+        continue
+      }
+      metric.shortName = normalized.shortName
+      metric.description = normalized.description
+      metric.updatedAt = new Date()
+      return { ...metric }
+    }
+    return null
+  }
+
+  async deleteMetric(metricId: string): Promise<boolean> {
+    let deleted = false
+    for (const [workspaceId, metrics] of memoryStore.metricsByWorkspace) {
+      const nextMetrics = metrics.filter((metric) => metric.id !== metricId)
+      if (nextMetrics.length === metrics.length) {
+        continue
+      }
+      memoryStore.metricsByWorkspace.set(workspaceId, nextMetrics)
+      deleted = true
+      break
+    }
+    if (!deleted) {
+      return false
+    }
+
+    for (const values of memoryStore.metricValuesByWorkItem.values()) {
+      values.delete(metricId)
+    }
+    return true
+  }
+
+  async setWorkItemMetricValue(
+    input: SetWorkItemMetricValueInput,
+  ): Promise<void> {
+    const item = findItemById(input.workItemId)
+    if (!item) {
+      throw new DomainError(
+        DomainErrorCode.INVALID_MOVE_TARGET,
+        "Metric and work item should belong to the same workspace",
+      )
+    }
+
+    const metrics = memoryStore.metricsByWorkspace.get(item.workspaceId) ?? []
+    const metric = metrics.find((candidate) => candidate.id === input.metricId)
+    if (!metric) {
+      throw new DomainError(
+        DomainErrorCode.INVALID_MOVE_TARGET,
+        "Metric and work item should belong to the same workspace",
+      )
+    }
+
+    const values =
+      memoryStore.metricValuesByWorkItem.get(input.workItemId) ?? new Map()
+    if (input.value === "none") {
+      values.delete(input.metricId)
+      if (values.size === 0) {
+        memoryStore.metricValuesByWorkItem.delete(input.workItemId)
+      } else {
+        memoryStore.metricValuesByWorkItem.set(input.workItemId, values)
+      }
+      return
+    }
+
+    values.set(input.metricId, input.value)
+    memoryStore.metricValuesByWorkItem.set(input.workItemId, values)
+  }
+
+  async listWorkItemMetricValues(
+    workItemId: string,
+  ): Promise<WorkItemMetricValueEntry[]> {
+    const values =
+      memoryStore.metricValuesByWorkItem.get(workItemId) ?? new Map()
+    return [...values.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([metricId, value]) => ({
+        workItemId,
+        metricId,
+        value,
+      }))
   }
 }
 
 export function __resetInMemoryStoreForTests() {
   memoryStore.byWorkspace.clear()
   memoryStore.workspaces.clear()
+  memoryStore.metricsByWorkspace.clear()
+  memoryStore.metricValuesByWorkItem.clear()
 }
