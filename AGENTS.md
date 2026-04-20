@@ -22,7 +22,7 @@ Build and maintain only the cleaned core unless the spec is explicitly expanded:
 - one work tree per workspace;
 - root and child work-item creation;
 - inline work-item editing;
-- ratings and parent aggregate read values;
+- ratings, workspace metrics, and parent aggregate read values;
 - stable sibling ordering;
 - move among siblings;
 - move to another valid parent;
@@ -92,7 +92,9 @@ Preserve these high-level qualities:
 
 - `title` cannot be saved empty.
 - Ratings must stay within `0..5` or `null`.
+- Workspace metrics are configured per workspace, may be empty, and use only `none`, `indirect`, `direct`.
 - Parent rows expose aggregate rating read values in the primary tree view.
+- Parent rows expose aggregate metric read values in the primary tree view.
 - Editing business fields must not implicitly change tree structure.
 - Structural operations must be atomic from the user’s perspective.
 - Invalid moves must never partially apply.

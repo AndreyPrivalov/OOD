@@ -208,4 +208,38 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
       code: DomainErrorCode.EMPTY_TITLE,
     })
   })
+
+  it("restores a deleted branch with stable sibling order", async () => {
+    const repo = new InMemoryWorkItemRepository()
+    const keep = await repo.create({ workspaceId, title: "keep" })
+    const deleted = await repo.create({ workspaceId, title: "deleted" })
+    await repo.create({
+      workspaceId,
+      parentId: deleted.id,
+      title: "nested",
+      importance: 3,
+    })
+
+    const treeBeforeDelete = await repo.listTree(workspaceId)
+    const deletedBranch = findNode(treeBeforeDelete, deleted.id)
+    expect(deletedBranch).toBeDefined()
+    const nestedChildId = deletedBranch?.children[0]?.id
+    expect(nestedChildId).toBeDefined()
+
+    await repo.deleteCascade(deleted.id)
+    const idMap = await repo.restoreBranch({
+      workspaceId,
+      targetParentId: null,
+      targetIndex: 1,
+      root: deletedBranch as TreeNode,
+    })
+    const restoredTree = await repo.listTree(workspaceId)
+
+    expect(idMap).toEqual({
+      [deleted.id]: deleted.id,
+      [nestedChildId as string]: nestedChildId as string,
+    })
+    expect(restoredTree.map((node) => node.id)).toEqual([keep.id, deleted.id])
+    expect(findNode(restoredTree, deleted.id)?.children).toHaveLength(1)
+  })
 })

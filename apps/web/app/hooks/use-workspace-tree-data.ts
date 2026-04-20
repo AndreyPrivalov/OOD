@@ -1,12 +1,35 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import {
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react"
+import {
+  type HistoryEntry,
+  type HistoryRowSnapshot,
+  type WorkspaceHistoryState,
+  areTreesEquivalent,
+  clearWorkspaceHistory,
+  findBranch,
+  getRowPlacement,
+  loadWorkspaceHistory,
+  makeEmptyHistory,
+  recordHistoryEntry,
+  remapHistoryIds,
+  removeBranchFromTree,
+  restoreBranchIntoTree,
+  saveWorkspaceHistory,
+} from "../history/workspace-history"
 import {
   type WorkTreeNode,
   applyOptimisticCreate,
   applyOptimisticMove,
   mapWorkItemErrorText,
   normalizeTreeData,
+  patchTreeRow,
 } from "../state/workspace-tree-state"
 import {
   WorkItemRequestError,
@@ -15,6 +38,7 @@ import {
   fetchWorkItems,
   moveWorkItem,
   patchWorkItem,
+  restoreWorkItemBranch,
 } from "../work-item-client"
 import { attachSaveRowDeferredError } from "../work-item-editing/save-result"
 
@@ -76,6 +100,100 @@ function findRow(nodes: WorkTreeNode[], rowId: string): WorkTreeNode | null {
   return null
 }
 
+function toHistoryBranchSnapshot(
+  row: Pick<
+    WorkTreeNode,
+    | "id"
+    | "workspaceId"
+    | "title"
+    | "object"
+    | "possiblyRemovable"
+    | "parentId"
+    | "siblingOrder"
+    | "overcomplication"
+    | "importance"
+    | "blocksMoney"
+    | "currentProblems"
+    | "solutionVariants"
+  >,
+): HistoryRowSnapshot {
+  return {
+    id: row.id,
+    workspaceId: row.workspaceId,
+    title: row.title,
+    object: row.object,
+    possiblyRemovable: row.possiblyRemovable,
+    parentId: row.parentId,
+    siblingOrder: row.siblingOrder,
+    overcomplication: row.overcomplication,
+    importance: row.importance,
+    blocksMoney: row.blocksMoney,
+    currentProblems: [...row.currentProblems],
+    solutionVariants: [...row.solutionVariants],
+    children: [],
+  }
+}
+
+function toTreePatch(row: HistoryRowSnapshot | WorkTreeNode) {
+  return {
+    id: row.id,
+    workspaceId: row.workspaceId,
+    title: row.title,
+    object: row.object,
+    possiblyRemovable: row.possiblyRemovable,
+    parentId: row.parentId,
+    siblingOrder: row.siblingOrder,
+    overcomplication: row.overcomplication,
+    importance: row.importance,
+    blocksMoney: row.blocksMoney,
+    currentProblems: [...row.currentProblems],
+    solutionVariants: [...row.solutionVariants],
+  }
+}
+
+function buildPatchPayloadFromSnapshot(snapshot: HistoryRowSnapshot) {
+  return {
+    title: snapshot.title,
+    object: snapshot.object,
+    possiblyRemovable: snapshot.possiblyRemovable,
+    overcomplication: snapshot.overcomplication,
+    importance: snapshot.importance,
+    blocksMoney: snapshot.blocksMoney,
+    currentProblems: [...snapshot.currentProblems],
+    solutionVariants: [...snapshot.solutionVariants],
+  }
+}
+
+function applyHistoryStateTransition(
+  state: WorkspaceHistoryState,
+  nextPresent: WorkTreeNode[],
+  direction: "undo" | "redo",
+): WorkspaceHistoryState | null {
+  if (direction === "undo") {
+    const entry = state.past.at(-1)
+    if (!entry) {
+      return null
+    }
+    return {
+      version: state.version,
+      past: state.past.slice(0, -1),
+      present: nextPresent,
+      future: [entry, ...state.future],
+    }
+  }
+
+  const entry = state.future[0]
+  if (!entry) {
+    return null
+  }
+  return {
+    version: state.version,
+    past: [...state.past, entry],
+    present: nextPresent,
+    future: state.future.slice(1),
+  }
+}
+
 const CREATE_ONLY_KEYS = new Set(["title", "object", "possiblyRemovable"])
 
 function buildPostCreatePatchPayload(payload: Record<string, unknown>) {
@@ -127,12 +245,20 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
   const [isLoading, setIsLoading] = useState(true)
   const [errorText, setErrorText] = useState("")
   const [refreshCount, setRefreshCount] = useState(0)
+  const [historyState, setHistoryState] =
+    useState<WorkspaceHistoryState | null>(null)
+  const [isApplyingHistory, setIsApplyingHistory] = useState(false)
   const draftSequenceRef = useRef(0)
   const treeRef = useRef(tree)
+  const historyRef = useRef<WorkspaceHistoryState | null>(historyState)
 
   useEffect(() => {
     treeRef.current = tree
   }, [tree])
+
+  useEffect(() => {
+    historyRef.current = historyState
+  }, [historyState])
 
   const toErrorText = useCallback((error: unknown) => {
     if (error instanceof WorkItemRequestError) {
@@ -141,19 +267,74 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
     return error instanceof Error ? error.message : "Неизвестная ошибка."
   }, [])
 
-  const refreshTree = useCallback(
-    async (opts?: { silent?: boolean }) => {
+  const commitTree = useCallback((nextTree: WorkTreeNode[]) => {
+    treeRef.current = nextTree
+    setTree(nextTree)
+  }, [])
+
+  const updateTree = useCallback(
+    (nextTree: SetStateAction<WorkTreeNode[]>) => {
+      const resolved =
+        typeof nextTree === "function" ? nextTree(treeRef.current) : nextTree
+      commitTree(resolved)
+    },
+    [commitTree],
+  )
+
+  const commitHistory = useCallback(
+    (nextHistory: WorkspaceHistoryState | null) => {
+      historyRef.current = nextHistory
+      setHistoryState(nextHistory)
       if (!currentWorkspaceId) {
-        setTree([])
+        return
+      }
+      if (!nextHistory) {
+        clearWorkspaceHistory(currentWorkspaceId)
+        return
+      }
+      saveWorkspaceHistory(currentWorkspaceId, nextHistory)
+    },
+    [currentWorkspaceId],
+  )
+
+  const pushHistoryEntry = useCallback(
+    (entry: HistoryEntry, nextPresent: WorkTreeNode[]) => {
+      const base = historyRef.current ?? makeEmptyHistory(treeRef.current)
+      commitHistory(recordHistoryEntry(base, entry, nextPresent))
+    },
+    [commitHistory],
+  )
+
+  const refreshTree = useCallback(
+    async (opts?: { silent?: boolean; reconcileHistory?: boolean }) => {
+      if (!currentWorkspaceId) {
+        commitTree([])
+        commitHistory(null)
         setIsLoading(false)
         return
       }
+
       if (!opts?.silent) {
         setIsLoading(true)
       }
+
       try {
-        const data = await fetchWorkItems(currentWorkspaceId)
-        setTree(normalizeTreeData(data))
+        const data = normalizeTreeData(await fetchWorkItems(currentWorkspaceId))
+        const existingHistory = historyRef.current
+
+        if (opts?.reconcileHistory && existingHistory) {
+          if (areTreesEquivalent(data, existingHistory.present)) {
+            commitTree(data)
+            commitHistory({ ...existingHistory, present: data })
+          } else {
+            commitTree(data)
+            commitHistory(makeEmptyHistory(data))
+          }
+        } else {
+          commitTree(data)
+          commitHistory(makeEmptyHistory(data))
+        }
+
         if (isDev) {
           setRefreshCount((current) => current + 1)
         }
@@ -166,12 +347,31 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
         }
       }
     },
-    [currentWorkspaceId, isDev, toErrorText],
+    [commitHistory, commitTree, currentWorkspaceId, isDev, toErrorText],
   )
 
   useEffect(() => {
+    if (!currentWorkspaceId) {
+      commitTree([])
+      commitHistory(null)
+      setIsLoading(false)
+      setErrorText("")
+      return
+    }
+
+    const restoredHistory = loadWorkspaceHistory(currentWorkspaceId)
+    if (restoredHistory) {
+      commitTree(restoredHistory.present)
+      commitHistory(restoredHistory)
+      setIsLoading(false)
+      void refreshTree({ silent: true, reconcileHistory: true })
+      return
+    }
+
+    commitTree([])
+    commitHistory(makeEmptyHistory([]))
     void refreshTree()
-  }, [refreshTree])
+  }, [commitHistory, commitTree, currentWorkspaceId, refreshTree])
 
   const createRowAtPosition = useCallback(
     async (parentId: string | null, targetIndex: number) => {
@@ -181,9 +381,9 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
 
       draftSequenceRef.current += 1
       const draftId = `${LOCAL_DRAFT_ROW_ID_PREFIX}${draftSequenceRef.current}`
-      setTree((current) =>
+      commitTree(
         applyOptimisticCreate(
-          current,
+          treeRef.current,
           {
             id: draftId,
             workspaceId: currentWorkspaceId,
@@ -205,38 +405,62 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
       setErrorText("")
       onCreateFocusRow(draftId)
     },
-    [currentWorkspaceId, onCreateFocusRow],
+    [commitTree, currentWorkspaceId, onCreateFocusRow],
   )
 
   const deleteRow = useCallback(
     async (id: string) => {
       if (isLocalDraftRowId(id)) {
         discardPendingSave(id)
-        setTree((current) => removeLocalRow(current, id))
+        commitTree(removeLocalRow(treeRef.current, id))
         onDeleteRow(id)
         return
       }
 
       const previousTree = treeRef.current
       const optimisticTree = removeLocalRow(previousTree, id)
-      if (optimisticTree === previousTree) {
+      const branch = findBranch(previousTree, id)
+      const placement = getRowPlacement(previousTree, id)
+      if (
+        optimisticTree === previousTree ||
+        !branch ||
+        !placement ||
+        !currentWorkspaceId
+      ) {
         return
       }
 
       discardPendingSave(id)
-      setTree(optimisticTree)
+      commitTree(optimisticTree)
       onDeleteRow(id)
 
       try {
         await deleteWorkItem(id)
+        pushHistoryEntry(
+          {
+            type: "deleteBranch",
+            targetParentId: placement.parentId,
+            targetIndex: placement.index,
+            branch,
+          },
+          optimisticTree,
+        )
         setErrorText("")
       } catch (error) {
-        setTree(previousTree)
+        commitTree(previousTree)
         void refreshTree({ silent: true })
         setErrorText(toErrorText(error))
       }
     },
-    [discardPendingSave, onDeleteRow, refreshTree, toErrorText],
+    [
+      commitTree,
+      currentWorkspaceId,
+      discardPendingSave,
+      onDeleteRow,
+      pushHistoryEntry,
+      refreshTree,
+      toErrorText,
+    ],
   )
 
   const saveRow = useCallback(
@@ -295,29 +519,204 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
       }
 
       if (isLocalDraftRowId(id)) {
-        setTree(optimisticTree)
+        commitTree(optimisticTree)
         return
       }
 
-      setTree(optimisticTree)
+      const previousPlacement = getRowPlacement(previousTree, id)
+      if (!previousPlacement) {
+        return
+      }
+
+      commitTree(optimisticTree)
       try {
         await moveWorkItem(id, {
           targetParentId,
           targetIndex,
         })
+        pushHistoryEntry(
+          {
+            type: "move",
+            rowId: id,
+            fromParentId: previousPlacement.parentId,
+            fromIndex: previousPlacement.index,
+            toParentId: targetParentId,
+            toIndex: targetIndex,
+          },
+          optimisticTree,
+        )
         setErrorText("")
       } catch (error) {
-        setTree(previousTree)
+        commitTree(previousTree)
         void refreshTree({ silent: true })
         setErrorText(toErrorText(error))
       }
     },
-    [refreshTree, toErrorText],
+    [commitTree, pushHistoryEntry, refreshTree, toErrorText],
+  )
+
+  const recordPersistedChange = useCallback(
+    (
+      change:
+        | { kind: "patch"; before: WorkTreeNode; after: WorkTreeNode }
+        | { kind: "create"; before: WorkTreeNode; after: WorkTreeNode },
+    ) => {
+      if (change.kind === "patch") {
+        pushHistoryEntry(
+          {
+            type: "patch",
+            before: toHistoryBranchSnapshot(change.before),
+            after: toHistoryBranchSnapshot(change.after),
+          },
+          treeRef.current,
+        )
+        return
+      }
+
+      pushHistoryEntry(
+        {
+          type: "createBranch",
+          targetParentId: change.after.parentId,
+          targetIndex: change.after.siblingOrder,
+          branch: toHistoryBranchSnapshot(change.after),
+        },
+        treeRef.current,
+      )
+    },
+    [pushHistoryEntry],
+  )
+
+  const applyHistoryDirection = useCallback(
+    async (direction: "undo" | "redo") => {
+      if (isApplyingHistory || !currentWorkspaceId) {
+        return
+      }
+
+      const currentHistory = historyRef.current
+      if (!currentHistory) {
+        return
+      }
+
+      const entry =
+        direction === "undo"
+          ? currentHistory.past.at(-1)
+          : currentHistory.future[0]
+      if (!entry) {
+        return
+      }
+
+      setIsApplyingHistory(true)
+      try {
+        let workingHistory = currentHistory
+        let nextPresent = currentHistory.present
+
+        if (entry.type === "patch") {
+          const snapshot = direction === "undo" ? entry.before : entry.after
+          await patchWorkItem(
+            snapshot.id,
+            buildPatchPayloadFromSnapshot(snapshot),
+          )
+          nextPresent = patchTreeRow(
+            currentHistory.present,
+            snapshot.id,
+            toTreePatch(snapshot),
+          )
+        } else if (entry.type === "move") {
+          const targetParentId =
+            direction === "undo" ? entry.fromParentId : entry.toParentId
+          const targetIndex =
+            direction === "undo" ? entry.fromIndex : entry.toIndex
+          await moveWorkItem(entry.rowId, {
+            targetParentId,
+            targetIndex,
+          })
+          nextPresent = applyOptimisticMove(
+            currentHistory.present,
+            entry.rowId,
+            targetParentId,
+            targetIndex,
+          )
+        } else if (entry.type === "deleteBranch") {
+          if (direction === "undo") {
+            const response = await restoreWorkItemBranch({
+              workspaceId: currentWorkspaceId,
+              targetParentId: entry.targetParentId,
+              targetIndex: entry.targetIndex,
+              root: entry.branch,
+            })
+            workingHistory = remapHistoryIds(workingHistory, response.idMap)
+            const remappedEntry = workingHistory.past.at(-1)
+            if (!remappedEntry || remappedEntry.type !== "deleteBranch") {
+              return
+            }
+            nextPresent = restoreBranchIntoTree(
+              workingHistory.present,
+              remappedEntry.branch,
+              remappedEntry.targetParentId,
+              remappedEntry.targetIndex,
+            )
+          } else {
+            await deleteWorkItem(entry.branch.id)
+            nextPresent = removeBranchFromTree(
+              workingHistory.present,
+              entry.branch.id,
+            )
+          }
+        } else if (direction === "undo") {
+          await deleteWorkItem(entry.branch.id)
+          nextPresent = removeBranchFromTree(
+            workingHistory.present,
+            entry.branch.id,
+          )
+        } else {
+          const response = await restoreWorkItemBranch({
+            workspaceId: currentWorkspaceId,
+            targetParentId: entry.targetParentId,
+            targetIndex: entry.targetIndex,
+            root: entry.branch,
+          })
+          workingHistory = remapHistoryIds(workingHistory, response.idMap)
+          const remappedEntry = workingHistory.future[0]
+          if (!remappedEntry || remappedEntry.type !== "createBranch") {
+            return
+          }
+          nextPresent = restoreBranchIntoTree(
+            workingHistory.present,
+            remappedEntry.branch,
+            remappedEntry.targetParentId,
+            remappedEntry.targetIndex,
+          )
+        }
+
+        const nextHistory = applyHistoryStateTransition(
+          workingHistory,
+          nextPresent,
+          direction,
+        )
+        if (!nextHistory) {
+          return
+        }
+        commitTree(nextPresent)
+        commitHistory(nextHistory)
+        setErrorText("")
+      } catch (error) {
+        setErrorText(toErrorText(error))
+      } finally {
+        setIsApplyingHistory(false)
+      }
+    },
+    [
+      commitHistory,
+      commitTree,
+      currentWorkspaceId,
+      isApplyingHistory,
+      toErrorText,
+    ],
   )
 
   return {
     tree,
-    setTree,
+    setTree: updateTree,
     isLoading,
     errorText,
     setErrorText,
@@ -328,5 +727,11 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
     moveRow,
     toErrorText,
     refreshCount,
+    canUndo: (historyState?.past.length ?? 0) > 0,
+    canRedo: (historyState?.future.length ?? 0) > 0,
+    isApplyingHistory,
+    recordPersistedChange,
+    undo: () => applyHistoryDirection("undo"),
+    redo: () => applyHistoryDirection("redo"),
   }
 }

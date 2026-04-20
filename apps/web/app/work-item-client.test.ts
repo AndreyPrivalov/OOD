@@ -3,6 +3,7 @@ import {
   WorkItemRequestError,
   fetchWorkItems,
   patchWorkItem,
+  restoreWorkItemBranch,
 } from "./work-item-client"
 
 describe("work-item-client", () => {
@@ -65,5 +66,61 @@ describe("work-item-client", () => {
         message: "Work item request failed",
       },
     )
+  })
+
+  it("posts restore payload to canonical restore endpoint", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { idMap: { "row-1": "row-1" } } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    )
+
+    const result = await restoreWorkItemBranch({
+      workspaceId: "ws",
+      targetParentId: null,
+      targetIndex: 0,
+      root: {
+        id: "row-1",
+        workspaceId: "ws",
+        title: "Restored",
+        object: null,
+        possiblyRemovable: false,
+        parentId: null,
+        siblingOrder: 0,
+        overcomplication: null,
+        importance: null,
+        blocksMoney: null,
+        currentProblems: [],
+        solutionVariants: [],
+        children: [],
+      },
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/work-items/restore", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workspaceId: "ws",
+        targetParentId: null,
+        targetIndex: 0,
+        root: {
+          id: "row-1",
+          workspaceId: "ws",
+          title: "Restored",
+          object: null,
+          possiblyRemovable: false,
+          parentId: null,
+          siblingOrder: 0,
+          overcomplication: null,
+          importance: null,
+          blocksMoney: null,
+          currentProblems: [],
+          solutionVariants: [],
+          children: [],
+        },
+      }),
+    })
+    expect(result).toEqual({ idMap: { "row-1": "row-1" } })
   })
 })

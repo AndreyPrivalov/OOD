@@ -115,9 +115,28 @@ export function useWorkspaceDndOverlayComposition(
     tableHeaderBottom,
   ])
 
+  const overlayNestTarget = useMemo(() => {
+    const dropIntent = dnd.dropIntent
+    if (dnd.interactionMode !== "dragging" || !dropIntent) {
+      return null
+    }
+    if (dropIntent.type !== "nest") {
+      return null
+    }
+    const rowAnchor = rowAnchors[dropIntent.targetId]
+    if (!rowAnchor) {
+      return null
+    }
+    return {
+      top: rowAnchor.top,
+      height: Math.max(0, rowAnchor.bottom - rowAnchor.top),
+    }
+  }, [dnd.dropIntent, dnd.interactionMode, rowAnchors])
+
   return {
     dnd,
     overlayAddIndicators,
     overlayDropY,
+    overlayNestTarget,
   }
 }

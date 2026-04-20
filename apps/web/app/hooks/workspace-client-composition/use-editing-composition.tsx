@@ -66,6 +66,11 @@ type UseWorkspaceEditingCompositionOptions = {
   syncEditsRef: (edits: Record<string, EditState>) => void
   toErrorText: (error: unknown) => string
   onDiscardPendingSaveReady: (handler: (id: string) => void) => void
+  onPersistedChange?: (
+    change:
+      | { kind: "patch"; before: FlatRow; after: FlatRow }
+      | { kind: "create"; before: FlatRow; after: FlatRow },
+  ) => void
 }
 
 export function useWorkspaceEditingComposition(
@@ -88,6 +93,7 @@ export function useWorkspaceEditingComposition(
     syncEditsRef,
     toErrorText,
     onDiscardPendingSaveReady,
+    onPersistedChange,
   } = options
   const patchLatenciesRef = useRef<number[]>([])
   const inputToPaintRef = useRef<number[]>([])
@@ -107,6 +113,7 @@ export function useWorkspaceEditingComposition(
     patchRow: (rowId, patch) => {
       setTree((currentTree) => patchTreeRow(currentTree, rowId, patch))
     },
+    onPersistedChange,
     reportError,
     saveRow,
     toErrorText,

@@ -8,7 +8,7 @@ This phase does not aim to add broad new functionality. Its goal is to reduce ac
 
 ## 2. Product Positioning
 
-OOD is a web application for managing hierarchical work trees. It is designed for a small team that needs to decompose work into nested items, compare items using a fixed set of ratings, and reorganize the structure safely.
+OOD is a web application for managing hierarchical work trees. It is designed for a small team that needs to decompose work into nested items, compare items using a mix of fixed ratings and workspace-defined impact metrics, and reorganize the structure safely.
 
 The system should support a shared environment for up to roughly ten users, but the first cleaned-up architecture does not need user-specific accounts, role-based permissions, or real-time conflict handling.
 
@@ -54,8 +54,10 @@ The cleaned core must include:
 - one work tree per workspace;
 - creation of root and child work items;
 - inline editing of core fields;
-- ratings on work items;
+- fixed ratings on work items;
+- workspace-defined impact metrics on work items;
 - aggregate ratings for parent items in read mode;
+- aggregate metric values for parent items in read mode;
 - deterministic ordering among siblings;
 - moving an item within sibling order;
 - moving an item to a different parent;
@@ -87,6 +89,17 @@ Required workspace fields:
 - `createdAt`
 - `updatedAt`
 
+Each workspace also owns a metric configuration set that may be empty and is scoped only to that workspace.
+
+Required workspace metric fields:
+
+- `id`
+- `workspaceId`
+- `shortName`
+- `description`
+- `createdAt`
+- `updatedAt`
+
 ### Work Item
 
 A work item is a single node in a workspace tree.
@@ -102,7 +115,7 @@ Required or supported fields:
 - `siblingOrder`
 - `overcomplication`
 - `importance`
-- `blocksMoney`
+- `metricValues`
 - `currentProblems`
 - `solutionVariants`
 - `createdAt`
@@ -115,7 +128,11 @@ Required or supported fields:
 - a workspace contains exactly one work tree;
 - work items cannot belong to multiple workspaces;
 - moving an item across workspaces is out of scope;
-- all workspaces are visible to all users in this phase.
+- all workspaces are visible to all users in this phase;
+- each workspace owns its own metric catalog;
+- different workspaces may have different metric sets, including zero metrics;
+- workspace rename, workspace metric management, and workspace deletion live in one workspace settings popup;
+- deleting a workspace from the settings popup deletes its full tree and metric catalog.
 
 ### Tree Rules
 
@@ -141,6 +158,31 @@ Required or supported fields:
 - parent items do not expose editable own ratings in the primary tree view;
 - parent items display aggregated descendant sums in read mode;
 - leaf items display their own stored ratings.
+- after a successful leaf rating edit, affected parent aggregate sums must update immediately in the current client session without waiting for a page reload;
+- the canonical write contract for item edits remains row-scoped, so immediate parent aggregate updates are owned by client-side derived tree state rather than by PATCH responses;
+- a full tree fetch is the reconciliation path for server truth, but routine leaf rating edits must not depend on that fetch to look correct.
+
+### Metric Rules
+
+- workspace metrics are defined per workspace and do not leak across workspace boundaries;
+- each metric has a required trimmed `shortName` and an optional trimmed `description`;
+- duplicate metric names inside one workspace are allowed;
+- empty metric names are forbidden as saved values;
+- adding a metric appends it to the end of that workspace metric order;
+- metric ordering is stable and is not manually editable in the first version;
+- deleting a metric removes the metric definition and all stored values for that metric in the workspace;
+- metric deletion does not require a confirmation popup and must instead be recoverable through canonical session undo;
+- work item metric values use one canonical enum with three states: `none`, `indirect`, `direct`;
+- missing or empty metric value is treated as `none`;
+- leaf items display and edit their own stored metric values;
+- parent items do not expose editable own metric values in the primary tree view;
+- parent items display only aggregated descendant metric values;
+- parent aggregate priority is deterministic: `direct` outranks `indirect`, and `indirect` outranks `none`;
+- if any descendant is `direct`, the aggregated parent value is `direct`;
+- otherwise, if any descendant is `indirect`, the aggregated parent value is `indirect`;
+- otherwise, the aggregated parent value is `none`;
+- when a new metric is added, existing work items in that workspace implicitly start with value `none`;
+- removing legacy `blocksMoney` is part of this feature and no compatibility alias should preserve it in the long-term contract.
 
 ## 8. UX Direction for the Cleanup Phase
 
@@ -172,6 +214,26 @@ The system should avoid aggressive continuous autosave queues when a simpler end
 
 The system must not persist placeholder rows with an empty saved `title` just to support focus or creation flow. If the UI needs a temporary draft row, that draft must remain local until it can be saved with a valid non-empty `title`.
 
+For leaf rating edits, the client must apply the confirmed row patch locally and immediately recompute aggregate sums for all affected ancestors in client state. One successful interaction must therefore update both the edited leaf value and the visible parent sums.
+
+Workspace metric configuration must not be edited inline in the tree header. Metric creation, rename, and deletion belong to the workspace settings popup rather than to table-column affordances.
+
+In the first version, leaf metric editing in the tree uses a dropdown control with the three canonical states. Parent rows remain read-only for metric columns.
+
+### Session History
+
+The cleaned core must support session-scoped undo and redo for canonical tree data actions.
+
+- `cmd/ctrl + z` triggers undo for the active workspace;
+- `cmd/ctrl + shift + z` triggers redo for the active workspace;
+- history is stored separately per workspace;
+- history includes only core data actions: `create`, inline field edits, rating edits, metric value edits, metric catalog edits, `move`, `delete`;
+- history does not include purely visual client state such as collapse state, scroll position, selection, or measured layout values;
+- refresh must preserve `past`, `present`, and `future` for the active browser tab via `sessionStorage`;
+- closing the tab or window ends the session and naturally drops the history;
+- one completed edit commit produces one history step; text fields continue to use `blur` as the default commit boundary;
+- metric deletion from workspace settings must produce one undoable data action that can restore both the metric definition and all removed item values.
+
 ## 9. Architectural Direction
 
 ### Frontend
@@ -184,6 +246,11 @@ The target shape is:
 - tree interaction logic extracted from rendering;
 - edit state and persistence triggers separated from visual components;
 - API contract mapping separated from UI domain behavior.
+- session history management kept in client state, with keyboard routing owned by workspace client composition instead of individual cells.
+- tree-derived rating aggregates treated as a first-class client projection, recomputed locally after accepted leaf rating patches instead of relying on ad hoc refreshes.
+- workspace settings composition separated from workspace switcher rendering.
+- workspace metric catalog and metric value storage modeled as reusable domain concepts rather than as ad hoc dynamic table props.
+- tree-derived metric aggregates treated as a first-class client projection, recomputed locally after accepted metric value edits instead of relying on full refresh.
 
 ### Package Structure
 
@@ -205,12 +272,26 @@ The system must converge toward:
 - one canonical API response shape;
 - one canonical naming scheme for fields;
 - one official runtime persistence mode outside tests.
+- one canonical aggregate-sync strategy for rating edits.
+- one canonical workspace-metric model instead of hard-coded `blocksMoney` semantics.
 
 The cleanup phase must remove or phase out:
 
 - legacy compatibility aliases in active API responses;
 - non-test in-memory repository fallbacks;
 - redundant duplicate documentation roots.
+- mixed behavior where some leaf rating edits use local aggregate recompute and others require forced refetch to show correct parent sums;
+- legacy `blocksMoney` field usage in active domain, API, or UI contracts.
+
+### Restore Contract
+
+Undo and redo for branch deletion and branch recreation require one canonical restore contract.
+
+- the server must expose a restore endpoint for a full branch snapshot;
+- restore requests must be atomic;
+- restore responses must return an `idMap`, even if ids are preserved as-is;
+- clients must remap queued history references using the returned `idMap`;
+- if session history restored from storage conflicts with the fetched server tree, the client must invalidate that workspace history, refresh from the server, and avoid partial replay.
 
 ### Approved Refactoring Goals
 
@@ -220,7 +301,8 @@ The current cleanup phase explicitly authorizes the following refactoring goals:
 - enforce the `title` invariant across UI draft handling, domain validation, repository logic, and database constraints so that an empty `title` can never be persisted as a saved row;
 - collapse the client/server tree contract to one canonical nested response shape and remove fallback normalization paths that silently accept alternative or legacy payload formats;
 - reduce oversized orchestration modules by separating tree data loading, inline editing state, and drag/drop overlay mechanics into smaller modules with clear ownership;
-- keep shared tree presentation in `packages/ui`, but move app-specific orchestration and contract-recovery logic out of the shared UI layer.
+- keep shared tree presentation in `packages/ui`, but move app-specific orchestration and contract-recovery logic out of the shared UI layer;
+- replace hard-coded `blocksMoney` storage and rendering with workspace-scoped metric configuration and values.
 
 ## 10. Technology Decisions
 
@@ -244,6 +326,7 @@ The cleanup phase must prioritize:
 - correctness of tree operations;
 - consistency of persistence behavior;
 - predictable inline editing;
+- predictable workspace settings editing;
 - reduction of oversized modules;
 - shared UI consistency through `packages/ui`;
 - removal of product features that create complexity without being core.
@@ -261,6 +344,10 @@ The specification must explicitly reject or handle these cases:
 - partial subtree loss after delete;
 - editing fields and accidentally changing structure;
 - writing invalid rating values outside `0..5`;
+- saving a metric with an empty `shortName`;
+- partially deleting a metric definition while leaving orphaned metric values behind;
+- restoring metric deletion via undo without restoring the removed item values;
+- allowing parent metric cells to behave like editable leaf metric cells in the primary tree view;
 - allowing parent ratings to behave like editable leaf ratings in the primary tree view;
 - serving multiple conflicting API field formats as a long-term contract;
 - silently falling back to temporary in-memory persistence in a normal development or shared environment.
@@ -272,7 +359,10 @@ The specification must explicitly reject or handle these cases:
 - if an end-of-edit save fails, the row must clearly remain in a recoverable local editing state;
 - if a move fails server-side, the tree must return to its last confirmed valid structure;
 - if a delete fails, the branch must remain visible and unchanged;
-- if loading a workspace fails, the error must be explicit and must not masquerade as an empty tree.
+- if loading a workspace fails, the error must be explicit and must not masquerade as an empty tree;
+- if saving workspace settings fails, the popup must keep the user input recoverable and show a local error;
+- if metric deletion fails, the metric and its values must remain unchanged;
+- if undo of metric deletion fails, the current client state must roll back to the last confirmed server-aligned version rather than leaving a half-restored metric column.
 
 ## 14. Deliverables of This Cleanup Phase
 

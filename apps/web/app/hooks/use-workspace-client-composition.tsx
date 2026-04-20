@@ -11,7 +11,6 @@ import {
   filterVisibleRows,
   pruneCollapsedRowIds,
 } from "../state/tree-visibility"
-import type { WorkTreeNode } from "../state/workspace-tree-state"
 import { useWorkspaceContext } from "../workspaces/use-workspace-context"
 import { WorkspaceSwitcher } from "../workspaces/workspace-switcher"
 import {
@@ -41,92 +40,6 @@ function getMedian(values: number[]): number | null {
 function autoGrowTextarea(target: HTMLTextAreaElement) {
   target.style.height = "auto"
   target.style.height = `${target.scrollHeight}px`
-}
-
-type RatingProjection = {
-  overcomplication: number | null
-  importance: number | null
-  blocksMoney: number | null
-  overcomplicationSum: number
-  importanceSum: number
-  blocksMoneySum: number
-}
-
-function toNullableProjectedRating(value: string | undefined): number | null {
-  if (!value || value.trim().length === 0) {
-    return null
-  }
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed)) {
-    return null
-  }
-  return Math.max(0, Math.min(5, Math.trunc(parsed)))
-}
-
-function projectRatingsByRowId(
-  nodes: WorkTreeNode[],
-  rowEdits: Record<
-    string,
-    { overcomplication: string; importance: string; blocksMoney: string }
-  >,
-) {
-  const byId = new Map<string, RatingProjection>()
-
-  const walk = (node: WorkTreeNode): RatingProjection => {
-    if (node.children.length === 0) {
-      const edit = rowEdits[node.id]
-      const overcomplication =
-        edit?.overcomplication === undefined
-          ? node.overcomplication
-          : toNullableProjectedRating(edit.overcomplication)
-      const importance =
-        edit?.importance === undefined
-          ? node.importance
-          : toNullableProjectedRating(edit.importance)
-      const blocksMoney =
-        edit?.blocksMoney === undefined
-          ? node.blocksMoney
-          : toNullableProjectedRating(edit.blocksMoney)
-
-      const projection: RatingProjection = {
-        overcomplication,
-        importance,
-        blocksMoney,
-        overcomplicationSum: overcomplication ?? 0,
-        importanceSum: importance ?? 0,
-        blocksMoneySum: blocksMoney ?? 0,
-      }
-      byId.set(node.id, projection)
-      return projection
-    }
-
-    let overcomplicationSum = 0
-    let importanceSum = 0
-    let blocksMoneySum = 0
-    for (const child of node.children) {
-      const childProjection = walk(child)
-      overcomplicationSum += childProjection.overcomplicationSum
-      importanceSum += childProjection.importanceSum
-      blocksMoneySum += childProjection.blocksMoneySum
-    }
-
-    const projection: RatingProjection = {
-      overcomplication: node.overcomplication,
-      importance: node.importance,
-      blocksMoney: node.blocksMoney,
-      overcomplicationSum,
-      importanceSum,
-      blocksMoneySum,
-    }
-    byId.set(node.id, projection)
-    return projection
-  }
-
-  for (const node of nodes) {
-    walk(node)
-  }
-
-  return byId
 }
 
 export function useWorkspaceClientComposition() {
@@ -207,10 +120,6 @@ export function useWorkspaceClientComposition() {
       discardPendingSaveRef.current = handler
     },
   })
-  const projectedRatingsByRowId = useMemo(
-    () => projectRatingsByRowId(treeData.tree, editing.rowEdits),
-    [editing.rowEdits, treeData.tree],
-  )
 
   const {
     FRAME_X_PX,
@@ -565,10 +474,7 @@ export function useWorkspaceClientComposition() {
         ratingCells: editing.renderRatingCells({
           edit,
           isParentRow: row.children.length > 0,
-          row: {
-            ...row,
-            ...(projectedRatingsByRowId.get(rowId) ?? {}),
-          },
+          row,
           onCommitEdit: (patch) => editing.commitEdit(rowId, patch),
         }),
         renderSignature: [
@@ -585,7 +491,7 @@ export function useWorkspaceClientComposition() {
     }
 
     return next
-  }, [editing, layout, projectedRatingsByRowId, treeData.rows])
+  }, [editing, layout, treeData.rows])
 
   return {
     currentWorkspaceId,
