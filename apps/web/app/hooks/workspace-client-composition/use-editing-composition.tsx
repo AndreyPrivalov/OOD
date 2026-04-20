@@ -1,6 +1,6 @@
 "use client"
 
-import { WorkspaceRatingCell, workspaceRatingFieldConfigs } from "@ood/ui"
+import { WorkspaceRatingCell, type WorkspaceRatingFieldConfig } from "@ood/ui"
 import type { Dispatch, KeyboardEvent, SetStateAction } from "react"
 import { useCallback, useEffect, useMemo, useRef } from "react"
 import {
@@ -13,6 +13,7 @@ import {
   buildEditState,
   useWorkItemEditing,
 } from "../../work-item-editing"
+import type { WorkspaceMetricSummary } from "../../workspaces/types"
 
 export type UseWorkspaceEditingStateCompositionResult = {
   getEditForRow: (row: FlatRow) => EditState
@@ -65,12 +66,55 @@ type UseWorkspaceEditingCompositionOptions = {
   setTree: Dispatch<SetStateAction<WorkTreeNode[]>>
   syncEditsRef: (edits: Record<string, EditState>) => void
   toErrorText: (error: unknown) => string
+  workspaceMetrics: WorkspaceMetricSummary[]
   onDiscardPendingSaveReady: (handler: (id: string) => void) => void
   onPersistedChange?: (
     change:
       | { kind: "patch"; before: FlatRow; after: FlatRow }
       | { kind: "create"; before: FlatRow; after: FlatRow },
   ) => void
+}
+
+const baseRatingFields: WorkspaceRatingFieldConfig[] = [
+  {
+    key: "overcomplication",
+    buttonLabel: "Сложно",
+    columnClassName: "overcomplication-col",
+    controlAriaLabel: "Сложно от 1 до 5",
+    headerLabel: "Сложно",
+  },
+  {
+    key: "importance",
+    buttonLabel: "Важно",
+    columnClassName: "importance-col",
+    controlAriaLabel: "Важно от 1 до 5",
+    headerLabel: "Важно",
+  },
+]
+
+function getMetricValueForRow(
+  row: FlatRow,
+  metricId: string,
+  isParentRow: boolean,
+) {
+  const metricValues =
+    "metricValues" in row &&
+    row.metricValues &&
+    typeof row.metricValues === "object"
+      ? (row.metricValues as Record<string, string>)
+      : null
+  const metricAggregates =
+    "metricAggregateValues" in row &&
+    row.metricAggregateValues &&
+    typeof row.metricAggregateValues === "object"
+      ? (row.metricAggregateValues as Record<string, string>)
+      : null
+
+  if (isParentRow) {
+    return metricAggregates?.[metricId] ?? "—"
+  }
+
+  return metricValues?.[metricId] ?? "none"
 }
 
 export function useWorkspaceEditingComposition(
@@ -92,6 +136,7 @@ export function useWorkspaceEditingComposition(
     setTree,
     syncEditsRef,
     toErrorText,
+    workspaceMetrics,
     onDiscardPendingSaveReady,
     onPersistedChange,
   } = options
@@ -211,30 +256,26 @@ export function useWorkspaceEditingComposition(
       row: FlatRow
     }) => (
       <>
-        <WorkspaceRatingCell
-          field={workspaceRatingFieldConfigs[0]}
-          row={row}
-          editState={edit}
-          isParentRow={isParentRow}
-          onChange={(value) => onCommitEdit({ overcomplication: value })}
-        />
-        <WorkspaceRatingCell
-          field={workspaceRatingFieldConfigs[1]}
-          row={row}
-          editState={edit}
-          isParentRow={isParentRow}
-          onChange={(value) => onCommitEdit({ importance: value })}
-        />
-        <WorkspaceRatingCell
-          field={workspaceRatingFieldConfigs[2]}
-          row={row}
-          editState={edit}
-          isParentRow={isParentRow}
-          onChange={(value) => onCommitEdit({ blocksMoney: value })}
-        />
+        {baseRatingFields.map((field) => (
+          <WorkspaceRatingCell
+            key={field.key}
+            field={field}
+            row={row}
+            editState={edit}
+            isParentRow={isParentRow}
+            onChange={(value) => onCommitEdit({ [field.key]: value })}
+          />
+        ))}
+        {workspaceMetrics.map((metric) => (
+          <td className="score-col workspace-metric-col" key={metric.id}>
+            <span className="score-summary">
+              {getMetricValueForRow(row, metric.id, isParentRow)}
+            </span>
+          </td>
+        ))}
       </>
     ),
-    [],
+    [workspaceMetrics],
   )
 
   return {

@@ -1,8 +1,8 @@
 "use client"
 
-import {
-  type WorkspaceTreeRowUiModel,
-  workspaceRatingFieldConfigs,
+import type {
+  WorkspaceRatingFieldConfig,
+  WorkspaceTreeRowUiModel,
 } from "@ood/ui"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { isUndoRedoShortcut } from "../history/workspace-history"
@@ -57,7 +57,37 @@ export function useWorkspaceClientComposition() {
     deleteWorkspace,
     openWorkspace,
     renameWorkspace,
+    updateWorkspaceMetrics,
   } = useWorkspaceContext()
+
+  const tableScoreHeaders = useMemo<
+    Array<{ key: string; headerLabel: string; columnClassName: string }>
+  >(() => {
+    const baseHeaders: WorkspaceRatingFieldConfig[] = [
+      {
+        key: "overcomplication",
+        buttonLabel: "Сложно",
+        columnClassName: "overcomplication-col",
+        controlAriaLabel: "Сложно от 1 до 5",
+        headerLabel: "Сложно",
+      },
+      {
+        key: "importance",
+        buttonLabel: "Важно",
+        columnClassName: "importance-col",
+        controlAriaLabel: "Важно от 1 до 5",
+        headerLabel: "Важно",
+      },
+    ]
+
+    const metricHeaders = (currentWorkspace?.metrics ?? []).map((metric) => ({
+      key: `metric:${metric.id}`,
+      headerLabel: metric.shortName,
+      columnClassName: "workspace-metric-col",
+    }))
+
+    return [...baseHeaders, ...metricHeaders]
+  }, [currentWorkspace?.metrics])
 
   const [pendingFocusRowId, setPendingFocusRowId] = useState<string | null>(
     null,
@@ -116,6 +146,7 @@ export function useWorkspaceClientComposition() {
     setTree: treeData.setTree,
     syncEditsRef: editingState.syncEditsRef,
     toErrorText: treeData.toErrorText,
+    workspaceMetrics: currentWorkspace?.metrics ?? [],
     onDiscardPendingSaveReady: (handler) => {
       discardPendingSaveRef.current = handler
     },
@@ -362,7 +393,7 @@ export function useWorkspaceClientComposition() {
       currentWorkspaceId,
       isCreatingWorkspace,
       isWorkspaceLoading,
-      workspaces,
+      workspaces: switcherWorkspaces,
     }: {
       currentWorkspaceId: string | null
       isCreatingWorkspace: boolean
@@ -377,9 +408,16 @@ export function useWorkspaceClientComposition() {
         isRenamingWorkspaceId={isRenamingWorkspaceId}
         onCreateWorkspace={handleCreateWorkspace}
         onDeleteWorkspace={handleDeleteWorkspace}
+        onWorkspaceMetricsChange={updateWorkspaceMetrics}
         onOpenWorkspace={handleOpenWorkspace}
         onRenameWorkspace={handleRenameWorkspace}
-        workspaces={workspaces}
+        workspaces={switcherWorkspaces.map(
+          (workspace) =>
+            workspaces.find((entry) => entry.id === workspace.id) ?? {
+              ...workspace,
+              metrics: [],
+            },
+        )}
       />
     ),
     [
@@ -389,6 +427,8 @@ export function useWorkspaceClientComposition() {
       handleRenameWorkspace,
       isDeletingWorkspaceId,
       isRenamingWorkspaceId,
+      updateWorkspaceMetrics,
+      workspaces,
     ],
   )
 
@@ -528,6 +568,6 @@ export function useWorkspaceClientComposition() {
       toggleRowCollapse,
       renderSwitcher,
     },
-    workspaceRatingFieldConfigs,
+    workspaceRatingFieldConfigs: tableScoreHeaders,
   }
 }

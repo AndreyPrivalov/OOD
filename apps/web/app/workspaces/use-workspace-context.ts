@@ -1,9 +1,12 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import type { WorkspaceSummary } from "./types"
+import type { WorkspaceMetricSummary, WorkspaceSummary } from "./types"
+import { parseWorkspaceSettings } from "./workspace-settings"
 
-function normalizeWorkspace(value: unknown): WorkspaceSummary | null {
+type WorkspaceBaseSummary = Omit<WorkspaceSummary, "metrics">
+
+function normalizeWorkspace(value: unknown): WorkspaceBaseSummary | null {
   if (!value || typeof value !== "object") {
     return null
   }
@@ -42,7 +45,12 @@ function mapErrorMessage(payload: unknown) {
 }
 
 export function useWorkspaceContext() {
-  const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([])
+  const [workspaceBases, setWorkspaceBases] = useState<WorkspaceBaseSummary[]>(
+    [],
+  )
+  const [metricsByWorkspaceId, setMetricsByWorkspaceId] = useState<
+    Record<string, WorkspaceMetricSummary[]>
+  >({})
   const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string | null>(
     null,
   )
@@ -67,17 +75,24 @@ export function useWorkspaceContext() {
         throw new Error(mapErrorMessage(json))
       }
 
-      const nextWorkspaces: WorkspaceSummary[] = Array.isArray(json?.data)
+      const nextWorkspaces: WorkspaceBaseSummary[] = Array.isArray(json?.data)
         ? json.data
             .map(normalizeWorkspace)
             .filter(
               (
-                workspace: WorkspaceSummary | null,
-              ): workspace is WorkspaceSummary => workspace !== null,
+                workspace: WorkspaceBaseSummary | null,
+              ): workspace is WorkspaceBaseSummary => workspace !== null,
             )
         : []
 
-      setWorkspaces(nextWorkspaces)
+      setWorkspaceBases(nextWorkspaces)
+      setMetricsByWorkspaceId((current) => {
+        const next: Record<string, WorkspaceMetricSummary[]> = {}
+        for (const workspace of nextWorkspaces) {
+          next[workspace.id] = current[workspace.id] ?? []
+        }
+        return next
+      })
       setCurrentWorkspaceId((current) => {
         if (
           current &&
@@ -106,14 +121,14 @@ export function useWorkspaceContext() {
 
   const openWorkspace = useCallback(
     (workspaceId: string) => {
-      if (!workspaces.some((workspace) => workspace.id === workspaceId)) {
+      if (!workspaceBases.some((workspace) => workspace.id === workspaceId)) {
         return
       }
 
       setCurrentWorkspaceId(workspaceId)
       setErrorText("")
     },
-    [workspaces],
+    [workspaceBases],
   )
 
   const createWorkspace = useCallback(async (name: string) => {
@@ -136,7 +151,11 @@ export function useWorkspaceContext() {
         throw new Error("Не удалось создать рабочее пространство.")
       }
 
-      setWorkspaces((current) => [...current, created])
+      setWorkspaceBases((current) => [...current, created])
+      setMetricsByWorkspaceId((current) => ({
+        ...current,
+        [created.id]: [],
+      }))
       setCurrentWorkspaceId(created.id)
       setErrorText("")
       return created
@@ -176,7 +195,7 @@ export function useWorkspaceContext() {
           throw new Error("Не удалось переименовать рабочее пространство.")
         }
 
-        setWorkspaces((current) =>
+        setWorkspaceBases((current) =>
           current.map((workspace) =>
             workspace.id === renamed.id ? renamed : workspace,
           ),
@@ -213,8 +232,12 @@ export function useWorkspaceContext() {
         throw new Error(mapErrorMessage(json))
       }
 
-      setWorkspaces((current) => {
+      setWorkspaceBases((current) => {
         const next = current.filter((workspace) => workspace.id !== workspaceId)
+        setMetricsByWorkspaceId((metricsCurrent) => {
+          const { [workspaceId]: _removed, ...rest } = metricsCurrent
+          return rest
+        })
         setCurrentWorkspaceId((active) => {
           if (active !== workspaceId) {
             return active
@@ -236,6 +259,55 @@ export function useWorkspaceContext() {
     }
   }, [])
 
+  const updateWorkspaceMetrics = useCallback(
+    (workspaceId: string, metrics: WorkspaceMetricSummary[]) => {
+      setMetricsByWorkspaceId((current) => ({
+        ...current,
+        [workspaceId]: metrics,
+      }))
+    },
+    [],
+  )
+
+  const refreshWorkspaceMetrics = useCallback(
+    async (workspaceId: string) => {
+      try {
+        const response = await fetch(
+          `/api/workspaces/${encodeURIComponent(workspaceId)}/settings`,
+          { cache: "no-store" },
+        )
+        const json = await response.json()
+        if (!response.ok) {
+          return
+        }
+        const parsed = parseWorkspaceSettings(json)
+        if (!parsed) {
+          return
+        }
+        updateWorkspaceMetrics(parsed.workspace.id, parsed.metrics)
+      } catch {
+        return
+      }
+    },
+    [updateWorkspaceMetrics],
+  )
+
+  useEffect(() => {
+    if (!currentWorkspaceId) {
+      return
+    }
+    void refreshWorkspaceMetrics(currentWorkspaceId)
+  }, [currentWorkspaceId, refreshWorkspaceMetrics])
+
+  const workspaces = useMemo<WorkspaceSummary[]>(
+    () =>
+      workspaceBases.map((workspace) => ({
+        ...workspace,
+        metrics: metricsByWorkspaceId[workspace.id] ?? [],
+      })),
+    [metricsByWorkspaceId, workspaceBases],
+  )
+
   const currentWorkspace = useMemo(
     () =>
       workspaces.find((workspace) => workspace.id === currentWorkspaceId) ??
@@ -255,6 +327,7 @@ export function useWorkspaceContext() {
     createWorkspace,
     renameWorkspace,
     deleteWorkspace,
+    updateWorkspaceMetrics,
     openWorkspace,
     refresh,
   }

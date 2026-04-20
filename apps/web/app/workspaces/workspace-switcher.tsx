@@ -4,6 +4,7 @@ import { type FormEvent, useEffect, useRef, useState } from "react"
 import type { WorkspaceSummary } from "./types"
 import {
   type MetricDraft,
+  type WorkspaceMetricSettingsView,
   type WorkspaceSettingsView,
   createMetricDrafts,
   mapSettingsErrorMessage,
@@ -18,6 +19,10 @@ type WorkspaceSwitcherProps = {
   isRenamingWorkspaceId: string | null
   onCreateWorkspace: (name: string) => Promise<void>
   onDeleteWorkspace: (workspaceId: string) => Promise<void>
+  onWorkspaceMetricsChange: (
+    workspaceId: string,
+    metrics: WorkspaceMetricSettingsView[],
+  ) => void
   onOpenWorkspace: (workspaceId: string) => void
   onRenameWorkspace: (workspaceId: string, name: string) => Promise<void>
   workspaces: WorkspaceSummary[]
@@ -134,6 +139,10 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
 
   function applySettings(nextSettings: WorkspaceSettingsView) {
     setSettingsData(nextSettings)
+    props.onWorkspaceMetricsChange(
+      nextSettings.workspace.id,
+      nextSettings.metrics,
+    )
     setRenameDraft(nextSettings.workspace.name)
     setRenameErrorText("")
     setCreateMetricDraft({ shortName: "", description: "" })
