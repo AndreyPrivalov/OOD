@@ -315,14 +315,13 @@ button:focus-visible {
   top: calc(100% + 8px);
   left: 0;
   z-index: 20;
-  width: min(820px, calc(100vw - 88px));
-  border: 1px solid var(--line-strong);
+  width: min(574px, calc(100vw - 88px));
   background: var(--bg);
-  border-radius: var(--radius-md);
+  border-radius: 8px;
   padding: var(--space-3);
   display: grid;
   gap: var(--space-3);
-  box-shadow: 0 8px 20px rgba(19, 25, 32, 0.08);
+  box-shadow: 0 10px 24px rgba(19, 25, 32, 0.14);
 }
 
 .workspace-settings-head {
@@ -384,16 +383,19 @@ button:focus-visible {
 .workspace-settings-delete-actions {
   display: grid;
   gap: var(--space-2);
-  grid-template-columns: minmax(160px, 1fr) minmax(180px, 1fr) auto auto;
   align-items: center;
 }
 
 .workspace-settings-row {
-  grid-template-columns: minmax(220px, 1fr) auto;
+  grid-template-columns: 1fr;
 }
 
 .workspace-settings-metric-create {
-  grid-template-columns: minmax(160px, 1fr) minmax(180px, 1fr) auto;
+  grid-template-columns: minmax(120px, 30%) minmax(0, 1fr) auto;
+}
+
+.workspace-settings-metric-row {
+  grid-template-columns: minmax(120px, 30%) minmax(0, 1fr) auto;
 }
 
 .workspace-settings-delete-actions {
@@ -485,7 +487,7 @@ button:focus-visible {
 
 @media (max-width: 1024px) {
   .workspace-settings-popup {
-    width: min(640px, calc(100vw - 56px));
+    width: min(448px, calc(100vw - 56px));
   }
 
   .workspace-settings-metric-row,

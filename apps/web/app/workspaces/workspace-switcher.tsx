@@ -218,8 +218,7 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
     void loadWorkspaceSettings(workspaceId)
   }
 
-  async function handleRenameWorkspace(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  async function handleRenameWorkspace() {
     if (!settingsData) {
       return
     }
@@ -227,6 +226,10 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
     const nextName = renameDraft.trim()
     if (nextName.length === 0) {
       setRenameErrorText("Название рабочего пространства не может быть пустым.")
+      return
+    }
+    if (nextName === settingsData.workspace.name.trim()) {
+      setRenameErrorText("")
       return
     }
 
@@ -314,6 +317,20 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
     }
 
     const description = draft.description.trim()
+    const originalMetric = settingsData.metrics.find(
+      (metric) => metric.id === metricId,
+    )
+    if (!originalMetric) {
+      return
+    }
+    const originalDescription = (originalMetric.description ?? "").trim()
+    if (
+      shortName === originalMetric.shortName.trim() &&
+      description === originalDescription
+    ) {
+      setMetricErrors((current) => ({ ...current, [metricId]: "" }))
+      return
+    }
     setActiveMetricSaveId(metricId)
     setMetricErrors((current) => ({ ...current, [metricId]: "" }))
 
@@ -485,37 +502,27 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
 
                   {settingsData && !isSettingsLoading ? (
                     <div className="workspace-settings-body">
-                      <form
-                        className="workspace-settings-form"
-                        onSubmit={(event) => {
-                          void handleRenameWorkspace(event)
-                        }}
-                      >
+                      <div className="workspace-settings-form">
                         <div className="workspace-settings-row">
                           <input
                             aria-label="Название рабочего пространства"
                             className="workspace-settings-input"
                             disabled={isRenaming || isDeleting}
+                            onBlur={() => {
+                              void handleRenameWorkspace()
+                            }}
                             onChange={(event) =>
                               setRenameDraft(event.target.value)
                             }
                             value={renameDraft}
                           />
-                          <button
-                            aria-label="Сохранить workspace"
-                            className="workspace-settings-button workspace-settings-button-icon"
-                            disabled={isRenaming || isDeleting}
-                            type="submit"
-                          >
-                            <i aria-hidden className="ri-save-line" />
-                          </button>
                         </div>
                         {renameErrorText ? (
                           <p className="workspace-settings-error">
                             {renameErrorText}
                           </p>
                         ) : null}
-                      </form>
+                      </div>
 
                       <div className="workspace-settings-form">
                         <form
@@ -584,7 +591,22 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
                                   className="workspace-settings-metric-item"
                                   key={metric.id}
                                 >
-                                  <div className="workspace-settings-metric-row">
+                                  <div
+                                    className="workspace-settings-metric-row"
+                                    onBlur={(event) => {
+                                      const nextFocused =
+                                        event.relatedTarget as Node | null
+                                      if (
+                                        nextFocused &&
+                                        event.currentTarget.contains(
+                                          nextFocused,
+                                        )
+                                      ) {
+                                        return
+                                      }
+                                      void handleSaveMetric(metric.id)
+                                    }}
+                                  >
                                     <input
                                       aria-label={`Имя метрики ${metric.shortName}`}
                                       className="workspace-settings-input"
@@ -624,17 +646,6 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
                                       value={draft.description}
                                     />
                                     <button
-                                      aria-label={`Сохранить метрику ${metric.shortName}`}
-                                      className="workspace-settings-button workspace-settings-button-icon"
-                                      disabled={metricBusy || isDeleting}
-                                      onClick={() => {
-                                        void handleSaveMetric(metric.id)
-                                      }}
-                                      type="button"
-                                    >
-                                      <i aria-hidden className="ri-save-line" />
-                                    </button>
-                                    <button
                                       aria-label={`Удалить метрику ${metric.shortName}`}
                                       className="workspace-settings-button workspace-settings-button-danger workspace-settings-button-icon"
                                       disabled={metricBusy || isDeleting}
@@ -665,12 +676,12 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
                         {!isDeleteWorkspaceConfirm ? (
                           <button
                             aria-label="Удалить workspace"
-                            className="workspace-settings-button workspace-settings-button-danger workspace-settings-button-icon"
+                            className="workspace-settings-button workspace-settings-button-danger"
                             disabled={isDeleting}
                             onClick={() => setIsDeleteWorkspaceConfirm(true)}
                             type="button"
                           >
-                            <i aria-hidden className="ri-delete-bin-line" />
+                            Удалить workspace
                           </button>
                         ) : (
                           <div className="workspace-settings-delete-confirm">
