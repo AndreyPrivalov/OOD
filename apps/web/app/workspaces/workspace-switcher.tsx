@@ -491,9 +491,6 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
                           void handleRenameWorkspace(event)
                         }}
                       >
-                        <p className="workspace-settings-label">
-                          Название workspace
-                        </p>
                         <div className="workspace-settings-row">
                           <input
                             aria-label="Название рабочего пространства"
@@ -505,11 +502,12 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
                             value={renameDraft}
                           />
                           <button
-                            className="workspace-settings-button"
+                            aria-label="Сохранить workspace"
+                            className="workspace-settings-button workspace-settings-button-icon"
                             disabled={isRenaming || isDeleting}
                             type="submit"
                           >
-                            Сохранить
+                            <i aria-hidden className="ri-save-line" />
                           </button>
                         </div>
                         {renameErrorText ? (
@@ -520,8 +518,6 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
                       </form>
 
                       <div className="workspace-settings-form">
-                        <p className="workspace-settings-label">Метрики</p>
-
                         <form
                           className="workspace-settings-metric-create"
                           onSubmit={(event) => {
@@ -555,11 +551,12 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
                             value={createMetricDraft.description}
                           />
                           <button
-                            className="workspace-settings-button"
+                            aria-label="Добавить метрику"
+                            className="workspace-settings-button workspace-settings-button-icon"
                             disabled={isCreatingMetric || isDeleting}
                             type="submit"
                           >
-                            Добавить
+                            <i aria-hidden className="ri-add-line" />
                           </button>
                         </form>
                         {createMetricErrorText ? (
@@ -568,11 +565,7 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
                           </p>
                         ) : null}
 
-                        {settingsData.metrics.length === 0 ? (
-                          <p className="workspace-settings-hint">
-                            Для этого workspace пока нет метрик.
-                          </p>
-                        ) : (
+                        {settingsData.metrics.length === 0 ? null : (
                           <ul className="workspace-settings-metric-list">
                             {settingsData.metrics.map((metric) => {
                               const draft = metricDrafts[metric.id] ?? {
@@ -631,24 +624,29 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
                                       value={draft.description}
                                     />
                                     <button
-                                      className="workspace-settings-button"
+                                      aria-label={`Сохранить метрику ${metric.shortName}`}
+                                      className="workspace-settings-button workspace-settings-button-icon"
                                       disabled={metricBusy || isDeleting}
                                       onClick={() => {
                                         void handleSaveMetric(metric.id)
                                       }}
                                       type="button"
                                     >
-                                      Сохранить
+                                      <i aria-hidden className="ri-save-line" />
                                     </button>
                                     <button
-                                      className="workspace-settings-button workspace-settings-button-danger"
+                                      aria-label={`Удалить метрику ${metric.shortName}`}
+                                      className="workspace-settings-button workspace-settings-button-danger workspace-settings-button-icon"
                                       disabled={metricBusy || isDeleting}
                                       onClick={() => {
                                         void handleDeleteMetric(metric.id)
                                       }}
                                       type="button"
                                     >
-                                      Удалить
+                                      <i
+                                        aria-hidden
+                                        className="ri-delete-bin-line"
+                                      />
                                     </button>
                                   </div>
                                   {metricErrors[metric.id] ? (
@@ -664,20 +662,15 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
                       </div>
 
                       <div className="workspace-settings-form workspace-settings-delete">
-                        <p className="workspace-settings-label">
-                          Удаление workspace
-                        </p>
-                        <p className="workspace-settings-hint">
-                          Удаляется весь tree и каталог метрик этого workspace.
-                        </p>
                         {!isDeleteWorkspaceConfirm ? (
                           <button
-                            className="workspace-settings-button workspace-settings-button-danger"
+                            aria-label="Удалить workspace"
+                            className="workspace-settings-button workspace-settings-button-danger workspace-settings-button-icon"
                             disabled={isDeleting}
                             onClick={() => setIsDeleteWorkspaceConfirm(true)}
                             type="button"
                           >
-                            Удалить workspace
+                            <i aria-hidden className="ri-delete-bin-line" />
                           </button>
                         ) : (
                           <div className="workspace-settings-delete-confirm">
@@ -697,16 +690,22 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
                                 Отмена
                               </button>
                               <button
-                                className="workspace-settings-button workspace-settings-button-danger"
+                                aria-label="Подтвердить удаление workspace"
+                                className="workspace-settings-button workspace-settings-button-danger workspace-settings-button-icon"
                                 disabled={isDeleting}
                                 onClick={() => {
                                   void confirmDeleteWorkspace()
                                 }}
                                 type="button"
                               >
-                                {isDeleting
-                                  ? "Удаление…"
-                                  : "Подтвердить удаление"}
+                                <i
+                                  aria-hidden
+                                  className={
+                                    isDeleting
+                                      ? "ri-loader-4-line"
+                                      : "ri-check-line"
+                                  }
+                                />
                               </button>
                             </div>
                           </div>

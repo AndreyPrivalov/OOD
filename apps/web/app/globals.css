@@ -367,8 +367,7 @@ button:focus-visible {
 .workspace-settings-form {
   display: grid;
   gap: var(--space-2);
-  border-top: 1px solid var(--line);
-  padding-top: var(--space-3);
+  padding-top: var(--space-1);
 }
 
 .workspace-settings-label {
@@ -423,6 +422,15 @@ button:focus-visible {
   line-height: 1.1;
   padding: 0 10px;
   cursor: pointer;
+}
+
+.workspace-settings-button-icon {
+  width: 32px;
+  min-width: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .workspace-settings-button:hover,
