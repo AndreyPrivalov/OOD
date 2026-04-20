@@ -103,5 +103,9 @@ export function shouldApplyConfirmedTreePatch(
     return true
   }
 
-  return RATING_PATCH_KEYS.some((key) => key in patch)
+  return (
+    RATING_PATCH_KEYS.some((key) => key in patch) ||
+    "metricValues" in patch ||
+    "metricAggregates" in patch
+  )
 }

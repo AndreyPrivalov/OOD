@@ -83,4 +83,18 @@ describe("shouldApplyConfirmedTreePatch", () => {
       false,
     )
   })
+
+  it("applies echoed metric patches so ancestor projection stays in sync", () => {
+    const patch = buildRowPatchFromServer({
+      metricValues: { "m-1": "direct" },
+      metricAggregates: { "m-1": "direct" },
+    })
+
+    expect(
+      shouldApplyConfirmedTreePatch(patch, {
+        metricValues: { "m-1": "direct" },
+        metricAggregates: { "m-1": "direct" },
+      }),
+    ).toBe(true)
+  })
 })

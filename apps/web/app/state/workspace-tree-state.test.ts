@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest"
 import { LocalFirstRowQueue } from "../work-item-editing/save-queue"
+import type { WorkTreeNode } from "./workspace-tree-state"
 import { normalizeTreeData, patchTreeRow } from "./workspace-tree-state"
 
-function createRatingTree(overcomplication: number) {
+function createRatingTree(overcomplication: number): WorkTreeNode[] {
   return [
     {
       id: "root",
@@ -15,6 +16,8 @@ function createRatingTree(overcomplication: number) {
       overcomplication: null,
       importance: null,
       blocksMoney: null,
+      metricValues: {},
+      metricAggregates: { "metric-1": "indirect" },
       overcomplicationSum: overcomplication,
       importanceSum: 3,
       blocksMoneySum: 1,
@@ -32,6 +35,8 @@ function createRatingTree(overcomplication: number) {
           overcomplication,
           importance: 3,
           blocksMoney: 1,
+          metricValues: { "metric-1": "direct" },
+          metricAggregates: { "metric-1": "direct" },
           overcomplicationSum: overcomplication,
           importanceSum: 3,
           blocksMoneySum: 1,
@@ -58,6 +63,8 @@ describe("normalizeTreeData", () => {
         overcomplication: null,
         importance: null,
         blocksMoney: null,
+        metricValues: {},
+        metricAggregates: { "metric-1": "direct" },
         overcomplicationSum: 0,
         importanceSum: 0,
         blocksMoneySum: 0,
@@ -75,6 +82,8 @@ describe("normalizeTreeData", () => {
             overcomplication: 2,
             importance: 3,
             blocksMoney: 1,
+            metricValues: { "metric-1": "direct" },
+            metricAggregates: { "metric-1": "direct" },
             overcomplicationSum: 2,
             importanceSum: 3,
             blocksMoneySum: 1,
@@ -102,6 +111,8 @@ describe("normalizeTreeData", () => {
         overcomplication: null,
         importance: null,
         blocksMoney: null,
+        metricValues: {},
+        metricAggregates: {},
         currentProblems: [],
         solutionVariants: [],
       },
@@ -116,6 +127,8 @@ describe("normalizeTreeData", () => {
         overcomplication: 2,
         importance: 3,
         blocksMoney: 1,
+        metricValues: { "metric-1": "direct" },
+        metricAggregates: { "metric-1": "direct" },
         currentProblems: [],
         solutionVariants: [],
       },
@@ -127,7 +140,7 @@ describe("normalizeTreeData", () => {
 
 describe("patchTreeRow", () => {
   it("recomputes aggregate rating sums for ancestors after a leaf rating patch", () => {
-    const tree = [
+    const tree: WorkTreeNode[] = [
       {
         id: "root",
         workspaceId: "ws",
@@ -139,6 +152,8 @@ describe("patchTreeRow", () => {
         overcomplication: null,
         importance: null,
         blocksMoney: null,
+        metricValues: {},
+        metricAggregates: { "metric-1": "indirect" },
         overcomplicationSum: 2,
         importanceSum: 3,
         blocksMoneySum: 1,
@@ -156,6 +171,8 @@ describe("patchTreeRow", () => {
             overcomplication: 2,
             importance: 3,
             blocksMoney: 1,
+            metricValues: { "metric-1": "direct" },
+            metricAggregates: { "metric-1": "direct" },
             overcomplicationSum: 2,
             importanceSum: 3,
             blocksMoneySum: 1,
@@ -176,6 +193,92 @@ describe("patchTreeRow", () => {
     expect(patchedTree[0]?.overcomplicationSum).toBe(5)
     expect(patchedTree[0]?.importanceSum).toBe(3)
     expect(patchedTree[0]?.blocksMoneySum).toBe(1)
+  })
+
+  it("recomputes metric aggregates along the ancestor chain after a leaf metric patch", () => {
+    const tree: WorkTreeNode[] = [
+      {
+        id: "root",
+        workspaceId: "ws",
+        title: "Root",
+        object: null,
+        possiblyRemovable: false,
+        parentId: null,
+        siblingOrder: 0,
+        overcomplication: null,
+        importance: null,
+        blocksMoney: null,
+        metricValues: {},
+        metricAggregates: { "metric-1": "none", "metric-2": "none" },
+        overcomplicationSum: 0,
+        importanceSum: 0,
+        blocksMoneySum: 0,
+        currentProblems: [],
+        solutionVariants: [],
+        children: [
+          {
+            id: "mid",
+            workspaceId: "ws",
+            title: "Mid",
+            object: null,
+            possiblyRemovable: true,
+            parentId: "root",
+            siblingOrder: 0,
+            overcomplication: null,
+            importance: null,
+            blocksMoney: null,
+            metricValues: {},
+            metricAggregates: {
+              "metric-1": "indirect",
+              "metric-2": "none",
+            },
+            overcomplicationSum: 0,
+            importanceSum: 0,
+            blocksMoneySum: 0,
+            currentProblems: [],
+            solutionVariants: [],
+            children: [
+              {
+                id: "leaf",
+                workspaceId: "ws",
+                title: "Leaf",
+                object: null,
+                possiblyRemovable: true,
+                parentId: "mid",
+                siblingOrder: 0,
+                overcomplication: null,
+                importance: null,
+                blocksMoney: null,
+                metricValues: { "metric-1": "none", "metric-2": "indirect" },
+                metricAggregates: {
+                  "metric-1": "none",
+                  "metric-2": "indirect",
+                },
+                overcomplicationSum: 0,
+                importanceSum: 0,
+                blocksMoneySum: 0,
+                currentProblems: [],
+                solutionVariants: [],
+                children: [],
+              },
+            ],
+          },
+        ],
+      },
+    ]
+
+    const patchedTree = patchTreeRow(tree, "leaf", {
+      metricValues: { "metric-1": "direct", "metric-2": "none" },
+    })
+
+    expect(
+      patchedTree[0]?.children[0]?.children[0]?.metricValues?.["metric-1"],
+    ).toBe("direct")
+    expect(patchedTree[0]?.children[0]?.metricAggregates?.["metric-1"]).toBe(
+      "direct",
+    )
+    expect(patchedTree[0]?.metricAggregates?.["metric-1"]).toBe("direct")
+    expect(patchedTree[0]?.metricAggregates?.["metric-2"]).toBe("none")
   })
 
   it("keeps parent sums stable after confirmed save when optimistic patch already applied", () => {

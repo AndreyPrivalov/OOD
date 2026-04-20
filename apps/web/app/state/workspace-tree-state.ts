@@ -97,6 +97,21 @@ function isMetricValueMap(
   return Object.values(input).every(isMetricValue)
 }
 
+function resolveMetricAggregateValue(
+  values: Array<"none" | "indirect" | "direct">,
+) {
+  let nextValue: "none" | "indirect" | "direct" = "none"
+  for (const value of values) {
+    if (value === "direct") {
+      return "direct"
+    }
+    if (value === "indirect") {
+      nextValue = "indirect"
+    }
+  }
+  return nextValue
+}
+
 function isWorkTreeNode(input: unknown): input is WorkTreeNode {
   if (!input || typeof input !== "object") {
     return false
@@ -142,11 +157,59 @@ export function normalizeTreeData(input: unknown): WorkTreeNode[] {
 }
 
 function normalizeNodeMetrics(node: WorkTreeNode): WorkTreeNode {
-  return {
+  const normalizedChildren = node.children.map(normalizeNodeMetrics)
+  return withDerivedMetricAggregates({
     ...node,
     metricValues: node.metricValues ?? {},
     metricAggregates: node.metricAggregates ?? {},
-    children: node.children.map(normalizeNodeMetrics),
+    children: normalizedChildren,
+  })
+}
+
+function withDerivedMetricAggregates(node: WorkTreeNode): WorkTreeNode {
+  if (node.children.length === 0) {
+    const ownMetricValues: WorkTreeNode["metricValues"] = {}
+    const ownMetricAggregates: WorkTreeNode["metricAggregates"] = {}
+    const metricIds = new Set<string>([
+      ...Object.keys(node.metricValues ?? {}),
+      ...Object.keys(node.metricAggregates ?? {}),
+    ])
+    for (const metricId of metricIds) {
+      const value = node.metricValues?.[metricId] ?? "none"
+      if (value !== "none") {
+        ownMetricValues[metricId] = value
+      }
+      ownMetricAggregates[metricId] = value
+    }
+    return {
+      ...node,
+      metricValues: ownMetricValues,
+      metricAggregates: ownMetricAggregates,
+    }
+  }
+
+  const metricIds = new Set<string>([
+    ...Object.keys(node.metricValues ?? {}),
+    ...Object.keys(node.metricAggregates ?? {}),
+  ])
+  for (const child of node.children) {
+    for (const metricId of Object.keys(child.metricAggregates ?? {})) {
+      metricIds.add(metricId)
+    }
+  }
+
+  const derivedMetricAggregates: WorkTreeNode["metricAggregates"] = {}
+  for (const metricId of metricIds) {
+    derivedMetricAggregates[metricId] = resolveMetricAggregateValue(
+      node.children.map(
+        (child) => child.metricAggregates?.[metricId] ?? "none",
+      ),
+    )
+  }
+
+  return {
+    ...node,
+    metricAggregates: derivedMetricAggregates,
   }
 }
 
@@ -159,12 +222,16 @@ export function patchTreeRow(
   const nextNodes = nodes.map((node) => {
     if (node.id === rowId) {
       changed = true
-      return withDerivedRatingTotals({ ...node, ...patch })
+      return withDerivedMetricAggregates(
+        withDerivedRatingTotals({ ...node, ...patch }),
+      )
     }
     const nextChildren = patchTreeRow(node.children, rowId, patch)
     if (nextChildren !== node.children) {
       changed = true
-      return withDerivedRatingTotals({ ...node, children: nextChildren })
+      return withDerivedMetricAggregates(
+        withDerivedRatingTotals({ ...node, children: nextChildren }),
+      )
     }
     return node
   })
@@ -172,31 +239,9 @@ export function patchTreeRow(
 }
 
 function withDerivedRatingTotals(node: WorkTreeNode): WorkTreeNode {
-  const metricIds = new Set<string>([
-    ...Object.keys(node.metricValues ?? {}),
-    ...Object.keys(node.metricAggregates ?? {}),
-  ])
-  for (const child of node.children) {
-    for (const metricId of Object.keys(child.metricAggregates ?? {})) {
-      metricIds.add(metricId)
-    }
-  }
-
   if (node.children.length === 0) {
-    const ownMetricValues: WorkTreeNode["metricValues"] = {}
-    const ownMetricAggregates: WorkTreeNode["metricAggregates"] = {}
-    for (const metricId of metricIds) {
-      const value = node.metricValues?.[metricId] ?? "none"
-      if (value !== "none") {
-        ownMetricValues[metricId] = value
-      }
-      ownMetricAggregates[metricId] = value
-    }
-
     return {
       ...node,
-      metricValues: ownMetricValues,
-      metricAggregates: ownMetricAggregates,
       ...leafRatingTotalsFromNode(node),
     }
   }
@@ -206,25 +251,8 @@ function withDerivedRatingTotals(node: WorkTreeNode): WorkTreeNode {
     aggregated = addRatingTotals(aggregated, getNodeRatingTotals(child))
   }
 
-  const aggregatedMetrics: WorkTreeNode["metricAggregates"] = {}
-  for (const metricId of metricIds) {
-    let nextValue: "none" | "indirect" | "direct" = "none"
-    for (const child of node.children) {
-      const childValue = child.metricAggregates?.[metricId] ?? "none"
-      if (childValue === "direct") {
-        nextValue = "direct"
-        break
-      }
-      if (childValue === "indirect") {
-        nextValue = "indirect"
-      }
-    }
-    aggregatedMetrics[metricId] = nextValue
-  }
-
   return {
     ...node,
-    metricAggregates: aggregatedMetrics,
     ...aggregated,
   }
 }
