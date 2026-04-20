@@ -216,7 +216,91 @@ export function patchTreeRow(
     return nextNode
   })
 
-  return hasChanges ? nextNodes : nodes
+  if (!hasChanges) {
+    return nodes
+  }
+
+  return shouldRecomputeRatingSums
+    ? recomputeTreeRatingSums(nextNodes)
+    : nextNodes
+}
+
+type RatingSums = {
+  overcomplicationSum: number
+  importanceSum: number
+  blocksMoneySum: number
+}
+
+function getOwnRatingSums(node: WorkTreeNode): RatingSums {
+  return {
+    overcomplicationSum: node.overcomplication ?? 0,
+    importanceSum: node.importance ?? 0,
+    blocksMoneySum: node.blocksMoney ?? 0,
+  }
+}
+
+function getChildrenRatingSums(children: WorkTreeNode[]): RatingSums {
+  return children.reduce(
+    (totals, child) => ({
+      overcomplicationSum:
+        totals.overcomplicationSum + (child.overcomplicationSum ?? 0),
+      importanceSum: totals.importanceSum + (child.importanceSum ?? 0),
+      blocksMoneySum: totals.blocksMoneySum + (child.blocksMoneySum ?? 0),
+    }),
+    {
+      overcomplicationSum: 0,
+      importanceSum: 0,
+      blocksMoneySum: 0,
+    },
+  )
+}
+
+function withUpdatedSums(node: WorkTreeNode, sums: RatingSums): WorkTreeNode {
+  if (
+    node.overcomplicationSum === sums.overcomplicationSum &&
+    node.importanceSum === sums.importanceSum &&
+    node.blocksMoneySum === sums.blocksMoneySum
+  ) {
+    return node
+  }
+
+  return {
+    ...node,
+    overcomplicationSum: sums.overcomplicationSum,
+    importanceSum: sums.importanceSum,
+    blocksMoneySum: sums.blocksMoneySum,
+  }
+}
+
+function recomputeNodeRatingSums(node: WorkTreeNode): WorkTreeNode {
+  if (node.children.length === 0) {
+    return withUpdatedSums(node, getOwnRatingSums(node))
+  }
+
+  let childrenChanged = false
+  const nextChildren = node.children.map((child) => {
+    const nextChild = recomputeNodeRatingSums(child)
+    if (nextChild !== child) {
+      childrenChanged = true
+    }
+    return nextChild
+  })
+
+  const nextNode = childrenChanged ? { ...node, children: nextChildren } : node
+  return withUpdatedSums(nextNode, getChildrenRatingSums(nextNode.children))
+}
+
+export function recomputeTreeRatingSums(nodes: WorkTreeNode[]): WorkTreeNode[] {
+  let changed = false
+  const nextNodes = nodes.map((node) => {
+    const nextNode = recomputeNodeRatingSums(node)
+    if (nextNode !== node) {
+      changed = true
+    }
+    return nextNode
+  })
+
+  return changed ? nextNodes : nodes
 }
 
 function cloneTree(nodes: WorkTreeNode[]): WorkTreeNode[] {
@@ -320,7 +404,7 @@ export function applyOptimisticCreate(
   optimisticNode.parentId = parentId
   siblings.splice(safeIndex, 0, optimisticNode)
   resequenceSiblings(siblings)
-  return nextTree
+  return recomputeTreeRatingSums(nextTree)
 }
 
 export function applyOptimisticMove(
@@ -348,5 +432,5 @@ export function applyOptimisticMove(
   destinationSiblings.splice(safeIndex, 0, detached.node)
   resequenceSiblings(detached.sourceSiblings)
   resequenceSiblings(destinationSiblings)
-  return nextTree
+  return recomputeTreeRatingSums(nextTree)
 }

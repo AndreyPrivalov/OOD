@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest"
-import { normalizeTreeData, patchTreeRow } from "./workspace-tree-state"
+import {
+  applyOptimisticMove,
+  normalizeTreeData,
+  patchTreeRow,
+} from "./workspace-tree-state"
 
 describe("normalizeTreeData", () => {
   it("accepts only canonical nested tree payload", () => {
@@ -131,5 +135,74 @@ describe("patchTreeRow", () => {
     expect(leaf.importance).toBe(5)
     expect(leaf.importanceSum).toBe(5)
     expect(root.importanceSum).toBe(5)
+  })
+})
+
+describe("applyOptimisticMove", () => {
+  it("recomputes source and destination parent sums after move", () => {
+    const tree = normalizeTreeData([
+      {
+        id: "root-a",
+        workspaceId: "ws",
+        title: "Root A",
+        object: null,
+        possiblyRemovable: false,
+        parentId: null,
+        siblingOrder: 0,
+        overcomplication: null,
+        importance: null,
+        blocksMoney: null,
+        overcomplicationSum: 4,
+        importanceSum: 0,
+        blocksMoneySum: 0,
+        currentProblems: [],
+        solutionVariants: [],
+        children: [
+          {
+            id: "leaf-a",
+            workspaceId: "ws",
+            title: "Leaf A",
+            object: null,
+            possiblyRemovable: false,
+            parentId: "root-a",
+            siblingOrder: 0,
+            overcomplication: 4,
+            importance: 0,
+            blocksMoney: 0,
+            overcomplicationSum: 4,
+            importanceSum: 0,
+            blocksMoneySum: 0,
+            currentProblems: [],
+            solutionVariants: [],
+            children: [],
+          },
+        ],
+      },
+      {
+        id: "root-b",
+        workspaceId: "ws",
+        title: "Root B",
+        object: null,
+        possiblyRemovable: false,
+        parentId: null,
+        siblingOrder: 1,
+        overcomplication: null,
+        importance: null,
+        blocksMoney: null,
+        overcomplicationSum: 0,
+        importanceSum: 0,
+        blocksMoneySum: 0,
+        currentProblems: [],
+        solutionVariants: [],
+        children: [],
+      },
+    ])
+
+    const moved = applyOptimisticMove(tree, "leaf-a", "root-b", 0)
+    const rootA = moved.find((node) => node.id === "root-a")
+    const rootB = moved.find((node) => node.id === "root-b")
+
+    expect(rootA?.overcomplicationSum).toBe(0)
+    expect(rootB?.overcomplicationSum).toBe(4)
   })
 })
