@@ -106,6 +106,7 @@ export function useWorkspaceClientComposition() {
       discardPendingSaveRef.current(id)
     },
     isDev,
+    onWorkspaceMetricsChange: updateWorkspaceMetrics,
     onCreateFocusRow: (rowId) => {
       setPendingFocusRowId(rowId)
       setEscapeCancellableRowId(rowId)
@@ -115,6 +116,7 @@ export function useWorkspaceClientComposition() {
         current === rowId ? null : current,
       )
     },
+    workspaceMetrics: currentWorkspace?.metrics ?? [],
   })
 
   const editingState = useWorkspaceEditingStateComposition(treeData.rows)
@@ -408,9 +410,22 @@ export function useWorkspaceClientComposition() {
         isRenamingWorkspaceId={isRenamingWorkspaceId}
         onCreateWorkspace={handleCreateWorkspace}
         onDeleteWorkspace={handleDeleteWorkspace}
+        onCreateMetric={(workspaceId, payload) =>
+          treeData.createMetricInCurrentWorkspace(payload, workspaceId)
+        }
+        onDeleteMetric={(workspaceId, metricId) =>
+          treeData.deleteMetricInCurrentWorkspace(metricId, workspaceId)
+        }
         onWorkspaceMetricsChange={updateWorkspaceMetrics}
         onOpenWorkspace={handleOpenWorkspace}
         onRenameWorkspace={handleRenameWorkspace}
+        onSaveMetric={(workspaceId, metricId, payload) =>
+          treeData.updateMetricInCurrentWorkspace(
+            metricId,
+            payload,
+            workspaceId,
+          )
+        }
         workspaces={switcherWorkspaces.map(
           (workspace) =>
             workspaces.find((entry) => entry.id === workspace.id) ?? {
@@ -427,6 +442,9 @@ export function useWorkspaceClientComposition() {
       handleRenameWorkspace,
       isDeletingWorkspaceId,
       isRenamingWorkspaceId,
+      treeData.createMetricInCurrentWorkspace,
+      treeData.deleteMetricInCurrentWorkspace,
+      treeData.updateMetricInCurrentWorkspace,
       updateWorkspaceMetrics,
       workspaces,
     ],

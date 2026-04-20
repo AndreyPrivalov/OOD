@@ -41,13 +41,27 @@ import {
   restoreWorkItemBranch,
 } from "../work-item-client"
 import { attachSaveRowDeferredError } from "../work-item-editing/save-result"
+import {
+  WorkspaceMetricRequestError,
+  createWorkspaceMetric,
+  deleteWorkspaceMetric,
+  restoreWorkspaceMetric,
+  updateWorkspaceMetric,
+} from "../workspace-metric-client"
+import type { WorkspaceMetricSummary } from "../workspaces/types"
+import { mapSettingsErrorMessage } from "../workspaces/workspace-settings"
 
 type UseWorkspaceTreeDataOptions = {
   currentWorkspaceId: string | null
   discardPendingSave: (id: string) => void
   isDev: boolean
+  onWorkspaceMetricsChange: (
+    workspaceId: string,
+    metrics: WorkspaceMetricSummary[],
+  ) => void
   onCreateFocusRow: (rowId: string) => void
   onDeleteRow: (rowId: string) => void
+  workspaceMetrics: WorkspaceMetricSummary[]
 }
 
 const LOCAL_DRAFT_ROW_ID_PREFIX = "local-draft:"
@@ -85,6 +99,55 @@ function removeLocalRow(nodes: WorkTreeNode[], rowId: string): WorkTreeNode[] {
   return nextNodes.map((node, index) => ({ ...node, siblingOrder: index }))
 }
 
+function removeMetricFromNodeMaps(
+  nodes: WorkTreeNode[],
+  metricId: string,
+): WorkTreeNode[] {
+  return nodes.map((node) => {
+    const nextMetricValues = { ...(node.metricValues ?? {}) }
+    const nextMetricAggregates = { ...(node.metricAggregates ?? {}) }
+    delete nextMetricValues[metricId]
+    delete nextMetricAggregates[metricId]
+
+    return {
+      ...node,
+      metricValues: nextMetricValues,
+      metricAggregates: nextMetricAggregates,
+      children: removeMetricFromNodeMaps(node.children, metricId),
+    }
+  })
+}
+
+function restoreMetricValuesIntoTree(
+  nodes: WorkTreeNode[],
+  snapshot: {
+    metric: { id: string }
+    removedValues: Array<{
+      workItemId: string
+      value: "none" | "indirect" | "direct"
+    }>
+  },
+): WorkTreeNode[] {
+  let nextTree = removeMetricFromNodeMaps(nodes, snapshot.metric.id)
+  for (const entry of snapshot.removedValues) {
+    const row = findRow(nextTree, entry.workItemId)
+    if (!row || row.children.length > 0) {
+      continue
+    }
+
+    const nextMetricValues = { ...(row.metricValues ?? {}) }
+    if (entry.value === "none") {
+      delete nextMetricValues[snapshot.metric.id]
+    } else {
+      nextMetricValues[snapshot.metric.id] = entry.value
+    }
+    nextTree = patchTreeRow(nextTree, row.id, {
+      metricValues: nextMetricValues,
+    })
+  }
+  return nextTree
+}
+
 function findRow(nodes: WorkTreeNode[], rowId: string): WorkTreeNode | null {
   const queue = [...nodes]
   while (queue.length > 0) {
@@ -113,6 +176,8 @@ function toHistoryBranchSnapshot(
     | "overcomplication"
     | "importance"
     | "blocksMoney"
+    | "metricValues"
+    | "metricAggregates"
     | "currentProblems"
     | "solutionVariants"
   >,
@@ -128,6 +193,8 @@ function toHistoryBranchSnapshot(
     overcomplication: row.overcomplication,
     importance: row.importance,
     blocksMoney: row.blocksMoney,
+    metricValues: { ...(row.metricValues ?? {}) },
+    metricAggregates: { ...(row.metricAggregates ?? {}) },
     currentProblems: [...row.currentProblems],
     solutionVariants: [...row.solutionVariants],
     children: [],
@@ -146,12 +213,32 @@ function toTreePatch(row: HistoryRowSnapshot | WorkTreeNode) {
     overcomplication: row.overcomplication,
     importance: row.importance,
     blocksMoney: row.blocksMoney,
+    metricValues: { ...(row.metricValues ?? {}) },
+    metricAggregates: { ...(row.metricAggregates ?? {}) },
     currentProblems: [...row.currentProblems],
     solutionVariants: [...row.solutionVariants],
   }
 }
 
-function buildPatchPayloadFromSnapshot(snapshot: HistoryRowSnapshot) {
+function buildPatchPayloadFromSnapshot(
+  snapshot: HistoryRowSnapshot,
+  currentRow?: Pick<WorkTreeNode, "metricValues"> | null,
+) {
+  const nextMetricValues = snapshot.metricValues ?? {}
+  const currentMetricValues = currentRow?.metricValues ?? {}
+  const metricPatch: Record<string, "none" | "indirect" | "direct"> = {}
+  const metricIds = new Set([
+    ...Object.keys(nextMetricValues),
+    ...Object.keys(currentMetricValues),
+  ])
+  for (const metricId of metricIds) {
+    const currentValue = currentMetricValues[metricId] ?? "none"
+    const nextValue = nextMetricValues[metricId] ?? "none"
+    if (currentValue !== nextValue) {
+      metricPatch[metricId] = nextValue
+    }
+  }
+
   return {
     title: snapshot.title,
     object: snapshot.object,
@@ -159,6 +246,9 @@ function buildPatchPayloadFromSnapshot(snapshot: HistoryRowSnapshot) {
     overcomplication: snapshot.overcomplication,
     importance: snapshot.importance,
     blocksMoney: snapshot.blocksMoney,
+    ...(Object.keys(metricPatch).length > 0
+      ? { metricValues: metricPatch }
+      : {}),
     currentProblems: [...snapshot.currentProblems],
     solutionVariants: [...snapshot.solutionVariants],
   }
@@ -238,8 +328,10 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
     currentWorkspaceId,
     discardPendingSave,
     isDev,
+    onWorkspaceMetricsChange,
     onCreateFocusRow,
     onDeleteRow,
+    workspaceMetrics,
   } = options
   const [tree, setTree] = useState<WorkTreeNode[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -251,6 +343,7 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
   const draftSequenceRef = useRef(0)
   const treeRef = useRef(tree)
   const historyRef = useRef<WorkspaceHistoryState | null>(historyState)
+  const workspaceMetricsRef = useRef(workspaceMetrics)
 
   useEffect(() => {
     treeRef.current = tree
@@ -260,9 +353,19 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
     historyRef.current = historyState
   }, [historyState])
 
+  useEffect(() => {
+    workspaceMetricsRef.current = workspaceMetrics
+  }, [workspaceMetrics])
+
   const toErrorText = useCallback((error: unknown) => {
     if (error instanceof WorkItemRequestError) {
       return mapWorkItemErrorText(error.payload)
+    }
+    if (error instanceof WorkspaceMetricRequestError) {
+      return mapSettingsErrorMessage(
+        error.payload,
+        "Не удалось выполнить действие с метрикой.",
+      )
     }
     return error instanceof Error ? error.message : "Неизвестная ошибка."
   }, [])
@@ -586,6 +689,136 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
     [pushHistoryEntry],
   )
 
+  const createMetricInCurrentWorkspace = useCallback(
+    async (
+      input: { shortName: string; description: string | null },
+      workspaceIdOverride?: string,
+    ) => {
+      const workspaceId = workspaceIdOverride ?? currentWorkspaceId
+      if (!workspaceId) {
+        throw new Error("Рабочее пространство не выбрано.")
+      }
+
+      const beforeMetrics =
+        workspaceId === currentWorkspaceId ? workspaceMetricsRef.current : []
+      const nextMetrics = await createWorkspaceMetric(workspaceId, input)
+      onWorkspaceMetricsChange(workspaceId, nextMetrics)
+
+      if (workspaceId !== currentWorkspaceId) {
+        setErrorText("")
+        return nextMetrics
+      }
+
+      const createdMetric = nextMetrics.find(
+        (metric) => !beforeMetrics.some((before) => before.id === metric.id),
+      )
+      if (createdMetric) {
+        const targetIndex = nextMetrics.findIndex(
+          (metric) => metric.id === createdMetric.id,
+        )
+        pushHistoryEntry(
+          {
+            type: "metricCatalogCreate",
+            metric: createdMetric,
+            targetIndex: targetIndex < 0 ? nextMetrics.length : targetIndex,
+          },
+          treeRef.current,
+        )
+      }
+
+      setErrorText("")
+      return nextMetrics
+    },
+    [currentWorkspaceId, onWorkspaceMetricsChange, pushHistoryEntry],
+  )
+
+  const updateMetricInCurrentWorkspace = useCallback(
+    async (
+      metricId: string,
+      input: { shortName: string; description: string | null },
+      workspaceIdOverride?: string,
+    ) => {
+      const workspaceId = workspaceIdOverride ?? currentWorkspaceId
+      if (!workspaceId) {
+        throw new Error("Рабочее пространство не выбрано.")
+      }
+
+      const beforeMetric = workspaceMetricsRef.current.find(
+        (metric) => metric.id === metricId,
+      )
+      const nextMetrics = await updateWorkspaceMetric(
+        workspaceId,
+        metricId,
+        input,
+      )
+      onWorkspaceMetricsChange(workspaceId, nextMetrics)
+
+      if (workspaceId !== currentWorkspaceId) {
+        setErrorText("")
+        return nextMetrics
+      }
+
+      const afterMetric = nextMetrics.find((metric) => metric.id === metricId)
+      if (
+        beforeMetric &&
+        afterMetric &&
+        (beforeMetric.shortName !== afterMetric.shortName ||
+          beforeMetric.description !== afterMetric.description)
+      ) {
+        pushHistoryEntry(
+          {
+            type: "metricCatalogUpdate",
+            before: beforeMetric,
+            after: afterMetric,
+          },
+          treeRef.current,
+        )
+      }
+
+      setErrorText("")
+      return nextMetrics
+    },
+    [currentWorkspaceId, onWorkspaceMetricsChange, pushHistoryEntry],
+  )
+
+  const deleteMetricInCurrentWorkspace = useCallback(
+    async (metricId: string, workspaceIdOverride?: string) => {
+      const workspaceId = workspaceIdOverride ?? currentWorkspaceId
+      if (!workspaceId) {
+        throw new Error("Рабочее пространство не выбрано.")
+      }
+
+      const response = await deleteWorkspaceMetric(workspaceId, metricId)
+      if (!response.deletedMetricSnapshot) {
+        throw new Error("Сервер не вернул snapshot удалённой метрики.")
+      }
+
+      onWorkspaceMetricsChange(workspaceId, response.metrics)
+      if (workspaceId !== currentWorkspaceId) {
+        setErrorText("")
+        return response.metrics
+      }
+
+      const nextTree = removeMetricFromNodeMaps(treeRef.current, metricId)
+      commitTree(nextTree)
+      pushHistoryEntry(
+        {
+          type: "metricCatalogDelete",
+          snapshot: response.deletedMetricSnapshot,
+        },
+        nextTree,
+      )
+      setErrorText("")
+      return response.metrics
+    },
+    [
+      commitTree,
+      currentWorkspaceId,
+      onWorkspaceMetricsChange,
+      pushHistoryEntry,
+    ],
+  )
+
   const applyHistoryDirection = useCallback(
     async (direction: "undo" | "redo") => {
       if (isApplyingHistory || !currentWorkspaceId) {
@@ -612,9 +845,10 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
 
         if (entry.type === "patch") {
           const snapshot = direction === "undo" ? entry.before : entry.after
+          const currentRow = findRow(currentHistory.present, snapshot.id)
           await patchWorkItem(
             snapshot.id,
-            buildPatchPayloadFromSnapshot(snapshot),
+            buildPatchPayloadFromSnapshot(snapshot, currentRow),
           )
           nextPresent = patchTreeRow(
             currentHistory.present,
@@ -636,6 +870,65 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
             targetParentId,
             targetIndex,
           )
+        } else if (entry.type === "metricCatalogCreate") {
+          if (direction === "undo") {
+            const response = await deleteWorkspaceMetric(
+              currentWorkspaceId,
+              entry.metric.id,
+            )
+            onWorkspaceMetricsChange(currentWorkspaceId, response.metrics)
+            nextPresent = removeMetricFromNodeMaps(
+              workingHistory.present,
+              entry.metric.id,
+            )
+          } else {
+            const nextMetrics = await restoreWorkspaceMetric(
+              currentWorkspaceId,
+              {
+                metric: {
+                  ...entry.metric,
+                },
+                targetIndex: entry.targetIndex,
+                removedValues: [],
+              },
+            )
+            onWorkspaceMetricsChange(currentWorkspaceId, nextMetrics)
+            nextPresent = workingHistory.present
+          }
+        } else if (entry.type === "metricCatalogUpdate") {
+          const metric = direction === "undo" ? entry.before : entry.after
+          const nextMetrics = await updateWorkspaceMetric(
+            currentWorkspaceId,
+            metric.id,
+            {
+              shortName: metric.shortName,
+              description: metric.description,
+            },
+          )
+          onWorkspaceMetricsChange(currentWorkspaceId, nextMetrics)
+          nextPresent = workingHistory.present
+        } else if (entry.type === "metricCatalogDelete") {
+          if (direction === "undo") {
+            const nextMetrics = await restoreWorkspaceMetric(
+              currentWorkspaceId,
+              entry.snapshot,
+            )
+            onWorkspaceMetricsChange(currentWorkspaceId, nextMetrics)
+            nextPresent = restoreMetricValuesIntoTree(
+              workingHistory.present,
+              entry.snapshot,
+            )
+          } else {
+            const response = await deleteWorkspaceMetric(
+              currentWorkspaceId,
+              entry.snapshot.metric.id,
+            )
+            onWorkspaceMetricsChange(currentWorkspaceId, response.metrics)
+            nextPresent = removeMetricFromNodeMaps(
+              workingHistory.present,
+              entry.snapshot.metric.id,
+            )
+          }
         } else if (entry.type === "deleteBranch") {
           if (direction === "undo") {
             const response = await restoreWorkItemBranch({
@@ -710,6 +1003,7 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
       commitTree,
       currentWorkspaceId,
       isApplyingHistory,
+      onWorkspaceMetricsChange,
       toErrorText,
     ],
   )
@@ -731,6 +1025,9 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
     canRedo: (historyState?.future.length ?? 0) > 0,
     isApplyingHistory,
     recordPersistedChange,
+    createMetricInCurrentWorkspace,
+    updateMetricInCurrentWorkspace,
+    deleteMetricInCurrentWorkspace,
     undo: () => applyHistoryDirection("undo"),
     redo: () => applyHistoryDirection("redo"),
   }

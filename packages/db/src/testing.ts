@@ -22,6 +22,8 @@ import {
 import type { WorkItemRepository } from "./repository"
 import type {
   CreateWorkspaceMetricInput,
+  DeletedWorkspaceMetricSnapshot,
+  RestoreWorkspaceMetricInput,
   SetWorkItemMetricValueInput,
   UpdateWorkspaceMetricInput,
   WorkspaceMetricRepository,
@@ -510,18 +512,82 @@ export class InMemoryWorkspaceMetricRepository
   async deleteMetric(
     workspaceId: WorkspaceId,
     metricId: string,
-  ): Promise<boolean> {
+  ): Promise<DeletedWorkspaceMetricSnapshot | null> {
     const metrics = memoryStore.metricsByWorkspace.get(workspaceId) ?? []
-    const nextMetrics = metrics.filter((metric) => metric.id !== metricId)
-    if (nextMetrics.length === metrics.length) {
-      return false
+    const removedMetric = metrics.find((metric) => metric.id === metricId)
+    if (!removedMetric) {
+      return null
     }
+    const targetIndex = metrics.findIndex((metric) => metric.id === metricId)
+    const nextMetrics = metrics.filter((metric) => metric.id !== metricId)
     memoryStore.metricsByWorkspace.set(workspaceId, nextMetrics)
 
-    for (const values of memoryStore.metricValuesByWorkItem.values()) {
+    const removedValues: DeletedWorkspaceMetricSnapshot["removedValues"] = []
+    for (const [workItemId, values] of memoryStore.metricValuesByWorkItem) {
+      const value = values.get(metricId)
+      if (value) {
+        removedValues.push({ workItemId, value })
+      }
       values.delete(metricId)
     }
-    return true
+
+    return {
+      metric: { ...removedMetric },
+      targetIndex: targetIndex < 0 ? 0 : targetIndex,
+      removedValues: removedValues.sort((left, right) =>
+        left.workItemId.localeCompare(right.workItemId),
+      ),
+    }
+  }
+
+  async restoreDeletedMetric(
+    workspaceId: WorkspaceId,
+    input: RestoreWorkspaceMetricInput,
+  ): Promise<WorkspaceMetric | null> {
+    const snapshot = input.snapshot.metric
+    if (snapshot.workspaceId !== workspaceId) {
+      throw new DomainError(
+        DomainErrorCode.INVALID_MOVE_TARGET,
+        "Metric should belong to the same workspace",
+      )
+    }
+
+    const normalized = validateUpsertWorkspaceMetricInput({
+      shortName: snapshot.shortName,
+      description: snapshot.description,
+    })
+    const metrics = getWorkspaceMetrics(workspaceId)
+    if (metrics.some((metric) => metric.id === snapshot.id)) {
+      return null
+    }
+
+    const insertIndex = clampIndex(input.snapshot.targetIndex, metrics.length)
+    const now = new Date()
+    const restored: WorkspaceMetric = {
+      id: snapshot.id,
+      workspaceId,
+      shortName: normalized.shortName,
+      description: normalized.description,
+      createdAt: now,
+      updatedAt: now,
+    }
+    metrics.splice(insertIndex, 0, restored)
+
+    for (const entry of input.snapshot.removedValues) {
+      if (entry.value === "none") {
+        continue
+      }
+      const item = findItemById(entry.workItemId)
+      if (!item || item.workspaceId !== workspaceId) {
+        continue
+      }
+      const values =
+        memoryStore.metricValuesByWorkItem.get(entry.workItemId) ?? new Map()
+      values.set(snapshot.id, entry.value)
+      memoryStore.metricValuesByWorkItem.set(entry.workItemId, values)
+    }
+
+    return { ...restored }
   }
 
   async setWorkItemMetricValue(

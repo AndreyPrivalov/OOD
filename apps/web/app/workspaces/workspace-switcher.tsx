@@ -17,7 +17,15 @@ type WorkspaceSwitcherProps = {
   isDeletingWorkspaceId: string | null
   isLoading: boolean
   isRenamingWorkspaceId: string | null
+  onCreateMetric: (
+    workspaceId: string,
+    input: { shortName: string; description: string | null },
+  ) => Promise<WorkspaceMetricSettingsView[]>
   onCreateWorkspace: (name: string) => Promise<void>
+  onDeleteMetric: (
+    workspaceId: string,
+    metricId: string,
+  ) => Promise<WorkspaceMetricSettingsView[]>
   onDeleteWorkspace: (workspaceId: string) => Promise<void>
   onWorkspaceMetricsChange: (
     workspaceId: string,
@@ -25,6 +33,11 @@ type WorkspaceSwitcherProps = {
   ) => void
   onOpenWorkspace: (workspaceId: string) => void
   onRenameWorkspace: (workspaceId: string, name: string) => Promise<void>
+  onSaveMetric: (
+    workspaceId: string,
+    metricId: string,
+    input: { shortName: string; description: string | null },
+  ) => Promise<WorkspaceMetricSettingsView[]>
   workspaces: WorkspaceSummary[]
 }
 
@@ -262,28 +275,17 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
     setCreateMetricErrorText("")
 
     try {
-      const response = await fetch(
-        `/api/workspaces/${encodeURIComponent(settingsData.workspace.id)}/settings/metrics`,
+      const nextMetrics = await props.onCreateMetric(
+        settingsData.workspace.id,
         {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            shortName,
-            description: description.length > 0 ? description : null,
-          }),
+          shortName,
+          description: description.length > 0 ? description : null,
         },
       )
-      const payload = await response.json()
-      const parsed = parseWorkspaceSettings(payload)
-      if (!response.ok) {
-        throw new Error(
-          mapSettingsErrorMessage(payload, "Не удалось добавить метрику."),
-        )
-      }
-      if (!parsed) {
-        throw new Error("Сервер вернул некорректные данные метрик.")
-      }
-      applySettings(parsed)
+      applySettings({
+        workspace: settingsData.workspace,
+        metrics: nextMetrics,
+      })
     } catch (error) {
       setCreateMetricErrorText(
         error instanceof Error ? error.message : "Не удалось добавить метрику.",
@@ -316,30 +318,18 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
     setMetricErrors((current) => ({ ...current, [metricId]: "" }))
 
     try {
-      const response = await fetch(
-        `/api/workspaces/${encodeURIComponent(
-          settingsData.workspace.id,
-        )}/settings/metrics/${encodeURIComponent(metricId)}`,
+      const nextMetrics = await props.onSaveMetric(
+        settingsData.workspace.id,
+        metricId,
         {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            shortName,
-            description: description.length > 0 ? description : null,
-          }),
+          shortName,
+          description: description.length > 0 ? description : null,
         },
       )
-      const payload = await response.json()
-      const parsed = parseWorkspaceSettings(payload)
-      if (!response.ok) {
-        throw new Error(
-          mapSettingsErrorMessage(payload, "Не удалось сохранить метрику."),
-        )
-      }
-      if (!parsed) {
-        throw new Error("Сервер вернул некорректные данные метрик.")
-      }
-      applySettings(parsed)
+      applySettings({
+        workspace: settingsData.workspace,
+        metrics: nextMetrics,
+      })
     } catch (error) {
       setMetricErrors((current) => ({
         ...current,
@@ -361,23 +351,14 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
     setMetricErrors((current) => ({ ...current, [metricId]: "" }))
 
     try {
-      const response = await fetch(
-        `/api/workspaces/${encodeURIComponent(
-          settingsData.workspace.id,
-        )}/settings/metrics/${encodeURIComponent(metricId)}`,
-        { method: "DELETE" },
+      const nextMetrics = await props.onDeleteMetric(
+        settingsData.workspace.id,
+        metricId,
       )
-      const payload = await response.json()
-      const parsed = parseWorkspaceSettings(payload)
-      if (!response.ok) {
-        throw new Error(
-          mapSettingsErrorMessage(payload, "Не удалось удалить метрику."),
-        )
-      }
-      if (!parsed) {
-        throw new Error("Сервер вернул некорректные данные метрик.")
-      }
-      applySettings(parsed)
+      applySettings({
+        workspace: settingsData.workspace,
+        metrics: nextMetrics,
+      })
     } catch (error) {
       setMetricErrors((current) => ({
         ...current,

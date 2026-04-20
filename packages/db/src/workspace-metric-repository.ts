@@ -33,6 +33,28 @@ export interface SetWorkItemMetricValueInput {
   value: WorkspaceMetricValue
 }
 
+export interface DeletedMetricValueSnapshot {
+  workItemId: string
+  value: WorkspaceMetricValue
+}
+
+export interface DeletedWorkspaceMetricDefinition {
+  id: string
+  workspaceId: WorkspaceId
+  shortName: string
+  description: string | null
+}
+
+export interface DeletedWorkspaceMetricSnapshot {
+  metric: DeletedWorkspaceMetricDefinition
+  targetIndex: number
+  removedValues: DeletedMetricValueSnapshot[]
+}
+
+export interface RestoreWorkspaceMetricInput {
+  snapshot: DeletedWorkspaceMetricSnapshot
+}
+
 export interface WorkspaceMetricRepository {
   listMetrics(workspaceId: WorkspaceId): Promise<WorkspaceMetric[]>
   createMetric(input: CreateWorkspaceMetricInput): Promise<WorkspaceMetric>
@@ -41,7 +63,14 @@ export interface WorkspaceMetricRepository {
     metricId: string,
     input: UpdateWorkspaceMetricInput,
   ): Promise<WorkspaceMetric | null>
-  deleteMetric(workspaceId: WorkspaceId, metricId: string): Promise<boolean>
+  deleteMetric(
+    workspaceId: WorkspaceId,
+    metricId: string,
+  ): Promise<DeletedWorkspaceMetricSnapshot | null>
+  restoreDeletedMetric(
+    workspaceId: WorkspaceId,
+    input: RestoreWorkspaceMetricInput,
+  ): Promise<WorkspaceMetric | null>
   setWorkItemMetricValue(input: SetWorkItemMetricValueInput): Promise<void>
   listWorkItemMetricValues(
     workItemId: string,
@@ -150,8 +179,17 @@ export class PostgresWorkspaceMetricRepository
   async deleteMetric(
     workspaceId: WorkspaceId,
     metricId: string,
-  ): Promise<boolean> {
+  ): Promise<DeletedWorkspaceMetricSnapshot | null> {
     return this.db.transaction(async (tx) => {
+      const values = await tx
+        .select({
+          workItemId: workItemMetricValues.workItemId,
+          value: workItemMetricValues.value,
+        })
+        .from(workItemMetricValues)
+        .where(eq(workItemMetricValues.metricId, metricId))
+        .orderBy(asc(workItemMetricValues.workItemId))
+
       const deleted = await tx
         .delete(workspaceMetrics)
         .where(
@@ -160,15 +198,11 @@ export class PostgresWorkspaceMetricRepository
             eq(workspaceMetrics.workspaceId, workspaceId),
           ),
         )
-        .returning({
-          id: workspaceMetrics.id,
-          workspaceId: workspaceMetrics.workspaceId,
-          siblingOrder: workspaceMetrics.siblingOrder,
-        })
+        .returning()
 
       const removed = deleted[0]
       if (!removed) {
-        return false
+        return null
       }
 
       const remaining = await tx
@@ -187,7 +221,119 @@ export class PostgresWorkspaceMetricRepository
           .where(eq(workspaceMetrics.id, metric.id))
       }
 
-      return true
+      return {
+        metric: {
+          id: removed.id,
+          workspaceId: removed.workspaceId,
+          shortName: removed.shortName,
+          description: removed.description ?? null,
+        },
+        targetIndex: removed.siblingOrder,
+        removedValues: values.map((entry) => ({
+          workItemId: entry.workItemId,
+          value: entry.value as WorkspaceMetricValue,
+        })),
+      }
+    })
+  }
+
+  async restoreDeletedMetric(
+    workspaceId: WorkspaceId,
+    input: RestoreWorkspaceMetricInput,
+  ): Promise<WorkspaceMetric | null> {
+    const snapshotMetric = input.snapshot.metric
+    if (snapshotMetric.workspaceId !== workspaceId) {
+      throw new DomainError(
+        DomainErrorCode.INVALID_MOVE_TARGET,
+        "Metric should belong to the same workspace",
+      )
+    }
+
+    const normalized = validateUpsertWorkspaceMetricInput({
+      shortName: snapshotMetric.shortName,
+      description: snapshotMetric.description,
+    })
+    await ensureWorkspace(this.db, workspaceId)
+
+    return this.db.transaction(async (tx) => {
+      const existing = await tx
+        .select({ id: workspaceMetrics.id })
+        .from(workspaceMetrics)
+        .where(eq(workspaceMetrics.id, snapshotMetric.id))
+        .limit(1)
+
+      if (existing[0]) {
+        return null
+      }
+
+      const siblings = await tx
+        .select({ id: workspaceMetrics.id })
+        .from(workspaceMetrics)
+        .where(eq(workspaceMetrics.workspaceId, workspaceId))
+        .orderBy(
+          asc(workspaceMetrics.siblingOrder),
+          asc(workspaceMetrics.createdAt),
+        )
+      const targetIndex = Math.max(
+        0,
+        Math.min(input.snapshot.targetIndex, siblings.length),
+      )
+      const siblingIds = siblings.map((sibling) => sibling.id)
+      siblingIds.splice(targetIndex, 0, snapshotMetric.id)
+
+      await tx.insert(workspaceMetrics).values({
+        id: snapshotMetric.id,
+        workspaceId,
+        shortName: normalized.shortName,
+        description: normalized.description,
+        siblingOrder: targetIndex,
+      })
+
+      for (const [index, siblingId] of siblingIds.entries()) {
+        if (siblingId === snapshotMetric.id) {
+          continue
+        }
+        await tx
+          .update(workspaceMetrics)
+          .set({ siblingOrder: index, updatedAt: new Date() })
+          .where(eq(workspaceMetrics.id, siblingId))
+      }
+
+      const workItemIds = new Set(
+        (
+          await tx
+            .select({ id: workItems.id })
+            .from(workItems)
+            .where(eq(workItems.workspaceId, workspaceId))
+        ).map((row) => row.id),
+      )
+
+      for (const entry of input.snapshot.removedValues) {
+        if (!workItemIds.has(entry.workItemId) || entry.value === "none") {
+          continue
+        }
+        await tx
+          .insert(workItemMetricValues)
+          .values({
+            workItemId: entry.workItemId,
+            metricId: snapshotMetric.id,
+            value: entry.value,
+          })
+          .onConflictDoUpdate({
+            target: [
+              workItemMetricValues.workItemId,
+              workItemMetricValues.metricId,
+            ],
+            set: { value: entry.value, updatedAt: new Date() },
+          })
+      }
+
+      const restored = await tx
+        .select()
+        .from(workspaceMetrics)
+        .where(eq(workspaceMetrics.id, snapshotMetric.id))
+        .limit(1)
+      return restored[0] ? toWorkspaceMetric(restored[0]) : null
     })
   }
 

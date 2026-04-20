@@ -106,6 +106,9 @@ export function mapSettingsErrorMessage(payload: unknown, fallback: string) {
     if (payload.error === "WORKSPACE_METRIC_NOT_FOUND") {
       return "Метрика не найдена."
     }
+    if (payload.error === "WORKSPACE_METRIC_CONFLICT") {
+      return "Не удалось восстановить метрику из истории."
+    }
     if (payload.error === "DEFAULT_WORKSPACE_PROTECTED") {
       return "Базовое рабочее пространство нельзя удалить."
     }

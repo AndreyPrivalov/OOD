@@ -64,13 +64,27 @@ export async function DELETE(
       return jsonErrorCode("WORKSPACE_NOT_FOUND", 404)
     }
 
-    const deleted = await metricRepository.deleteMetric(id, metricId)
-    if (!deleted) {
+    const deletedSnapshot = await metricRepository.deleteMetric(id, metricId)
+    if (!deletedSnapshot) {
       return jsonErrorCode("WORKSPACE_METRIC_NOT_FOUND", 404)
     }
 
     const metrics = await metricRepository.listMetrics(id)
-    return jsonData(serializeWorkspaceSettings(workspace, metrics))
+    return jsonData({
+      ...serializeWorkspaceSettings(workspace, metrics),
+      deletedMetricSnapshot: {
+        metric: {
+          id: deletedSnapshot.metric.id,
+          shortName: deletedSnapshot.metric.shortName,
+          description: deletedSnapshot.metric.description,
+        },
+        targetIndex: deletedSnapshot.targetIndex,
+        removedValues: deletedSnapshot.removedValues.map((entry) => ({
+          workItemId: entry.workItemId,
+          value: entry.value,
+        })),
+      },
+    })
   } catch (error) {
     return jsonError(error)
   }

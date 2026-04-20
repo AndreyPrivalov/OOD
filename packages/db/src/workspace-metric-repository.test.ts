@@ -45,7 +45,7 @@ describe("InMemoryWorkspaceMetricRepository", () => {
       shortName: "Impact",
       description: "direct impact",
     })
-    expect(deleted).toBe(true)
+    expect(deleted?.metric.id).toBe(created.id)
     expect(metrics).toEqual([])
   })
 
@@ -71,7 +71,7 @@ describe("InMemoryWorkspaceMetricRepository", () => {
     })
     const beforeDelete = await metricRepo.listWorkItemMetricValues(item.id)
 
-    await metricRepo.deleteMetric(workspace.id, metric.id)
+    const deleted = await metricRepo.deleteMetric(workspace.id, metric.id)
     const afterDelete = await metricRepo.listWorkItemMetricValues(item.id)
 
     expect(beforeDelete).toEqual([
@@ -82,5 +82,54 @@ describe("InMemoryWorkspaceMetricRepository", () => {
       },
     ])
     expect(afterDelete).toEqual([])
+    expect(deleted?.removedValues).toEqual([
+      {
+        workItemId: item.id,
+        value: "direct",
+      },
+    ])
+  })
+
+  it("restores deleted metric definition and values from snapshot", async () => {
+    __resetInMemoryStoreForTests()
+    const workspaceRepo = new InMemoryWorkspaceRepository()
+    const itemRepo = new InMemoryWorkItemRepository()
+    const metricRepo = new InMemoryWorkspaceMetricRepository()
+    const workspace = await workspaceRepo.create({ name: "Alpha" })
+    const item = await itemRepo.create({
+      workspaceId: workspace.id,
+      title: "A",
+    })
+    const metric = await metricRepo.createMetric({
+      workspaceId: workspace.id,
+      shortName: "Risk",
+    })
+
+    await metricRepo.setWorkItemMetricValue({
+      workItemId: item.id,
+      metricId: metric.id,
+      value: "indirect",
+    })
+    const deleted = await metricRepo.deleteMetric(workspace.id, metric.id)
+    expect(deleted).not.toBeNull()
+    if (!deleted) {
+      return
+    }
+
+    const restored = await metricRepo.restoreDeletedMetric(workspace.id, {
+      snapshot: deleted,
+    })
+    const metrics = await metricRepo.listMetrics(workspace.id)
+    const values = await metricRepo.listWorkItemMetricValues(item.id)
+
+    expect(restored?.id).toBe(metric.id)
+    expect(metrics.map((entry) => entry.id)).toContain(metric.id)
+    expect(values).toEqual([
+      {
+        workItemId: item.id,
+        metricId: metric.id,
+        value: "indirect",
+      },
+    ])
   })
 })

@@ -1,4 +1,6 @@
 import type { WorkTreeNode } from "../state/workspace-tree-state"
+import type { DeletedWorkspaceMetricSnapshot } from "../workspace-metric-client"
+import type { WorkspaceMetricSummary } from "../workspaces/types"
 
 export type HistoryRowSnapshot = Omit<WorkTreeNode, "children"> & {
   children: HistoryRowSnapshot[]
@@ -30,6 +32,20 @@ export type HistoryEntry =
       targetIndex: number
       branch: HistoryRowSnapshot
     }
+  | {
+      type: "metricCatalogCreate"
+      metric: WorkspaceMetricSummary
+      targetIndex: number
+    }
+  | {
+      type: "metricCatalogUpdate"
+      before: WorkspaceMetricSummary
+      after: WorkspaceMetricSummary
+    }
+  | {
+      type: "metricCatalogDelete"
+      snapshot: DeletedWorkspaceMetricSnapshot
+    }
 
 export type WorkspaceHistoryState = {
   version: number
@@ -44,6 +60,8 @@ const STORAGE_PREFIX = "ood:workspace-history:v1:"
 function cloneBranch<T extends HistoryRowSnapshot | WorkTreeNode>(node: T): T {
   return {
     ...node,
+    metricValues: { ...(node.metricValues ?? {}) },
+    metricAggregates: { ...(node.metricAggregates ?? {}) },
     currentProblems: [...node.currentProblems],
     solutionVariants: [...node.solutionVariants],
     children: node.children.map((child) => cloneBranch(child)),
@@ -97,6 +115,35 @@ function cloneHistoryEntry(entry: HistoryEntry): HistoryEntry {
     return { ...entry }
   }
 
+  if (entry.type === "metricCatalogCreate") {
+    return {
+      type: "metricCatalogCreate",
+      metric: { ...entry.metric },
+      targetIndex: entry.targetIndex,
+    }
+  }
+
+  if (entry.type === "metricCatalogUpdate") {
+    return {
+      type: "metricCatalogUpdate",
+      before: { ...entry.before },
+      after: { ...entry.after },
+    }
+  }
+
+  if (entry.type === "metricCatalogDelete") {
+    return {
+      type: "metricCatalogDelete",
+      snapshot: {
+        metric: { ...entry.snapshot.metric },
+        targetIndex: entry.snapshot.targetIndex,
+        removedValues: entry.snapshot.removedValues.map((value) => ({
+          ...value,
+        })),
+      },
+    }
+  }
+
   return {
     ...entry,
     branch: cloneHistoryBranch(entry.branch),
@@ -120,6 +167,8 @@ function remapBranchIds(
     ...branch,
     id: nextId,
     parentId: nextParentId,
+    metricValues: { ...(branch.metricValues ?? {}) },
+    metricAggregates: { ...(branch.metricAggregates ?? {}) },
     children: branch.children.map((child) =>
       remapBranchIds(child, idMap, nextId),
     ),
@@ -155,6 +204,27 @@ export function remapHistoryIds(
           entry.toParentId === null
             ? null
             : (idMap[entry.toParentId] ?? entry.toParentId),
+      }
+    }
+
+    if (entry.type === "metricCatalogCreate") {
+      return entry
+    }
+
+    if (entry.type === "metricCatalogUpdate") {
+      return entry
+    }
+
+    if (entry.type === "metricCatalogDelete") {
+      return {
+        ...entry,
+        snapshot: {
+          ...entry.snapshot,
+          removedValues: entry.snapshot.removedValues.map((value) => ({
+            ...value,
+            workItemId: idMap[value.workItemId] ?? value.workItemId,
+          })),
+        },
       }
     }
 
@@ -309,6 +379,8 @@ function remapTreeIds(
       ...node,
       id: nextId,
       parentId: nextParentId,
+      metricValues: { ...(node.metricValues ?? {}) },
+      metricAggregates: { ...(node.metricAggregates ?? {}) },
       currentProblems: [...node.currentProblems],
       solutionVariants: [...node.solutionVariants],
       children: remapTreeIds(node.children, idMap, nextId),
@@ -328,6 +400,8 @@ function normalizeTree(nodes: WorkTreeNode[]): unknown {
     overcomplication: node.overcomplication,
     importance: node.importance,
     blocksMoney: node.blocksMoney,
+    metricValues: { ...(node.metricValues ?? {}) },
+    metricAggregates: { ...(node.metricAggregates ?? {}) },
     currentProblems: [...node.currentProblems],
     solutionVariants: [...node.solutionVariants],
     overcomplicationSum: node.overcomplicationSum ?? null,

@@ -19,6 +19,7 @@
 - при ошибке применения undo/redo указатель истории не двигается, локальное дерево возвращается к последнему подтверждённому состоянию, а ошибка показывается локально;
 - для `delete` и `create` история хранит полный snapshot затронутой ветки, достаточный для точного восстановления sibling order и parent linkage;
 - для delete метрики история хранит snapshot определения метрики и всех удалённых значений этой метрики внутри workspace;
+- undo/redo для metric catalog edits выполняется через канонические settings endpoints; undo delete использует отдельный atomic restore операции с snapshot payload;
 - канонический restore endpoint принимает полный branch snapshot и placement (`targetParentId`, `targetIndex`) и возвращает `idMap`;
 - клиент обязан remap'нуть history references по `idMap`, если сервер вернул новые ids;
 - persisted `present` хранится вместе со стеками `past` и `future`, чтобы `refresh` не откатывал дерево до отдельного fetch до reconcile;
