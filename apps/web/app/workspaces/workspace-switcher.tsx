@@ -598,7 +598,7 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
                                     />
                                     <button
                                       aria-label={`Удалить метрику ${metric.shortName}`}
-                                      className="workspace-settings-button workspace-settings-button-danger workspace-settings-button-icon"
+                                      className="workspace-settings-button workspace-settings-button-danger workspace-settings-button-icon workspace-settings-metric-delete-trigger"
                                       disabled={metricBusy || isDeleting}
                                       onClick={() => {
                                         void handleDeleteMetric(metric.id)
@@ -667,12 +667,12 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
                         ) : (
                           <button
                             aria-label="Создать новую метрику"
-                            className="workspace-settings-button workspace-settings-button-icon"
+                            className="workspace-settings-button workspace-settings-button-danger workspace-settings-delete-trigger"
                             disabled={isDeleting}
                             onClick={() => setIsCreateMetricOpen(true)}
                             type="button"
                           >
-                            <i aria-hidden className="ri-add-line" />
+                            Добавить метрику
                           </button>
                         )}
                         {createMetricErrorText ? (
