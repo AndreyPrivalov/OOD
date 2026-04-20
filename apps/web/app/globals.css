@@ -446,7 +446,9 @@ button:focus-visible {
 
 .cell-tree {
   display: grid;
-  gap: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0 4px;
   position: relative;
 }
 
@@ -472,7 +474,7 @@ button:focus-visible {
   z-index: 1;
 }
 
-.work-table tbody tr:hover .work-number,
+.work-table tbody tr td.work-col:hover .work-number,
 .work-table tbody tr.drag-source .work-number {
   opacity: 1;
 }
@@ -504,8 +506,7 @@ button:focus-visible {
   z-index: 5;
 }
 
-.work-table tbody tr:hover .drag-handle,
-.work-table tbody tr .work-col:hover .drag-handle,
+.work-table tbody tr td.work-col:hover .drag-handle,
 .work-table tbody tr.drag-source .drag-handle {
   opacity: 1;
   visibility: visible;
@@ -710,10 +711,6 @@ button:focus-visible {
 }
 
 .rating-icon-btn.is-active {
-  color: var(--fg);
-}
-
-.rating-control.rating-tone-high .rating-icon-btn.is-active {
   color: var(--accent);
 }
 
@@ -786,16 +783,21 @@ button:focus-visible {
 }
 
 .collapse-handle {
-  font-size: 18px;
+  font-size: 20px;
   opacity: 0;
   visibility: hidden;
   transition: opacity 120ms ease;
 }
 
-.work-table tbody tr:hover .delete-handle,
+.collapse-handle i {
+  display: inline-block;
+  transition: transform 120ms ease;
+}
+
+.work-table tbody tr td.work-col:hover .delete-handle,
 .work-table tbody tr.drag-source .delete-handle,
 .delete-handle:hover,
-.work-table tbody tr:hover .collapse-handle,
+.work-table tbody tr td.work-col:hover .collapse-handle,
 .work-table tbody tr.drag-source .collapse-handle,
 .collapse-handle:hover,
 .work-table tbody tr.is-collapsed .collapse-handle {
@@ -816,18 +818,20 @@ button:focus-visible {
   color: var(--muted);
 }
 
+.work-table tbody tr.is-collapsed .collapse-handle i {
+  transform: rotate(-90deg);
+}
+
 .work-col-actions {
-  position: absolute;
-  top: 4px;
-  right: 0;
+  position: relative;
   width: calc(var(--table-control-height) * 2 + 4px);
-  height: var(--table-control-height);
+  min-height: var(--table-control-height);
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
   overflow: visible;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .work-col-actions .delete-handle,
@@ -841,7 +845,7 @@ button:focus-visible {
   max-width: none;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  padding-right: calc((var(--table-control-height) * 2) + 12px);
+  padding-right: 4px;
 }
 
 .input-object {
