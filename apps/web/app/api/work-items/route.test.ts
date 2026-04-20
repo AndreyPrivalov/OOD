@@ -139,4 +139,19 @@ describe("GET /api/work-items contract", () => {
       possiblyRemovable: true,
     })
   })
+
+  it("uses default workspace id when query param is missing", async () => {
+    repository.listTree.mockResolvedValueOnce([])
+    workspaceMetricRepository.listMetrics.mockResolvedValueOnce([])
+
+    const response = await GET(new Request("http://localhost/api/work-items"))
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(repository.listTree).toHaveBeenCalledWith("default-workspace")
+    expect(workspaceMetricRepository.listMetrics).toHaveBeenCalledWith(
+      "default-workspace",
+    )
+    expect(payload.data).toEqual([])
+  })
 })

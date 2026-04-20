@@ -260,6 +260,64 @@ describe("patchTreeRow", () => {
     expect(patchedTree[0]?.metricAggregates?.["metric-2"]).toBe("none")
   })
 
+  it("resets stale metric ids to none when leaf metric map is replaced", () => {
+    const tree: WorkTreeNode[] = [
+      {
+        id: "root",
+        workspaceId: "ws",
+        title: "Root",
+        object: null,
+        possiblyRemovable: false,
+        parentId: null,
+        siblingOrder: 0,
+        overcomplication: null,
+        importance: null,
+        metricValues: {},
+        metricAggregates: { "metric-1": "direct", "metric-2": "none" },
+        overcomplicationSum: 0,
+        importanceSum: 0,
+        currentProblems: [],
+        solutionVariants: [],
+        children: [
+          {
+            id: "leaf",
+            workspaceId: "ws",
+            title: "Leaf",
+            object: null,
+            possiblyRemovable: true,
+            parentId: "root",
+            siblingOrder: 0,
+            overcomplication: null,
+            importance: null,
+            metricValues: { "metric-1": "direct", "metric-2": "none" },
+            metricAggregates: { "metric-1": "direct", "metric-2": "none" },
+            overcomplicationSum: 0,
+            importanceSum: 0,
+            currentProblems: [],
+            solutionVariants: [],
+            children: [],
+          },
+        ],
+      },
+    ]
+
+    const patchedTree = patchTreeRow(tree, "leaf", {
+      metricValues: { "metric-2": "indirect" },
+    })
+
+    expect(patchedTree[0]?.children[0]?.metricValues).toEqual({
+      "metric-2": "indirect",
+    })
+    expect(patchedTree[0]?.children[0]?.metricAggregates).toEqual({
+      "metric-1": "none",
+      "metric-2": "indirect",
+    })
+    expect(patchedTree[0]?.metricAggregates).toEqual({
+      "metric-1": "none",
+      "metric-2": "indirect",
+    })
+  })
+
   it("keeps parent sums stable after confirmed save when optimistic patch already applied", () => {
     const optimisticTree = patchTreeRow(createRatingTree(2), "leaf", {
       overcomplication: 5,

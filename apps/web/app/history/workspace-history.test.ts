@@ -109,6 +109,33 @@ describe("workspace-history", () => {
     expect(loadWorkspaceHistory("ws")).toBeNull()
   })
 
+  it("keeps session history isolated per workspace key", () => {
+    const storage = new Map<string, string>()
+    Object.assign(globalThis, {
+      window: {
+        sessionStorage: {
+          getItem: (key: string) => storage.get(key) ?? null,
+          setItem: (key: string, value: string) => {
+            storage.set(key, value)
+          },
+          removeItem: (key: string) => {
+            storage.delete(key)
+          },
+        },
+      },
+    })
+
+    const first = makeEmptyHistory([makeNode("root-a", null, 0)])
+    const second = makeEmptyHistory([makeNode("root-b", null, 0)])
+
+    saveWorkspaceHistory("ws-a", first)
+    saveWorkspaceHistory("ws-b", second)
+    clearWorkspaceHistory("ws-a")
+
+    expect(loadWorkspaceHistory("ws-a")).toBeNull()
+    expect(loadWorkspaceHistory("ws-b")).toEqual(second)
+  })
+
   it("remaps history ids after restore idMap", () => {
     const state = {
       version: 1,

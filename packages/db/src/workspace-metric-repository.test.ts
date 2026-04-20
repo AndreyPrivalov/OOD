@@ -49,6 +49,38 @@ describe("InMemoryWorkspaceMetricRepository", () => {
     expect(metrics).toEqual([])
   })
 
+  it("keeps metric mutations scoped to the requested workspace", async () => {
+    __resetInMemoryStoreForTests()
+    const workspaceRepo = new InMemoryWorkspaceRepository()
+    const metricRepo = new InMemoryWorkspaceMetricRepository()
+    const firstWorkspace = await workspaceRepo.create({ name: "Alpha" })
+    const secondWorkspace = await workspaceRepo.create({ name: "Beta" })
+
+    const created = await metricRepo.createMetric({
+      workspaceId: firstWorkspace.id,
+      shortName: "Impact",
+    })
+
+    const updatedFromWrongWorkspace = await metricRepo.updateMetric(
+      secondWorkspace.id,
+      created.id,
+      {
+        shortName: "Wrong",
+      },
+    )
+    const deletedFromWrongWorkspace = await metricRepo.deleteMetric(
+      secondWorkspace.id,
+      created.id,
+    )
+
+    expect(updatedFromWrongWorkspace).toBeNull()
+    expect(deletedFromWrongWorkspace).toBeNull()
+    expect(await metricRepo.listMetrics(firstWorkspace.id)).toEqual([
+      expect.objectContaining({ id: created.id, shortName: "Impact" }),
+    ])
+    expect(await metricRepo.listMetrics(secondWorkspace.id)).toEqual([])
+  })
+
   it("deleting metric definition removes all metric values for that metric", async () => {
     __resetInMemoryStoreForTests()
     const workspaceRepo = new InMemoryWorkspaceRepository()
