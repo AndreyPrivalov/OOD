@@ -37,6 +37,36 @@ export function buildRowPatchFromServer(
   return patch
 }
 
+export function buildRowPatchFromPayload(
+  payload: Record<string, unknown>,
+): EditableWorkItemPatch {
+  const patch: EditableWorkItemPatch = {}
+  if (typeof payload.title === "string") {
+    patch.title = payload.title
+  }
+  if (payload.object === null || typeof payload.object === "string") {
+    patch.object = payload.object
+  }
+  if (typeof payload.possiblyRemovable === "boolean") {
+    patch.possiblyRemovable = payload.possiblyRemovable
+  }
+  Object.assign(
+    patch,
+    buildRatingServerPatch(payload as Partial<WorkspaceRatingValues>),
+  )
+  if (Array.isArray(payload.currentProblems)) {
+    patch.currentProblems = payload.currentProblems.filter(
+      (item): item is string => typeof item === "string",
+    )
+  }
+  if (Array.isArray(payload.solutionVariants)) {
+    patch.solutionVariants = payload.solutionVariants.filter(
+      (item): item is string => typeof item === "string",
+    )
+  }
+  return patch
+}
+
 function isSamePrimitiveOrList(left: unknown, right: unknown): boolean {
   if (Array.isArray(left) && Array.isArray(right)) {
     if (left.length !== right.length) {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  buildRowPatchFromPayload,
   buildRowPatchFromServer,
   isServerPatchEchoingPayload,
 } from "./reconciliation"
@@ -26,6 +27,31 @@ describe("buildRowPatchFromServer", () => {
       blocksMoney: null,
       currentProblems: ["a", "b"],
       solutionVariants: ["x", "y"],
+    })
+  })
+})
+
+describe("buildRowPatchFromPayload", () => {
+  it("keeps only supported payload fields and sanitizes string lists", () => {
+    const patch = buildRowPatchFromPayload({
+      title: "Updated",
+      object: null,
+      possiblyRemovable: false,
+      overcomplication: 5,
+      importance: null,
+      currentProblems: ["x", 1, "y"],
+      solutionVariants: ["s1", { bad: true }, "s2"],
+      ignored: "value",
+    })
+
+    expect(patch).toEqual({
+      title: "Updated",
+      object: null,
+      possiblyRemovable: false,
+      overcomplication: 5,
+      importance: null,
+      currentProblems: ["x", "y"],
+      solutionVariants: ["s1", "s2"],
     })
   })
 })

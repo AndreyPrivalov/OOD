@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { buildEditState, isSameEditState } from "./edit-state"
-import { buildRowPatchFromServer } from "./reconciliation"
+import {
+  buildRowPatchFromPayload,
+  buildRowPatchFromServer,
+} from "./reconciliation"
 import { buildPatchPayload } from "./save-payload"
 import { LocalFirstRowQueue, type RevisionedValue } from "./save-queue"
 import { readSaveRowDeferredError } from "./save-result"
@@ -19,6 +22,11 @@ type UseWorkItemEditingOptions<Row extends EditableWorkItemRow> = {
   rows: Row[]
   rowsById: Map<string, Row>
   patchRow: (rowId: string, patch: EditableWorkItemPatch) => void
+  onPersistedChange?: (
+    change:
+      | { kind: "patch"; before: Row; after: Row }
+      | { kind: "create"; before: Row; after: Row },
+  ) => void
   reportError: (message: string) => void
   saveRow: (id: string, payload: Record<string, unknown>) => Promise<unknown>
   toErrorText: (error: unknown) => string
@@ -35,6 +43,7 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
     rows,
     rowsById,
     patchRow,
+    onPersistedChange,
     reportError,
     saveRow,
     toErrorText,
@@ -194,15 +203,21 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
         }
 
         if (!ackResult.stale && ackResult.shouldApply && updated) {
-          const patch = buildRowPatchFromServer(updated)
-          if (Object.keys(patch).length > 0) {
-            patchRow(activeRowId, patch)
+          const serverPatch = buildRowPatchFromServer(updated)
+          const localPayloadPatch = buildRowPatchFromPayload(payload)
+          const mergedPatch = { ...serverPatch, ...localPayloadPatch }
+          if (Object.keys(mergedPatch).length > 0) {
+            patchRow(activeRowId, mergedPatch)
+          }
+        } else if (!ackResult.stale && ackResult.shouldApply) {
+          const localPayloadPatch = buildRowPatchFromPayload(payload)
+          if (Object.keys(localPayloadPatch).length > 0) {
+            patchRow(activeRowId, localPayloadPatch)
           }
         }
 
         if (nextRowId !== activeRowId) {
           remapRowState(activeRowId, nextRowId)
-          activeRowId = nextRowId
         }
 
         const nextRowSnapshot = {
@@ -210,6 +225,30 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
           ...updated,
           id: activeRowId,
         } as Row
+        const persistedRowSnapshot = {
+          ...nextRowSnapshot,
+          id: nextRowId,
+        } as Row
+
+        if (!ackResult.stale && ackResult.shouldApply) {
+          if (nextRowId !== activeRowId) {
+            onPersistedChange?.({
+              kind: "create",
+              before: currentRow,
+              after: persistedRowSnapshot,
+            })
+          } else {
+            onPersistedChange?.({
+              kind: "patch",
+              before: currentRow,
+              after: persistedRowSnapshot,
+            })
+          }
+        }
+
+        if (nextRowId !== activeRowId) {
+          activeRowId = nextRowId
+        }
 
         if (ackResult.nextRequest) {
           void runRowSaveRequest(
@@ -237,6 +276,7 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
       getRowQueue,
       isDev,
       markRowCleanIfSettled,
+      onPersistedChange,
       patchRow,
       reportError,
       recordPatchLatency,
