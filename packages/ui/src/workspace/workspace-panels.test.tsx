@@ -37,13 +37,11 @@ describe("workspace panels", () => {
 
   it("renders workspace title and context", () => {
     const rendered = WorkspaceTitlePanel({
-      title: "Работы",
-      currentWorkspaceName: "Продуктовая область",
+      title: "Продуктовая область",
       errorText: "Ошибка загрузки дерева",
     })
     const text = collectText(rendered).join(" ")
 
-    expect(text).toContain("Работы")
     expect(text).toContain("Продуктовая область")
     expect(text).toContain("Ошибка загрузки дерева")
   })

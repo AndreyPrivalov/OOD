@@ -1,7 +1,10 @@
 import type { ReactNode } from "react"
 import { isValidElement } from "react"
 import { describe, expect, it } from "vitest"
-import { WorkspaceTreeTable } from "./workspace-tree-table"
+import {
+  WorkspaceTreeTable,
+  buildRowRenderSignature,
+} from "./workspace-tree-table"
 
 function collectText(node: ReactNode): string[] {
   if (typeof node === "string" || typeof node === "number") {
@@ -31,14 +34,16 @@ describe("WorkspaceTreeTable", () => {
           blocksMoney: 1,
         },
       ],
+      collapsedRowIds: new Set<string>(),
       rowUiById: {
         "row-1": {
           title: {
             value: "Первая работа",
-            registerInputRef: () => {},
+            registerTextareaRef: () => {},
             onFocus: () => {},
             onBlur: () => {},
             onKeyDown: () => {},
+            onInput: () => {},
           },
           object: {
             value: "Объект A",
@@ -116,12 +121,15 @@ describe("WorkspaceTreeTable", () => {
           kind: "add",
           laneId: "lane-1",
           y: 40,
+          contentStartXPx: 80,
           parentId: null,
           targetIndex: 0,
           showPlus: true,
         },
       ],
       overlayDropY: null,
+      overlayNestTarget: null,
+      dragPreview: null,
       listScrollRef: { current: null },
       tableWrapRef: { current: null },
       tableRef: { current: null },
@@ -132,10 +140,35 @@ describe("WorkspaceTreeTable", () => {
       onHandlePointerCancel: () => {},
       onCreateAtPosition: () => {},
       onDeleteRow: () => {},
+      onToggleRowCollapse: () => {},
     })
     const text = collectText(rendered).join(" ")
 
     expect(text).toContain("Работа")
     expect(text).toContain("R1")
+  })
+
+  it("changes row render signature when parent aggregate sums change", () => {
+    const base = {
+      id: "parent-row",
+      parentId: null,
+      depth: 0,
+      siblingOrder: 0,
+      children: [{ id: "leaf" }],
+      overcomplication: null,
+      importance: null,
+      blocksMoney: null,
+      overcomplicationSum: 2,
+      importanceSum: 1,
+      blocksMoneySum: 0,
+    }
+
+    const before = buildRowRenderSignature(base)
+    const after = buildRowRenderSignature({
+      ...base,
+      overcomplicationSum: 5,
+    })
+
+    expect(after).not.toBe(before)
   })
 })

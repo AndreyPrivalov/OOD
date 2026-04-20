@@ -11,9 +11,16 @@ export interface CreateWorkspaceInput {
   name: string
 }
 
+export interface RenameWorkspaceInput {
+  name: string
+}
+
 export interface WorkspaceRepository {
   list(): Promise<Workspace[]>
+  getById(id: string): Promise<Workspace | null>
   create(input: CreateWorkspaceInput): Promise<Workspace>
+  rename(id: string, input: RenameWorkspaceInput): Promise<Workspace | null>
+  delete(id: string): Promise<boolean>
 }
 
 export class PostgresWorkspaceRepository implements WorkspaceRepository {
@@ -25,6 +32,16 @@ export class PostgresWorkspaceRepository implements WorkspaceRepository {
 
   async list(): Promise<Workspace[]> {
     return listWorkspaceRows(this.db)
+  }
+
+  async getById(id: string): Promise<Workspace | null> {
+    const rows = await this.db
+      .select()
+      .from(workspaces)
+      .where(eq(workspaces.id, id))
+      .limit(1)
+
+    return rows[0] ? toWorkspace(rows[0]) : null
   }
 
   async create(input: CreateWorkspaceInput): Promise<Workspace> {
@@ -42,6 +59,35 @@ export class PostgresWorkspaceRepository implements WorkspaceRepository {
       .limit(1)
 
     return toWorkspace(created[0])
+  }
+
+  async rename(
+    id: string,
+    input: RenameWorkspaceInput,
+  ): Promise<Workspace | null> {
+    const updated = await this.db
+      .update(workspaces)
+      .set({
+        name: input.name,
+        updatedAt: new Date(),
+      })
+      .where(eq(workspaces.id, id))
+      .returning()
+
+    if (updated.length === 0) {
+      return null
+    }
+
+    return toWorkspace(updated[0])
+  }
+
+  async delete(id: string): Promise<boolean> {
+    const deleted = await this.db
+      .delete(workspaces)
+      .where(eq(workspaces.id, id))
+      .returning({ id: workspaces.id })
+
+    return deleted.length > 0
   }
 }
 

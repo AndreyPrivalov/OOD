@@ -11,6 +11,7 @@ import {
 import { useWorkspaceDragDrop } from "../use-workspace-drag-drop"
 
 type UseWorkspaceDndOverlayCompositionOptions = {
+  contentStartXPx: number
   moveRow: (
     id: string,
     targetParentId: string | null,
@@ -19,6 +20,7 @@ type UseWorkspaceDndOverlayCompositionOptions = {
   rowAnchors: Record<string, { top: number; bottom: number }>
   rows: FlatRow[]
   rowsById: Map<string, FlatRow>
+  rowTreeIndentPx: number
   scheduleOverlayRecalc: () => void
   siblingsByParent: Map<string | null, FlatRow[]>
   tableHeaderBottom: number
@@ -28,10 +30,12 @@ export function useWorkspaceDndOverlayComposition(
   options: UseWorkspaceDndOverlayCompositionOptions,
 ) {
   const {
+    contentStartXPx,
     moveRow,
     rowAnchors,
     rows,
     rowsById,
+    rowTreeIndentPx,
     scheduleOverlayRecalc,
     siblingsByParent,
     tableHeaderBottom,
@@ -71,11 +75,19 @@ export function useWorkspaceDndOverlayComposition(
       kind: "add",
       laneId: lane.id,
       y: lane.anchorY ?? 0,
+      contentStartXPx:
+        contentStartXPx + Math.max(0, lane.depth) * rowTreeIndentPx,
       parentId: lane.parentId,
       targetIndex: lane.targetIndex,
       showPlus: true,
     }))
-  }, [dnd.interactionMode, dnd.isDragPrimed, visibleInsertLanes])
+  }, [
+    contentStartXPx,
+    dnd.interactionMode,
+    dnd.isDragPrimed,
+    rowTreeIndentPx,
+    visibleInsertLanes,
+  ])
 
   const overlayDropY = useMemo(() => {
     const dropIntent = dnd.dropIntent
@@ -103,9 +115,28 @@ export function useWorkspaceDndOverlayComposition(
     tableHeaderBottom,
   ])
 
+  const overlayNestTarget = useMemo(() => {
+    const dropIntent = dnd.dropIntent
+    if (dnd.interactionMode !== "dragging" || !dropIntent) {
+      return null
+    }
+    if (dropIntent.type !== "nest") {
+      return null
+    }
+    const rowAnchor = rowAnchors[dropIntent.targetId]
+    if (!rowAnchor) {
+      return null
+    }
+    return {
+      top: rowAnchor.top,
+      height: Math.max(0, rowAnchor.bottom - rowAnchor.top),
+    }
+  }, [dnd.dropIntent, dnd.interactionMode, rowAnchors])
+
   return {
     dnd,
     overlayAddIndicators,
     overlayDropY,
+    overlayNestTarget,
   }
 }

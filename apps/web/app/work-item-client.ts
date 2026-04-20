@@ -11,6 +11,22 @@ export type WorkItemErrorPayload = {
   details?: unknown
 }
 
+export type RestoreWorkTreeNode = {
+  id: string
+  workspaceId: string
+  title: string
+  object: string | null
+  possiblyRemovable: boolean
+  parentId: string | null
+  siblingOrder: number
+  overcomplication: number | null
+  importance: number | null
+  blocksMoney: number | null
+  currentProblems: string[]
+  solutionVariants: string[]
+  children: RestoreWorkTreeNode[]
+}
+
 type ApiEnvelope<T> = {
   data?: T
   error?: string
@@ -42,6 +58,17 @@ type MoveWorkItemResponse = {
 type DeleteWorkItemResponse = {
   id: string
   mode: "cascade"
+}
+
+type RestoreWorkItemBranchInput = {
+  workspaceId: string
+  targetParentId: string | null
+  targetIndex: number
+  root: RestoreWorkTreeNode
+}
+
+type RestoreWorkItemBranchResponse = {
+  idMap: Record<string, string>
 }
 
 type PatchWorkItemPayload = Partial<
@@ -134,6 +161,16 @@ export function moveWorkItem(
   input: MoveWorkItemInput,
 ): Promise<MoveWorkItemResponse> {
   return requestData<MoveWorkItemResponse>(`/api/work-items/${id}/move`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  })
+}
+
+export function restoreWorkItemBranch(
+  input: RestoreWorkItemBranchInput,
+): Promise<RestoreWorkItemBranchResponse> {
+  return requestData<RestoreWorkItemBranchResponse>("/api/work-items/restore", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),

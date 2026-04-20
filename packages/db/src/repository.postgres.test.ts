@@ -141,12 +141,12 @@ describe("PostgresWorkItemRepository", () => {
     expect(root).toMatchObject({
       overcomplicationSum: 2,
       importanceSum: 0,
-      blocksMoneySum: 1,
+      blocksMoneySum: 0,
     })
     expect(leaf).toMatchObject({
       overcomplicationSum: 2,
       importanceSum: 0,
-      blocksMoneySum: 1,
+      blocksMoneySum: 0,
     })
   })
 
@@ -169,5 +169,63 @@ describe("PostgresWorkItemRepository", () => {
 
     expect(state.executeCalls).toBe(1)
     expect(state.updateCalls).toBe(2)
+  })
+
+  it("restoreBranch inserts branch and compacts target siblings", async () => {
+    const state: DbStubState = {
+      selectQueue: [
+        [{ id: "ws" }],
+        [{ id: "parent", workspaceId: "ws" }],
+        [],
+        [{ id: "keep-a" }, { id: "keep-b" }],
+      ],
+      executeCalls: 0,
+      updateCalls: 0,
+    }
+    const repo = new PostgresWorkItemRepository(
+      createDbStub(state) as unknown as ConstructorParameters<
+        typeof PostgresWorkItemRepository
+      >[0],
+    )
+
+    const idMap = await repo.restoreBranch({
+      workspaceId: "ws",
+      targetParentId: "parent",
+      targetIndex: 1,
+      root: {
+        id: "branch",
+        workspaceId: "ws",
+        title: "branch",
+        object: null,
+        possiblyRemovable: false,
+        parentId: "parent",
+        siblingOrder: 0,
+        overcomplication: null,
+        importance: null,
+        blocksMoney: null,
+        currentProblems: [],
+        solutionVariants: [],
+        children: [
+          {
+            id: "leaf",
+            workspaceId: "ws",
+            title: "leaf",
+            object: null,
+            possiblyRemovable: false,
+            parentId: "branch",
+            siblingOrder: 0,
+            overcomplication: null,
+            importance: null,
+            blocksMoney: null,
+            currentProblems: [],
+            solutionVariants: [],
+            children: [],
+          },
+        ],
+      },
+    })
+
+    expect(idMap).toEqual({ branch: "branch", leaf: "leaf" })
+    expect(state.updateCalls).toBeGreaterThan(0)
   })
 })

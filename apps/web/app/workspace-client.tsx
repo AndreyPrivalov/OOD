@@ -19,13 +19,14 @@ export function WorkspaceClient() {
           isCreatingWorkspace={vm.isCreatingWorkspace}
           isWorkspaceLoading={vm.isWorkspaceLoading}
           workspaceErrorText={vm.workspaceErrorText}
+          className="section section-column-start workspace-switcher-row"
           workspaces={vm.workspaces}
           renderSwitcher={vm.handlers.renderSwitcher}
         />
         <WorkspaceTitlePanel
-          title="Работы"
-          currentWorkspaceName={vm.currentWorkspaceName}
+          title={vm.currentWorkspaceName}
           errorText={vm.errorText}
+          className="section section-column-start"
         />
         <section className="section">
           {vm.isLoading ? <p className="list-loading">Загрузка</p> : null}
@@ -34,10 +35,22 @@ export function WorkspaceClient() {
           ) : null}
           <WorkspaceTreeTable
             rows={vm.rows}
+            collapsedRowIds={vm.collapsedRowIds}
             rowUiById={vm.rowUiById}
             numberingById={vm.numberingById}
             draggedRowId={vm.dnd.draggedRowId}
             dropIntent={vm.dnd.dropIntent}
+            dragPreview={
+              vm.dnd.dragPreviewPosition && vm.dnd.draggedRowId
+                ? {
+                    x: vm.dnd.dragPreviewPosition.x,
+                    y: vm.dnd.dragPreviewPosition.y,
+                    title:
+                      vm.rowUiById[vm.dnd.draggedRowId]?.title.value ??
+                      "Без названия",
+                  }
+                : null
+            }
             tableColumnWidths={vm.layout.tableColumnWidths}
             ratingHeaders={vm.workspaceRatingFieldConfigs}
             rowTreeIndentPx={vm.tableFrame.TREE_LEVEL_OFFSET_PX}
@@ -50,6 +63,7 @@ export function WorkspaceClient() {
             overlayHeight={vm.layout.overlayHeight}
             overlayAddIndicators={vm.overlayAddIndicators}
             overlayDropY={vm.overlayDropY}
+            overlayNestTarget={vm.overlayNestTarget}
             listScrollRef={vm.layout.listScrollRef}
             tableWrapRef={vm.layout.tableWrapRef}
             tableRef={vm.layout.tableRef}
@@ -64,6 +78,7 @@ export function WorkspaceClient() {
             onDeleteRow={(rowId) => {
               void vm.handlers.deleteRow(rowId)
             }}
+            onToggleRowCollapse={vm.handlers.toggleRowCollapse}
           />
         </section>
       </div>

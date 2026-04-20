@@ -4,6 +4,7 @@ import {
   DomainError,
   DomainErrorCode,
   type MoveWorkItemInput,
+  type RestoreWorkItemBranchInput,
   type UpdateWorkItemInput,
   type WorkItem,
   type WorkTreeReadNode,
@@ -12,7 +13,7 @@ import {
   validateCreateWorkItemInput,
   withScoreSums,
 } from "@ood/domain"
-import { and, asc, eq, isNull, ne, sql } from "drizzle-orm"
+import { and, asc, eq, inArray, isNull, ne, sql } from "drizzle-orm"
 import { getDb } from "./client"
 import { workItems } from "./schema"
 import { ensureWorkspace } from "./workspace-store"
@@ -23,6 +24,9 @@ export interface WorkItemRepository {
   update(id: string, patch: UpdateWorkItemInput): Promise<WorkItem>
   move(id: string, input: MoveWorkItemInput): Promise<void>
   deleteCascade(id: string): Promise<void>
+  restoreBranch(
+    input: RestoreWorkItemBranchInput,
+  ): Promise<Record<string, string>>
 }
 
 type DbExecutor = ReturnType<typeof getDb>
@@ -51,7 +55,7 @@ function toDomainWorkItem(row: WorkItemRow): WorkItem {
     overcomplication:
       (row.overcomplication as WorkItem["overcomplication"]) ?? null,
     importance: (row.importance as WorkItem["importance"]) ?? null,
-    blocksMoney: (row.blocksMoney as WorkItem["blocksMoney"]) ?? null,
+    blocksMoney: null,
     currentProblems: parseStringArray(row.currentProblems),
     solutionVariants: parseStringArray(row.solutionVariants),
     createdAt: row.createdAt,
@@ -84,6 +88,49 @@ function siblingFilter(workspaceId: string, parentId: string | null) {
     eq(workItems.workspaceId, workspaceId),
     eq(workItems.parentId, parentId),
   )
+}
+
+function flattenRestoreSnapshot(input: RestoreWorkItemBranchInput) {
+  const rows: Array<{
+    id: string
+    workspaceId: string
+    title: string
+    object: string | null
+    possiblyRemovable: boolean
+    parentId: string | null
+    siblingOrder: number
+    overcomplication: number | null
+    importance: number | null
+    currentProblems: string[]
+    solutionVariants: string[]
+  }> = []
+
+  function visit(
+    node: RestoreWorkItemBranchInput["root"],
+    parentId: string | null,
+    siblingOrder: number,
+  ) {
+    rows.push({
+      id: node.id,
+      workspaceId: node.workspaceId,
+      title: node.title,
+      object: node.object,
+      possiblyRemovable: node.possiblyRemovable,
+      parentId,
+      siblingOrder,
+      overcomplication: node.overcomplication ?? null,
+      importance: node.importance ?? null,
+      currentProblems: node.currentProblems,
+      solutionVariants: node.solutionVariants,
+    })
+
+    node.children.forEach((child, index) => {
+      visit(child, node.id, index)
+    })
+  }
+
+  visit(input.root, input.targetParentId, input.targetIndex)
+  return rows
 }
 
 export class PostgresWorkItemRepository implements WorkItemRepository {
@@ -153,7 +200,6 @@ export class PostgresWorkItemRepository implements WorkItemRepository {
         siblingOrder: index,
         overcomplication: validatedInput.overcomplication ?? null,
         importance: validatedInput.importance ?? null,
-        blocksMoney: validatedInput.blocksMoney ?? null,
         currentProblems: validatedInput.currentProblems ?? [],
         solutionVariants: validatedInput.solutionVariants ?? [],
       })
@@ -208,7 +254,6 @@ export class PostgresWorkItemRepository implements WorkItemRepository {
       updates.overcomplication = patch.overcomplication
     }
     if (patch.importance !== undefined) updates.importance = patch.importance
-    if (patch.blocksMoney !== undefined) updates.blocksMoney = patch.blocksMoney
     if (patch.currentProblems !== undefined) {
       updates.currentProblems = patch.currentProblems
     }
@@ -343,6 +388,70 @@ export class PostgresWorkItemRepository implements WorkItemRepository {
         tx,
         siblings.map((row) => row.id),
       )
+    })
+  }
+
+  async restoreBranch(
+    input: RestoreWorkItemBranchInput,
+  ): Promise<Record<string, string>> {
+    await ensureWorkspace(this.db, input.workspaceId)
+
+    return this.db.transaction(async (tx) => {
+      if (input.targetParentId) {
+        const parentRows = await tx
+          .select({ id: workItems.id, workspaceId: workItems.workspaceId })
+          .from(workItems)
+          .where(eq(workItems.id, input.targetParentId))
+          .limit(1)
+
+        if (
+          parentRows.length === 0 ||
+          parentRows[0].workspaceId !== input.workspaceId
+        ) {
+          throw new DomainError(
+            DomainErrorCode.PARENT_NOT_FOUND,
+            "Target parent not found",
+          )
+        }
+      }
+
+      const snapshotRows = flattenRestoreSnapshot(input)
+      const snapshotIds = snapshotRows.map((row) => row.id)
+      const existingRows = await tx
+        .select({ id: workItems.id })
+        .from(workItems)
+        .where(inArray(workItems.id, snapshotIds))
+
+      if (existingRows.length > 0) {
+        throw new DomainError(
+          DomainErrorCode.INVALID_MOVE_TARGET,
+          "Cannot restore branch with ids that already exist",
+        )
+      }
+
+      const targetSiblings = await tx
+        .select({ id: workItems.id })
+        .from(workItems)
+        .where(siblingFilter(input.workspaceId, input.targetParentId))
+        .orderBy(asc(workItems.siblingOrder), asc(workItems.createdAt))
+
+      const targetOrder = targetSiblings.map((row) => row.id)
+      const targetIndex = clampIndex(input.targetIndex, targetOrder.length)
+      targetOrder.splice(targetIndex, 0, input.root.id)
+
+      const now = new Date()
+      for (const row of snapshotRows) {
+        await tx.insert(workItems).values({
+          ...row,
+          siblingOrder:
+            row.id === input.root.id ? targetIndex : row.siblingOrder,
+          createdAt: now,
+          updatedAt: now,
+        })
+      }
+
+      await this.reorderSiblings(tx, targetOrder)
+      return Object.fromEntries(snapshotIds.map((id) => [id, id]))
     })
   }
   private async reorderSiblings(

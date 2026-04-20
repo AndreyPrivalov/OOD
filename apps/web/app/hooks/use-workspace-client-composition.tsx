@@ -5,12 +5,19 @@ import {
   workspaceRatingFieldConfigs,
 } from "@ood/ui"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { isUndoRedoShortcut } from "../history/workspace-history"
+import {
+  areSetsEqual,
+  filterVisibleRows,
+  pruneCollapsedRowIds,
+} from "../state/tree-visibility"
 import { useWorkspaceContext } from "../workspaces/use-workspace-context"
 import { WorkspaceSwitcher } from "../workspaces/workspace-switcher"
 import {
   useTableFrameConstants,
   useWorkspaceLayout,
 } from "./use-workspace-layout"
+import { readActiveFieldSnapshot } from "./workspace-client-composition/page-exit-save"
 import { useWorkspaceDndOverlayComposition } from "./workspace-client-composition/use-dnd-overlay-composition"
 import {
   useWorkspaceEditingComposition,
@@ -43,9 +50,13 @@ export function useWorkspaceClientComposition() {
     currentWorkspaceId,
     errorText: workspaceErrorText,
     isCreating: isCreatingWorkspace,
+    isDeletingWorkspaceId,
     isLoading: isWorkspaceLoading,
+    isRenamingWorkspaceId,
     createWorkspace,
+    deleteWorkspace,
     openWorkspace,
+    renameWorkspace,
   } = useWorkspaceContext()
 
   const [pendingFocusRowId, setPendingFocusRowId] = useState<string | null>(
@@ -54,6 +65,9 @@ export function useWorkspaceClientComposition() {
   const [escapeCancellableRowId, setEscapeCancellableRowId] = useState<
     string | null
   >(null)
+  const [collapsedRowIds, setCollapsedRowIds] = useState<Set<string>>(
+    () => new Set(),
+  )
   const discardPendingSaveRef = useRef<(id: string) => void>(() => {})
 
   const treeData = useWorkspaceTreeDataComposition({
@@ -74,11 +88,15 @@ export function useWorkspaceClientComposition() {
   })
 
   const editingState = useWorkspaceEditingStateComposition(treeData.rows)
+  const rows = useMemo(
+    () => filterVisibleRows(treeData.rows, collapsedRowIds),
+    [collapsedRowIds, treeData.rows],
+  )
 
   const layout = useWorkspaceLayout({
     getEditForRow: editingState.getEditForRow,
     isDev,
-    rows: treeData.rows,
+    rows,
   })
 
   const editing = useWorkspaceEditingComposition({
@@ -86,6 +104,7 @@ export function useWorkspaceClientComposition() {
     escapeCancellableRowId,
     focusTitleInput: layout.focusTitleInput,
     isDev,
+    onPersistedChange: treeData.recordPersistedChange,
     pendingFocusRowId,
     reportError: treeData.setErrorText,
     rows: treeData.rows,
@@ -102,11 +121,23 @@ export function useWorkspaceClientComposition() {
     },
   })
 
+  const {
+    FRAME_X_PX,
+    LEFT_GUTTER_WIDTH_PX,
+    WORK_CONTENT_INDENT_PX,
+    CELL_INLINE_PAD_PX,
+    STRUCTURE_LINE_WIDTH_PX,
+    CONTENT_START_X_PX,
+    TREE_LEVEL_OFFSET_PX,
+  } = useTableFrameConstants()
+
   const dndOverlay = useWorkspaceDndOverlayComposition({
+    contentStartXPx: CONTENT_START_X_PX,
     moveRow: treeData.moveRow,
     rowAnchors: layout.rowAnchors,
-    rows: treeData.rows,
+    rows,
     rowsById: treeData.rowsById,
+    rowTreeIndentPx: TREE_LEVEL_OFFSET_PX,
     scheduleOverlayRecalc: layout.scheduleOverlayRecalc,
     siblingsByParent: treeData.siblingsByParent,
     tableHeaderBottom: layout.tableHeaderBottom,
@@ -154,6 +185,35 @@ export function useWorkspaceClientComposition() {
     treeData.refreshCount,
   ])
 
+  useEffect(() => {
+    setCollapsedRowIds((current) => {
+      const next = pruneCollapsedRowIds(treeData.rows, current)
+      if (areSetsEqual(current, next)) {
+        return current
+      }
+      return next
+    })
+  }, [treeData.rows])
+
+  const toggleRowCollapse = useCallback(
+    (rowId: string) => {
+      const row = treeData.rowsById.get(rowId)
+      if (!row || row.children.length === 0) {
+        return
+      }
+      setCollapsedRowIds((current) => {
+        const next = new Set(current)
+        if (next.has(rowId)) {
+          next.delete(rowId)
+        } else {
+          next.add(rowId)
+        }
+        return next
+      })
+    },
+    [treeData.rowsById],
+  )
+
   const handleOpenWorkspace = useCallback(
     (workspaceId: string) => {
       if (workspaceId === currentWorkspaceId) {
@@ -180,6 +240,123 @@ export function useWorkspaceClientComposition() {
     [createWorkspace, editing.flushPendingEdits, treeData.setErrorText],
   )
 
+  const handleRenameWorkspace = useCallback(
+    async (workspaceId: string, name: string) => {
+      editing.flushPendingEdits()
+      treeData.setErrorText("")
+      await renameWorkspace(workspaceId, name)
+    },
+    [editing.flushPendingEdits, renameWorkspace, treeData.setErrorText],
+  )
+
+  const handleDeleteWorkspace = useCallback(
+    async (workspaceId: string) => {
+      editing.flushPendingEdits()
+      treeData.setErrorText("")
+      await deleteWorkspace(workspaceId)
+    },
+    [deleteWorkspace, editing.flushPendingEdits, treeData.setErrorText],
+  )
+
+  const commitActiveFieldBeforeLeave = useCallback(() => {
+    if (typeof document === "undefined") {
+      return
+    }
+
+    const snapshot = readActiveFieldSnapshot(document.activeElement)
+    if (!snapshot) {
+      return
+    }
+
+    if (snapshot.field === "title") {
+      editing.commitTextEdit(snapshot.rowId, { title: snapshot.value })
+      editing.handleTitleBlur(snapshot.rowId)
+    } else if (snapshot.field === "object") {
+      editing.commitTextEdit(snapshot.rowId, { object: snapshot.value })
+    } else if (snapshot.field === "currentProblems") {
+      editing.commitTextEdit(snapshot.rowId, {
+        currentProblems: snapshot.value,
+      })
+    } else if (snapshot.field === "solutionVariants") {
+      editing.commitTextEdit(snapshot.rowId, {
+        solutionVariants: snapshot.value,
+      })
+    }
+
+    editing.handleFieldBlur(snapshot.rowId)
+  }, [editing])
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return
+    }
+
+    const handlePageExit = () => {
+      commitActiveFieldBeforeLeave()
+      editing.flushPendingEdits()
+    }
+
+    window.addEventListener("pagehide", handlePageExit)
+    window.addEventListener("beforeunload", handlePageExit)
+
+    return () => {
+      window.removeEventListener("pagehide", handlePageExit)
+      window.removeEventListener("beforeunload", handlePageExit)
+    }
+  }, [commitActiveFieldBeforeLeave, editing.flushPendingEdits])
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const direction = isUndoRedoShortcut(event)
+      if (!direction) {
+        return
+      }
+
+      const target = event.target
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === "TEXTAREA" ||
+          target.tagName === "INPUT" ||
+          target.isContentEditable)
+      ) {
+        return
+      }
+
+      if (treeData.isApplyingHistory) {
+        return
+      }
+
+      if (direction === "undo" && !treeData.canUndo) {
+        return
+      }
+      if (direction === "redo" && !treeData.canRedo) {
+        return
+      }
+
+      event.preventDefault()
+      if (direction === "undo") {
+        void treeData.undo()
+      } else {
+        void treeData.redo()
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [
+    treeData.canRedo,
+    treeData.canUndo,
+    treeData.isApplyingHistory,
+    treeData.redo,
+    treeData.undo,
+  ])
+
   const renderSwitcher = useCallback(
     ({
       currentWorkspaceId,
@@ -195,24 +372,25 @@ export function useWorkspaceClientComposition() {
       <WorkspaceSwitcher
         currentWorkspaceId={currentWorkspaceId}
         isCreating={isCreatingWorkspace}
+        isDeletingWorkspaceId={isDeletingWorkspaceId}
         isLoading={isWorkspaceLoading}
+        isRenamingWorkspaceId={isRenamingWorkspaceId}
         onCreateWorkspace={handleCreateWorkspace}
+        onDeleteWorkspace={handleDeleteWorkspace}
         onOpenWorkspace={handleOpenWorkspace}
+        onRenameWorkspace={handleRenameWorkspace}
         workspaces={workspaces}
       />
     ),
-    [handleCreateWorkspace, handleOpenWorkspace],
+    [
+      handleCreateWorkspace,
+      handleDeleteWorkspace,
+      handleOpenWorkspace,
+      handleRenameWorkspace,
+      isDeletingWorkspaceId,
+      isRenamingWorkspaceId,
+    ],
   )
-
-  const {
-    FRAME_X_PX,
-    LEFT_GUTTER_WIDTH_PX,
-    WORK_CONTENT_INDENT_PX,
-    CELL_INLINE_PAD_PX,
-    STRUCTURE_LINE_WIDTH_PX,
-    CONTENT_START_X_PX,
-    TREE_LEVEL_OFFSET_PX,
-  } = useTableFrameConstants()
 
   const currentWorkspaceName = currentWorkspace?.name ?? "Рабочее пространство"
   const rowUiById = useMemo<Record<string, WorkspaceTreeRowUiModel>>(() => {
@@ -227,7 +405,8 @@ export function useWorkspaceClientComposition() {
       next[rowId] = {
         title: {
           value: edit.title,
-          registerInputRef: (node) => layout.registerTitleInputRef(rowId, node),
+          registerTextareaRef: (node) =>
+            layout.registerTitleInputRef(rowId, node),
           onFocus: () => editing.handleFieldFocus(rowId),
           onBlur: (value) => {
             editing.commitTextEdit(rowId, { title: value })
@@ -235,6 +414,7 @@ export function useWorkspaceClientComposition() {
             editing.handleTitleBlur(rowId)
           },
           onKeyDown: (event) => editing.handleTitleKeyDown(event, rowId),
+          onInput: autoGrowTextarea,
         },
         object: {
           value: edit.object,
@@ -316,19 +496,23 @@ export function useWorkspaceClientComposition() {
   return {
     currentWorkspaceId,
     isCreatingWorkspace,
+    isDeletingWorkspaceId,
     isWorkspaceLoading,
+    isRenamingWorkspaceId,
     workspaceErrorText,
     workspaces,
     currentWorkspaceName,
     errorText: treeData.errorText,
     isLoading: treeData.isLoading,
-    rows: treeData.rows,
+    rows,
     numberingById: treeData.numberingById,
+    collapsedRowIds,
     rowUiById,
     dnd: dndOverlay.dnd,
     layout,
     overlayAddIndicators: dndOverlay.overlayAddIndicators,
     overlayDropY: dndOverlay.overlayDropY,
+    overlayNestTarget: dndOverlay.overlayNestTarget,
     tableFrame: {
       FRAME_X_PX,
       LEFT_GUTTER_WIDTH_PX,
@@ -341,6 +525,7 @@ export function useWorkspaceClientComposition() {
     handlers: {
       createRowAtPosition: treeData.createRowAtPosition,
       deleteRow: treeData.deleteRow,
+      toggleRowCollapse,
       renderSwitcher,
     },
     workspaceRatingFieldConfigs,

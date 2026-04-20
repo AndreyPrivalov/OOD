@@ -31,7 +31,10 @@ export function jsonError(error: unknown) {
     })
   }
 
-  const message = error instanceof Error ? error.message : "Unexpected error"
+  const message =
+    error instanceof Error && error.message.trim().length > 0
+      ? error.message
+      : "Unexpected error"
   return jsonErrorCode("INTERNAL_ERROR", 500, { message })
 }
 

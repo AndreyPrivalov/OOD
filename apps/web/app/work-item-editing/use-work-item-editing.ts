@@ -1,10 +1,11 @@
 "use client"
 
+import { type RatingFieldKey, ratingFieldKeys } from "@ood/domain"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { buildEditState, isSameEditState } from "./edit-state"
 import {
   buildRowPatchFromServer,
-  isServerPatchEchoingPayload,
+  shouldApplyConfirmedTreePatch,
 } from "./reconciliation"
 import { buildPatchPayload } from "./save-payload"
 import { LocalFirstRowQueue, type RevisionedValue } from "./save-queue"
@@ -19,6 +20,11 @@ import type {
 
 type UseWorkItemEditingOptions<Row extends EditableWorkItemRow> = {
   isDev: boolean
+  onPersistedChange?: (
+    change:
+      | { kind: "patch"; before: Row; after: Row }
+      | { kind: "create"; before: Row; after: Row },
+  ) => void
   rows: Row[]
   rowsById: Map<string, Row>
   patchRow: (rowId: string, patch: EditableWorkItemPatch) => void
@@ -30,11 +36,47 @@ type UseWorkItemEditingOptions<Row extends EditableWorkItemRow> = {
   scheduleTextColumnWidthRecalc: () => void
 }
 
+export function buildOptimisticRatingPatch<Row extends EditableWorkItemRow>(
+  row: Row | undefined,
+  patch: RowEditPatch,
+): EditableWorkItemPatch | null {
+  if (!row || row.children.length > 0) {
+    return null
+  }
+
+  const optimisticPatch: EditableWorkItemPatch = {}
+  for (const field of ratingFieldKeys as readonly RatingFieldKey[]) {
+    if (!(field in patch)) {
+      continue
+    }
+    const nextValue = toNullableRating(patch[field])
+    if (nextValue !== row[field]) {
+      optimisticPatch[field] = nextValue
+    }
+  }
+
+  return Object.keys(optimisticPatch).length > 0 ? optimisticPatch : null
+}
+
+function toNullableRating(value: string | undefined): number | null {
+  if (!value || value.trim().length === 0) {
+    return null
+  }
+
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) {
+    return null
+  }
+
+  return Math.max(0, Math.min(5, Math.trunc(parsed)))
+}
+
 export function useWorkItemEditing<Row extends EditableWorkItemRow>(
   options: UseWorkItemEditingOptions<Row>,
 ) {
   const {
     isDev,
+    onPersistedChange,
     rows,
     rowsById,
     patchRow,
@@ -196,12 +238,15 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
           meta.hasUnackedChanges = false
         }
 
+        const nextRowSnapshot = {
+          ...currentRow,
+          ...updated,
+          id: activeRowId,
+        } as Row
+
         if (!ackResult.stale && ackResult.shouldApply && updated) {
           const patch = buildRowPatchFromServer(updated)
-          if (
-            Object.keys(patch).length > 0 &&
-            !isServerPatchEchoingPayload(patch, payload)
-          ) {
+          if (shouldApplyConfirmedTreePatch(patch, payload)) {
             patchRow(activeRowId, patch)
           }
         }
@@ -211,11 +256,13 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
           activeRowId = nextRowId
         }
 
-        const nextRowSnapshot = {
-          ...currentRow,
-          ...updated,
-          id: activeRowId,
-        } as Row
+        if (!ackResult.stale && ackResult.shouldApply && onPersistedChange) {
+          onPersistedChange({
+            kind: activeRowId === id ? "patch" : "create",
+            before: currentRow,
+            after: nextRowSnapshot,
+          })
+        }
 
         if (ackResult.nextRequest) {
           void runRowSaveRequest(
@@ -232,6 +279,9 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
         markRowCleanIfSettled(activeRowId)
       } catch (error) {
         const nextRequest = queue.fail(request.revision)
+        if (!nextRequest) {
+          patchRow(activeRowId, buildRowPatchFromServer(currentRow))
+        }
         if (nextRequest) {
           void runRowSaveRequest(activeRowId, nextRequest, currentRow)
         }
@@ -244,6 +294,7 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
       isDev,
       markRowCleanIfSettled,
       patchRow,
+      onPersistedChange,
       reportError,
       recordPatchLatency,
       remapRowState,
@@ -312,6 +363,10 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
       const shouldPersist = updateOptions?.persist ?? false
       const shouldRecalcColumnWidths =
         updateOptions?.recalcColumnWidths ?? false
+      const optimisticRatingPatch = buildOptimisticRatingPatch(
+        rowsByIdRef.current.get(id),
+        patch,
+      )
       let nextEditToPersist: EditState | null = null
       setEdits((current) => {
         const fallbackRow = rowsByIdRef.current.get(id)
@@ -337,6 +392,9 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
       if (nextEditToPersist) {
         persistRowEdit(id, nextEditToPersist)
       }
+      if (optimisticRatingPatch) {
+        patchRow(id, optimisticRatingPatch)
+      }
       if (shouldRecalcColumnWidths) {
         scheduleTextColumnWidthRecalc()
       }
@@ -349,6 +407,7 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
     [
       getRowMeta,
       isDev,
+      patchRow,
       persistRowEdit,
       recordInputToPaint,
       scheduleTextColumnWidthRecalc,

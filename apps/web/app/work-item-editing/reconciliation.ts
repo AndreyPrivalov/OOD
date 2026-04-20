@@ -1,8 +1,15 @@
+import type { RatingFieldKey } from "@ood/domain"
 import {
   type WorkspaceRatingValues,
   buildRatingServerPatch,
 } from "../workspace-ratings"
 import type { EditableWorkItemPatch, EditableWorkItemRow } from "./types"
+
+const RATING_PATCH_KEYS = [
+  "overcomplication",
+  "importance",
+  "blocksMoney",
+] satisfies RatingFieldKey[]
 
 export function buildRowPatchFromServer(
   updated: Partial<EditableWorkItemRow>,
@@ -58,4 +65,19 @@ export function isServerPatchEchoingPayload(
   return entries.every(([key, value]) =>
     isSamePrimitiveOrList(value, payload[key]),
   )
+}
+
+export function shouldApplyConfirmedTreePatch(
+  patch: EditableWorkItemPatch,
+  payload: Record<string, unknown>,
+): boolean {
+  if (Object.keys(patch).length === 0) {
+    return false
+  }
+
+  if (!isServerPatchEchoingPayload(patch, payload)) {
+    return true
+  }
+
+  return RATING_PATCH_KEYS.some((key) => key in patch)
 }

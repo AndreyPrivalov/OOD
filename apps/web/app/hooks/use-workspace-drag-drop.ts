@@ -21,6 +21,8 @@ type PointerDragState = {
   pointerId: number
   startX: number
   startY: number
+  pointerX: number
+  pointerY: number
   isDragging: boolean
   intent: DropIntent | null
 }
@@ -89,6 +91,8 @@ export function useWorkspaceDragDrop(options: UseWorkspaceDragDropOptions) {
         pointerId: event.pointerId,
         startX: event.clientX,
         startY: event.clientY,
+        pointerX: event.clientX,
+        pointerY: event.clientY,
         isDragging: false,
         intent: null,
       })
@@ -119,6 +123,8 @@ export function useWorkspaceDragDrop(options: UseWorkspaceDragDropOptions) {
       })
       const nextState: PointerDragState = {
         ...current,
+        pointerX: event.clientX,
+        pointerY: event.clientY,
         isDragging: true,
         intent: nextIntent,
       }
@@ -166,6 +172,10 @@ export function useWorkspaceDragDrop(options: UseWorkspaceDragDropOptions) {
 
   const draggedRowId = dragState?.isDragging ? dragState.activeId : null
   const dropIntent = dragState?.isDragging ? dragState.intent : null
+  const dragPreviewPosition =
+    dragState?.isDragging === true
+      ? { x: dragState.pointerX, y: dragState.pointerY }
+      : null
   const isDragging = Boolean(dragState?.isDragging)
   const isDragPrimed = dragState !== null
   const interactionMode: InteractionMode = isDragging ? "dragging" : "idle"
@@ -174,6 +184,7 @@ export function useWorkspaceDragDrop(options: UseWorkspaceDragDropOptions) {
     dragState,
     draggedRowId,
     dropIntent,
+    dragPreviewPosition,
     isDragPrimed,
     interactionMode,
     handleHandlePointerDown,

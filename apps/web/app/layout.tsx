@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { Commissioner, EB_Garamond } from "next/font/google"
+import { Commissioner, Gentium_Book_Plus } from "next/font/google"
 import "./globals.css"
 
 const commissioner = Commissioner({
@@ -8,7 +8,8 @@ const commissioner = Commissioner({
   display: "swap",
 })
 
-const garamond = EB_Garamond({
+const gentiumBookPlus = Gentium_Book_Plus({
+  weight: "400",
   subsets: ["latin", "cyrillic"],
   variable: "--font-serif",
   display: "swap",
@@ -25,7 +26,10 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="ru" className={`${commissioner.variable} ${garamond.variable}`}>
+    <html
+      lang="ru"
+      className={`${commissioner.variable} ${gentiumBookPlus.variable}`}
+    >
       <head>
         <link
           rel="stylesheet"

@@ -1,3 +1,4 @@
+import { addRatingTotals, emptyRatingTotals } from "@ood/domain"
 import type { WorkItemErrorPayload } from "../work-item-client"
 
 export type WorkTreeNode = {
@@ -129,16 +130,67 @@ export function patchTreeRow(
   const nextNodes = nodes.map((node) => {
     if (node.id === rowId) {
       changed = true
-      return { ...node, ...patch }
+      return withDerivedRatingTotals({ ...node, ...patch })
     }
     const nextChildren = patchTreeRow(node.children, rowId, patch)
     if (nextChildren !== node.children) {
       changed = true
-      return { ...node, children: nextChildren }
+      return withDerivedRatingTotals({ ...node, children: nextChildren })
     }
     return node
   })
   return changed ? nextNodes : nodes
+}
+
+function withDerivedRatingTotals(node: WorkTreeNode): WorkTreeNode {
+  if (node.children.length === 0) {
+    return {
+      ...node,
+      ...leafRatingTotalsFromNode(node),
+    }
+  }
+
+  let aggregated = emptyRatingTotals()
+  for (const child of node.children) {
+    aggregated = addRatingTotals(aggregated, getNodeRatingTotals(child))
+  }
+
+  return {
+    ...node,
+    ...aggregated,
+  }
+}
+
+function getNodeRatingTotals(node: WorkTreeNode) {
+  if (node.children.length === 0) {
+    return leafRatingTotalsFromNode(node)
+  }
+
+  if (
+    typeof node.overcomplicationSum === "number" &&
+    typeof node.importanceSum === "number" &&
+    typeof node.blocksMoneySum === "number"
+  ) {
+    return {
+      overcomplicationSum: node.overcomplicationSum,
+      importanceSum: node.importanceSum,
+      blocksMoneySum: node.blocksMoneySum,
+    }
+  }
+
+  let aggregated = emptyRatingTotals()
+  for (const child of node.children) {
+    aggregated = addRatingTotals(aggregated, getNodeRatingTotals(child))
+  }
+  return aggregated
+}
+
+function leafRatingTotalsFromNode(node: WorkTreeNode) {
+  return {
+    overcomplicationSum: node.overcomplication ?? 0,
+    importanceSum: node.importance ?? 0,
+    blocksMoneySum: node.blocksMoney ?? 0,
+  }
 }
 
 function cloneTree(nodes: WorkTreeNode[]): WorkTreeNode[] {

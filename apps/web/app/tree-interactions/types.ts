@@ -1,6 +1,7 @@
 export type FlatRowLike = {
   id: string
   parentId: string | null
+  depth: number
   siblingOrder: number
 }
 
@@ -26,6 +27,7 @@ export type InteractionMode = "idle" | "dragging"
 export type InsertLane = {
   id: string
   parentId: string | null
+  depth: number
   targetIndex: number
   anchorRowId: string | null
   anchorPlacement: "before" | "after-last" | "empty"
@@ -36,6 +38,7 @@ export type OverlayIndicator = {
   kind: "add" | "drop"
   laneId: string
   y: number
+  contentStartXPx: number
   parentId: string | null
   targetIndex: number
   showPlus: boolean

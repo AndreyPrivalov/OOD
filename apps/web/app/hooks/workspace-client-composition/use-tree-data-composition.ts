@@ -1,11 +1,10 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useRef } from "react"
 import {
-  type FlatRow,
-  buildTreeNumbering,
-  flattenTree,
-} from "../../state/workspace-tree-state"
+  type TreeSelectorCache,
+  deriveTreeSelectors,
+} from "../../state/tree-selectors"
 import { useWorkspaceTreeData } from "../use-workspace-tree-data"
 
 type UseWorkspaceTreeDataCompositionOptions = {
@@ -20,39 +19,19 @@ export function useWorkspaceTreeDataComposition(
   options: UseWorkspaceTreeDataCompositionOptions,
 ) {
   const treeData = useWorkspaceTreeData(options)
+  const selectorCacheRef = useRef<TreeSelectorCache | null>(null)
 
-  const rows = useMemo(() => flattenTree(treeData.tree), [treeData.tree])
-  const numberingById = useMemo(
-    () => buildTreeNumbering(treeData.tree),
-    [treeData.tree],
-  )
-
-  const siblingsByParent = useMemo(() => {
-    const map = new Map<string | null, FlatRow[]>()
-    for (const row of rows) {
-      const bucket = map.get(row.parentId) ?? []
-      bucket.push(row)
-      map.set(row.parentId, bucket)
-    }
-    for (const bucket of map.values()) {
-      bucket.sort((a, b) => a.siblingOrder - b.siblingOrder)
-    }
-    return map
-  }, [rows])
-
-  const rowsById = useMemo(() => {
-    const map = new Map<string, FlatRow>()
-    for (const row of rows) {
-      map.set(row.id, row)
-    }
-    return map
-  }, [rows])
+  const selectors = useMemo(() => {
+    const cache = deriveTreeSelectors(treeData.tree, selectorCacheRef.current)
+    selectorCacheRef.current = cache
+    return cache.snapshot
+  }, [treeData.tree])
 
   return {
     ...treeData,
-    rows,
-    numberingById,
-    siblingsByParent,
-    rowsById,
+    rows: selectors.rows,
+    numberingById: selectors.numberingById,
+    siblingsByParent: selectors.siblingsByParent,
+    rowsById: selectors.rowsById,
   }
 }

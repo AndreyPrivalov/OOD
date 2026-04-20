@@ -24,6 +24,10 @@ export type SerializedWorkTreeNode = SerializedWorkItem & {
   children: SerializedWorkTreeNode[]
 }
 
+export type SerializedRestoreWorkTreeNode = SerializedWorkItem & {
+  children: SerializedRestoreWorkTreeNode[]
+}
+
 type WorkItemContractInput = Pick<
   WorkItem,
   | "id"
@@ -101,4 +105,13 @@ export function serializeWorkTree(
   tree: ReadonlyArray<WorkTreeContractInput>,
 ): SerializedWorkTreeNode[] {
   return tree.map(serializeWorkTreeNode)
+}
+
+export function serializeRestoreWorkTreeNode(
+  item: WorkTreeContractInput,
+): SerializedRestoreWorkTreeNode {
+  return {
+    ...serializeWorkItem(item),
+    children: item.children.map(serializeRestoreWorkTreeNode),
+  }
 }

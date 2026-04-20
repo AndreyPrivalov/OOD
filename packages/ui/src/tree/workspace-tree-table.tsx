@@ -1,10 +1,11 @@
 import {
   type CSSProperties,
-  type FormEvent,
   type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
   memo,
+  useEffect,
+  useState,
 } from "react"
 
 type TreeRowLike = {
@@ -16,9 +17,9 @@ type TreeRowLike = {
   overcomplication: number | null
   importance: number | null
   blocksMoney: number | null
-  overcomplicationTotal?: number
-  importanceTotal?: number
-  blocksMoneyTotal?: number
+  overcomplicationSum?: number
+  importanceSum?: number
+  blocksMoneySum?: number
 }
 
 type FieldControl = {
@@ -28,8 +29,9 @@ type FieldControl = {
 }
 
 type TitleFieldControl = FieldControl & {
-  registerInputRef: (node: HTMLInputElement | null) => void
-  onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void
+  registerTextareaRef: (node: HTMLTextAreaElement | null) => void
+  onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void
+  onInput?: (target: HTMLTextAreaElement) => void
 }
 
 type TextareaFieldControl = FieldControl & {
@@ -73,6 +75,7 @@ type OverlayIndicatorLike = {
   kind: "add" | "drop"
   laneId: string
   y: number
+  contentStartXPx: number
   parentId: string | null
   targetIndex: number
   showPlus: boolean
@@ -87,6 +90,17 @@ type TableColumnWidthsLike = {
   currentProblems: string
   solutionVariants: string
   removable: string
+}
+
+type DragPreviewLike = {
+  x: number
+  y: number
+  title: string
+}
+
+type OverlayNestTargetLike = {
+  top: number
+  height: number
 }
 
 type RatingHeader = {
@@ -109,6 +123,144 @@ type MemoRowProps = {
   ) => void
   children: ReactNode
 }
+
+type EditableInputFieldProps = {
+  className: string
+  dataRowField: string
+  placeholder: string
+  ariaLabel: string
+  control: FieldControl
+}
+
+const EditableInputField = memo(function EditableInputField(
+  props: EditableInputFieldProps,
+) {
+  const [draftValue, setDraftValue] = useState(props.control.value)
+  const [isFocused, setIsFocused] = useState(false)
+
+  useEffect(() => {
+    if (!isFocused) {
+      setDraftValue(props.control.value)
+    }
+  }, [props.control.value, isFocused])
+
+  return (
+    <input
+      className={props.className}
+      data-row-field={props.dataRowField}
+      value={draftValue}
+      placeholder={props.placeholder}
+      aria-label={props.ariaLabel}
+      onFocus={() => {
+        setIsFocused(true)
+        props.control.onFocus()
+      }}
+      onChange={(event) => {
+        setDraftValue(event.currentTarget.value)
+      }}
+      onBlur={() => {
+        setIsFocused(false)
+        props.control.onBlur(draftValue)
+      }}
+    />
+  )
+})
+
+type EditableTextareaFieldProps = {
+  className: string
+  dataRowField: string
+  placeholder: string
+  ariaLabel: string
+  control: TextareaFieldControl
+}
+
+const EditableTextareaField = memo(function EditableTextareaField(
+  props: EditableTextareaFieldProps,
+) {
+  const [draftValue, setDraftValue] = useState(props.control.value)
+  const [isFocused, setIsFocused] = useState(false)
+
+  useEffect(() => {
+    if (!isFocused) {
+      setDraftValue(props.control.value)
+    }
+  }, [props.control.value, isFocused])
+
+  return (
+    <textarea
+      className={props.className}
+      data-row-field={props.dataRowField}
+      ref={props.control.registerTextareaRef}
+      rows={1}
+      value={draftValue}
+      placeholder={props.placeholder}
+      aria-label={props.ariaLabel}
+      onFocus={() => {
+        setIsFocused(true)
+        props.control.onFocus()
+      }}
+      onBlur={() => {
+        setIsFocused(false)
+        props.control.onBlur(draftValue)
+      }}
+      onKeyDown={props.control.onKeyDown}
+      onChange={(event) => {
+        setDraftValue(event.currentTarget.value)
+        props.control.onInput?.(event.currentTarget)
+      }}
+    />
+  )
+})
+
+type EditableTitleFieldProps = {
+  control: TitleFieldControl
+  rowDepth: number
+  rowTreeIndentPx: number
+  workContentIndentPx: number
+}
+
+const EditableTitleField = memo(function EditableTitleField(
+  props: EditableTitleFieldProps,
+) {
+  const [draftValue, setDraftValue] = useState(props.control.value)
+  const [isFocused, setIsFocused] = useState(false)
+
+  useEffect(() => {
+    if (!isFocused) {
+      setDraftValue(props.control.value)
+    }
+  }, [props.control.value, isFocused])
+
+  return (
+    <textarea
+      className="input-title textarea-list"
+      data-row-field="title"
+      ref={props.control.registerTextareaRef}
+      style={{
+        paddingInlineStart: `${
+          props.rowDepth * props.rowTreeIndentPx + props.workContentIndentPx
+        }px`,
+      }}
+      rows={1}
+      value={draftValue}
+      placeholder="Название"
+      aria-label="Название"
+      onFocus={() => {
+        setIsFocused(true)
+        props.control.onFocus()
+      }}
+      onKeyDown={props.control.onKeyDown}
+      onChange={(event) => {
+        setDraftValue(event.currentTarget.value)
+        props.control.onInput?.(event.currentTarget)
+      }}
+      onBlur={() => {
+        setIsFocused(false)
+        props.control.onBlur(draftValue)
+      }}
+    />
+  )
+})
 
 const MemoWorkRow = memo(
   function MemoWorkRow(props: MemoRowProps) {
@@ -135,8 +287,24 @@ const MemoWorkRow = memo(
     prev.editRenderSignature === next.editRenderSignature,
 )
 
+export function buildRowRenderSignature(row: TreeRowLike): string {
+  return [
+    row.id,
+    row.parentId ?? "root",
+    String(row.siblingOrder),
+    String(row.depth),
+    String(row.overcomplication ?? ""),
+    String(row.importance ?? ""),
+    String(row.blocksMoney ?? ""),
+    String(row.overcomplicationSum ?? ""),
+    String(row.importanceSum ?? ""),
+    String(row.blocksMoneySum ?? ""),
+  ].join(":")
+}
+
 export type WorkspaceTreeTableProps = {
   rows: TreeRowLike[]
+  collapsedRowIds: ReadonlySet<string>
   rowUiById: Record<string, WorkspaceTreeRowUiModel>
   numberingById: Map<string, string>
   draggedRowId: string | null
@@ -153,6 +321,8 @@ export type WorkspaceTreeTableProps = {
   overlayHeight: number
   overlayAddIndicators: OverlayIndicatorLike[]
   overlayDropY: number | null
+  overlayNestTarget: OverlayNestTargetLike | null
+  dragPreview: DragPreviewLike | null
   listScrollRef: React.RefObject<HTMLDivElement>
   tableWrapRef: React.RefObject<HTMLDivElement>
   tableRef: React.RefObject<HTMLTableElement>
@@ -169,9 +339,16 @@ export type WorkspaceTreeTableProps = {
   onHandlePointerCancel: (event: PointerEvent<HTMLButtonElement>) => void
   onCreateAtPosition: (parentId: string | null, targetIndex: number) => void
   onDeleteRow: (rowId: string) => void
+  onToggleRowCollapse: (rowId: string) => void
 }
 
 export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
+  const ratingColumnWidthByKey: Record<string, string> = {
+    overcomplication: props.tableColumnWidths.overcomplication,
+    importance: props.tableColumnWidths.importance,
+    blocksMoney: props.tableColumnWidths.blocksMoney,
+  }
+
   return (
     <div className="list" ref={props.listScrollRef}>
       <div className="work-table-wrap" ref={props.tableWrapRef}>
@@ -210,6 +387,21 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
             .filter(Boolean)
             .join(" ")}
         >
+          <colgroup>
+            <col style={{ width: props.tableColumnWidths.work }} />
+            <col style={{ width: props.tableColumnWidths.object }} />
+            {props.ratingHeaders.map((field) => (
+              <col
+                key={field.key}
+                style={{
+                  width: ratingColumnWidthByKey[field.key] ?? "15ch",
+                }}
+              />
+            ))}
+            <col style={{ width: props.tableColumnWidths.currentProblems }} />
+            <col style={{ width: props.tableColumnWidths.solutionVariants }} />
+            <col style={{ width: props.tableColumnWidths.removable }} />
+          </colgroup>
           <thead>
             <tr>
               <th className="work-col">Работа</th>
@@ -225,7 +417,6 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
               <th className="problems-col">Проблемы</th>
               <th className="solutions-col">Решения</th>
               <th className="removable-col">Возможно убрать</th>
-              <th className="actions-col" aria-label="Удаление" />
             </tr>
           </thead>
           <tbody>
@@ -235,10 +426,12 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                 return null
               }
               const hasMultilineField =
+                rowUi.title.value.includes("\n") ||
                 rowUi.currentProblems.value.includes("\n") ||
                 rowUi.solutionVariants.value.includes("\n")
               const rowClassName = [
                 props.draggedRowId === row.id ? "drag-source" : "",
+                props.collapsedRowIds.has(row.id) ? "is-collapsed" : "",
                 props.dropIntent?.type === "between" &&
                 props.dropIntent.rowId === row.id
                   ? `drop-between-target-${props.dropIntent.position}`
@@ -250,8 +443,10 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
               ]
                 .filter(Boolean)
                 .join(" ")
-              const rowRenderSignature = `${row.id}:${row.parentId ?? "root"}:${row.siblingOrder}:${row.depth}`
+              const rowRenderSignature = buildRowRenderSignature(row)
               const editRenderSignature = rowUi.renderSignature
+              const isCollapsible = row.children.length > 0
+              const isCollapsed = props.collapsedRowIds.has(row.id)
               return (
                 <MemoWorkRow
                   key={row.id}
@@ -286,77 +481,82 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                       >
                         <i className="ri-draggable" aria-hidden />
                       </button>
-                      <input
-                        className="input-title"
-                        key={`title:${row.id}:${rowUi.title.value}`}
-                        ref={rowUi.title.registerInputRef}
-                        style={{
-                          paddingInlineStart: `${
-                            row.depth * props.rowTreeIndentPx +
-                            props.workContentIndentPx
-                          }px`,
-                        }}
-                        defaultValue={rowUi.title.value}
-                        placeholder="Название"
-                        aria-label="Название"
-                        onFocus={rowUi.title.onFocus}
-                        onKeyDown={rowUi.title.onKeyDown}
-                        onBlur={(event) =>
-                          rowUi.title.onBlur(event.currentTarget.value)
-                        }
+                      <EditableTitleField
+                        control={rowUi.title}
+                        rowDepth={row.depth}
+                        rowTreeIndentPx={props.rowTreeIndentPx}
+                        workContentIndentPx={props.workContentIndentPx}
                       />
+                      <div className="work-col-actions">
+                        {isCollapsible ? (
+                          <button
+                            type="button"
+                            className={[
+                              "btn btn-secondary btn-icon collapse-handle",
+                              isCollapsed ? "is-collapsed" : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                            onClick={() => props.onToggleRowCollapse(row.id)}
+                            aria-label={
+                              isCollapsed
+                                ? "Показать вложенные работы"
+                                : "Скрыть вложенные работы"
+                            }
+                            title={
+                              isCollapsed
+                                ? "Показать вложенные работы"
+                                : "Скрыть вложенные работы"
+                            }
+                          >
+                            <i
+                              className={
+                                isCollapsed
+                                  ? "ri-arrow-right-s-line"
+                                  : "ri-arrow-down-s-line"
+                              }
+                              aria-hidden
+                            />
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-icon delete-handle"
+                          onClick={() => props.onDeleteRow(row.id)}
+                          aria-label="Удалить"
+                          title="Удалить"
+                        >
+                          <i className="ri-delete-bin-line" aria-hidden />
+                        </button>
+                      </div>
                     </div>
                   </td>
                   <td className="object-col">
-                    <input
+                    <EditableInputField
                       className="input-object"
-                      key={`object:${row.id}:${rowUi.object.value}`}
-                      defaultValue={rowUi.object.value}
+                      dataRowField="object"
+                      control={rowUi.object}
                       placeholder="Объект"
-                      aria-label="Объект"
-                      onFocus={rowUi.object.onFocus}
-                      onBlur={(event) =>
-                        rowUi.object.onBlur(event.currentTarget.value)
-                      }
+                      ariaLabel="Объект"
                     />
                   </td>
                   {rowUi.ratingCells}
                   <td className="problems-col">
-                    <textarea
+                    <EditableTextareaField
                       className="textarea-list"
-                      ref={rowUi.currentProblems.registerTextareaRef}
-                      key={`currentProblems:${row.id}:${rowUi.currentProblems.value}`}
-                      rows={1}
-                      defaultValue={rowUi.currentProblems.value}
+                      dataRowField="currentProblems"
+                      control={rowUi.currentProblems}
                       placeholder="Проблемы"
-                      aria-label="Проблемы по строкам"
-                      onFocus={rowUi.currentProblems.onFocus}
-                      onBlur={(event) =>
-                        rowUi.currentProblems.onBlur(event.currentTarget.value)
-                      }
-                      onKeyDown={rowUi.currentProblems.onKeyDown}
-                      onInput={(event: FormEvent<HTMLTextAreaElement>) =>
-                        rowUi.currentProblems.onInput?.(event.currentTarget)
-                      }
+                      ariaLabel="Проблемы по строкам"
                     />
                   </td>
                   <td className="solutions-col">
-                    <textarea
+                    <EditableTextareaField
                       className="textarea-list"
-                      ref={rowUi.solutionVariants.registerTextareaRef}
-                      key={`solutionVariants:${row.id}:${rowUi.solutionVariants.value}`}
-                      rows={1}
-                      defaultValue={rowUi.solutionVariants.value}
+                      dataRowField="solutionVariants"
+                      control={rowUi.solutionVariants}
                       placeholder="Решения"
-                      aria-label="Решения по строкам"
-                      onFocus={rowUi.solutionVariants.onFocus}
-                      onBlur={(event) =>
-                        rowUi.solutionVariants.onBlur(event.currentTarget.value)
-                      }
-                      onKeyDown={rowUi.solutionVariants.onKeyDown}
-                      onInput={(event: FormEvent<HTMLTextAreaElement>) =>
-                        rowUi.solutionVariants.onInput?.(event.currentTarget)
-                      }
+                      ariaLabel="Решения по строкам"
                     />
                   </td>
                   <td className="removable-col">
@@ -372,19 +572,6 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                         onBlur={rowUi.possiblyRemovable.onBlur}
                       />
                     </label>
-                  </td>
-                  <td>
-                    <div className="cell-actions">
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-icon delete-handle"
-                        onClick={() => props.onDeleteRow(row.id)}
-                        aria-label="Удалить"
-                        title="Удалить"
-                      >
-                        <i className="ri-delete-bin-line" aria-hidden />
-                      </button>
-                    </div>
                   </td>
                 </MemoWorkRow>
               )
@@ -405,7 +592,12 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
             <div
               key={indicator.laneId}
               className="overlay-add-lane"
-              style={{ top: `${indicator.y}px` }}
+              style={
+                {
+                  top: `${indicator.y}px`,
+                  "--lane-content-start-x": `${indicator.contentStartXPx}px`,
+                } as CSSProperties
+              }
             >
               <div className="overlay-add-hotspot" aria-hidden>
                 <button
@@ -413,6 +605,9 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                   className="overlay-add-plus"
                   aria-label="Добавить работу между строками"
                   title="Добавить работу"
+                  onPointerDown={(event) => {
+                    event.preventDefault()
+                  }}
                   onClick={() =>
                     props.onCreateAtPosition(
                       indicator.parentId,
@@ -435,7 +630,31 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
               }}
             />
           ) : null}
+          {props.overlayNestTarget ? (
+            <div
+              className="overlay-drop-nest"
+              aria-hidden
+              style={{
+                top: `${Math.round(props.overlayNestTarget.top)}px`,
+                height: `${Math.round(props.overlayNestTarget.height)}px`,
+              }}
+            />
+          ) : null}
         </div>
+        {props.dragPreview ? (
+          <div
+            className="drag-preview"
+            aria-hidden
+            style={{
+              left: `${Math.round(props.dragPreview.x)}px`,
+              top: `${Math.round(props.dragPreview.y)}px`,
+            }}
+          >
+            <span className="drag-preview-title">
+              {props.dragPreview.title.trim() || "Без названия"}
+            </span>
+          </div>
+        ) : null}
       </div>
     </div>
   )
