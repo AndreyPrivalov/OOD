@@ -17,9 +17,33 @@ type TreeRowLike = {
   overcomplication: number | null
   importance: number | null
   blocksMoney: number | null
+  overcomplicationSum?: number
+  importanceSum?: number
+  blocksMoneySum?: number
   overcomplicationTotal?: number
   importanceTotal?: number
   blocksMoneyTotal?: number
+}
+
+export function buildRowRenderSignature(row: TreeRowLike): string {
+  const overcomplicationSum =
+    row.overcomplicationSum ?? row.overcomplicationTotal
+  const importanceSum = row.importanceSum ?? row.importanceTotal
+  const blocksMoneySum = row.blocksMoneySum ?? row.blocksMoneyTotal
+
+  return [
+    row.id,
+    row.parentId ?? "root",
+    row.siblingOrder,
+    row.depth,
+    row.children.length,
+    row.overcomplication ?? "null",
+    row.importance ?? "null",
+    row.blocksMoney ?? "null",
+    overcomplicationSum ?? "null",
+    importanceSum ?? "null",
+    blocksMoneySum ?? "null",
+  ].join(":")
 }
 
 type FieldControl = {
@@ -428,7 +452,7 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
               ]
                 .filter(Boolean)
                 .join(" ")
-              const rowRenderSignature = `${row.id}:${row.parentId ?? "root"}:${row.siblingOrder}:${row.depth}`
+              const rowRenderSignature = buildRowRenderSignature(row)
               const editRenderSignature = rowUi.renderSignature
               const isCollapsible = row.children.length > 0
               const isCollapsed = props.collapsedRowIds.has(row.id)
@@ -494,14 +518,7 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                                 : "Скрыть вложенные работы"
                             }
                           >
-                            <i
-                              className={
-                                isCollapsed
-                                  ? "ri-arrow-right-s-line"
-                                  : "ri-arrow-down-s-line"
-                              }
-                              aria-hidden
-                            />
+                            <i className="ri-arrow-down-s-line" aria-hidden />
                           </button>
                         ) : null}
                         <button

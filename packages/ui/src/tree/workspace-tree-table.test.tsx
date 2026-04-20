@@ -1,7 +1,10 @@
 import type { ReactNode } from "react"
 import { isValidElement } from "react"
 import { describe, expect, it } from "vitest"
-import { WorkspaceTreeTable } from "./workspace-tree-table"
+import {
+  WorkspaceTreeTable,
+  buildRowRenderSignature,
+} from "./workspace-tree-table"
 
 function collectText(node: ReactNode): string[] {
   if (typeof node === "string" || typeof node === "number") {
@@ -17,6 +20,30 @@ function collectText(node: ReactNode): string[] {
 }
 
 describe("WorkspaceTreeTable", () => {
+  it("includes aggregate score sums in row render signature", () => {
+    const base = {
+      id: "row-1",
+      parentId: null,
+      depth: 0,
+      siblingOrder: 0,
+      children: [{ id: "child" }],
+      overcomplication: null,
+      importance: null,
+      blocksMoney: null,
+      overcomplicationSum: 3,
+      importanceSum: 2,
+      blocksMoneySum: 1,
+    }
+
+    const before = buildRowRenderSignature(base)
+    const after = buildRowRenderSignature({
+      ...base,
+      importanceSum: 5,
+    })
+
+    expect(after).not.toBe(before)
+  })
+
   it("renders table headers, rows, and overlay controls", () => {
     const rendered = WorkspaceTreeTable({
       rows: [
