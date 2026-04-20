@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { buildEditState, isSameEditState } from "./edit-state"
 import type { EditableWorkItemRow } from "./types"
+import { buildOptimisticRatingPatch } from "./use-work-item-editing"
 
 function createRow(
   overrides: Partial<EditableWorkItemRow> = {},
@@ -49,5 +50,47 @@ describe("isSameEditState", () => {
     const left = buildEditState(createRow())
     const right = { ...left, importance: "5" }
     expect(isSameEditState(left, right)).toBe(false)
+  })
+})
+
+describe("buildOptimisticRatingPatch", () => {
+  it("builds immediate leaf rating patch for changed scores", () => {
+    const patch = buildOptimisticRatingPatch(
+      {
+        id: "leaf",
+        title: "Leaf",
+        object: null,
+        possiblyRemovable: false,
+        overcomplication: 2,
+        importance: 3,
+        blocksMoney: null,
+        currentProblems: [],
+        solutionVariants: [],
+        children: [],
+      },
+      { overcomplication: "5" },
+    )
+
+    expect(patch).toEqual({ overcomplication: 5 })
+  })
+
+  it("skips optimistic patching for parent rows", () => {
+    const patch = buildOptimisticRatingPatch(
+      {
+        id: "parent",
+        title: "Parent",
+        object: null,
+        possiblyRemovable: false,
+        overcomplication: null,
+        importance: null,
+        blocksMoney: null,
+        currentProblems: [],
+        solutionVariants: [],
+        children: [{ id: "child" }],
+      },
+      { overcomplication: "5" },
+    )
+
+    expect(patch).toBeNull()
   })
 })
