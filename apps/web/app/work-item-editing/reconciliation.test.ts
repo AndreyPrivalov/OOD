@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   buildRowPatchFromServer,
   isServerPatchEchoingPayload,
+  shouldApplyConfirmedTreePatch,
 } from "./reconciliation"
 
 describe("buildRowPatchFromServer", () => {
@@ -51,5 +52,23 @@ describe("isServerPatchEchoingPayload", () => {
         { solutionVariants: ["a"] },
       ),
     ).toBe(false)
+  })
+})
+
+describe("shouldApplyConfirmedTreePatch", () => {
+  it("keeps applying confirmed rating patches even when server echoes payload", () => {
+    const patch = buildRowPatchFromServer({ overcomplication: 4 })
+
+    expect(shouldApplyConfirmedTreePatch(patch, { overcomplication: 4 })).toBe(
+      true,
+    )
+  })
+
+  it("skips echo patches for non-rating fields", () => {
+    const patch = buildRowPatchFromServer({ title: "Updated" })
+
+    expect(shouldApplyConfirmedTreePatch(patch, { title: "Updated" })).toBe(
+      false,
+    )
   })
 })

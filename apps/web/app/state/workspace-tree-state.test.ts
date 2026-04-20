@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { normalizeTreeData } from "./workspace-tree-state"
+import { normalizeTreeData, patchTreeRow } from "./workspace-tree-state"
 
 describe("normalizeTreeData", () => {
   it("accepts only canonical nested tree payload", () => {
@@ -79,5 +79,59 @@ describe("normalizeTreeData", () => {
     ]
 
     expect(normalizeTreeData(legacyPayload)).toEqual([])
+  })
+})
+
+describe("patchTreeRow", () => {
+  it("recomputes aggregate rating sums for ancestors after a leaf rating patch", () => {
+    const tree = [
+      {
+        id: "root",
+        workspaceId: "ws",
+        title: "Root",
+        object: null,
+        possiblyRemovable: false,
+        parentId: null,
+        siblingOrder: 0,
+        overcomplication: null,
+        importance: null,
+        blocksMoney: null,
+        overcomplicationSum: 2,
+        importanceSum: 3,
+        blocksMoneySum: 1,
+        currentProblems: [],
+        solutionVariants: [],
+        children: [
+          {
+            id: "leaf",
+            workspaceId: "ws",
+            title: "Leaf",
+            object: null,
+            possiblyRemovable: true,
+            parentId: "root",
+            siblingOrder: 0,
+            overcomplication: 2,
+            importance: 3,
+            blocksMoney: 1,
+            overcomplicationSum: 2,
+            importanceSum: 3,
+            blocksMoneySum: 1,
+            currentProblems: [],
+            solutionVariants: [],
+            children: [],
+          },
+        ],
+      },
+    ]
+
+    const patchedTree = patchTreeRow(tree, "leaf", {
+      overcomplication: 5,
+    })
+
+    expect(patchedTree[0]?.children[0]?.overcomplication).toBe(5)
+    expect(patchedTree[0]?.children[0]?.overcomplicationSum).toBe(5)
+    expect(patchedTree[0]?.overcomplicationSum).toBe(5)
+    expect(patchedTree[0]?.importanceSum).toBe(3)
+    expect(patchedTree[0]?.blocksMoneySum).toBe(1)
   })
 })

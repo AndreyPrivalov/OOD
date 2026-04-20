@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { buildEditState, isSameEditState } from "./edit-state"
 import {
   buildRowPatchFromServer,
-  isServerPatchEchoingPayload,
+  shouldApplyConfirmedTreePatch,
 } from "./reconciliation"
 import { buildPatchPayload } from "./save-payload"
 import { LocalFirstRowQueue, type RevisionedValue } from "./save-queue"
@@ -19,6 +19,11 @@ import type {
 
 type UseWorkItemEditingOptions<Row extends EditableWorkItemRow> = {
   isDev: boolean
+  onPersistedChange?: (
+    change:
+      | { kind: "patch"; before: Row; after: Row }
+      | { kind: "create"; before: Row; after: Row },
+  ) => void
   rows: Row[]
   rowsById: Map<string, Row>
   patchRow: (rowId: string, patch: EditableWorkItemPatch) => void
@@ -35,6 +40,7 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
 ) {
   const {
     isDev,
+    onPersistedChange,
     rows,
     rowsById,
     patchRow,
@@ -196,12 +202,15 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
           meta.hasUnackedChanges = false
         }
 
+        const nextRowSnapshot = {
+          ...currentRow,
+          ...updated,
+          id: activeRowId,
+        } as Row
+
         if (!ackResult.stale && ackResult.shouldApply && updated) {
           const patch = buildRowPatchFromServer(updated)
-          if (
-            Object.keys(patch).length > 0 &&
-            !isServerPatchEchoingPayload(patch, payload)
-          ) {
+          if (shouldApplyConfirmedTreePatch(patch, payload)) {
             patchRow(activeRowId, patch)
           }
         }
@@ -211,11 +220,13 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
           activeRowId = nextRowId
         }
 
-        const nextRowSnapshot = {
-          ...currentRow,
-          ...updated,
-          id: activeRowId,
-        } as Row
+        if (!ackResult.stale && ackResult.shouldApply && onPersistedChange) {
+          onPersistedChange({
+            kind: activeRowId === id ? "patch" : "create",
+            before: currentRow,
+            after: nextRowSnapshot,
+          })
+        }
 
         if (ackResult.nextRequest) {
           void runRowSaveRequest(
@@ -244,6 +255,7 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
       isDev,
       markRowCleanIfSettled,
       patchRow,
+      onPersistedChange,
       reportError,
       recordPatchLatency,
       remapRowState,
