@@ -16,12 +16,10 @@ type TreeRowLike = {
   children: unknown[]
   overcomplication: number | null
   importance: number | null
-  blocksMoney: number | null
   metricValues?: Record<string, "none" | "indirect" | "direct">
   metricAggregates?: Record<string, "none" | "indirect" | "direct">
   overcomplicationSum?: number
   importanceSum?: number
-  blocksMoneySum?: number
 }
 
 type FieldControl = {
@@ -88,7 +86,6 @@ type TableColumnWidthsLike = {
   object: string
   overcomplication: string
   importance: string
-  blocksMoney: string
   currentProblems: string
   solutionVariants: string
   removable: string
@@ -306,12 +303,10 @@ export function buildRowRenderSignature(row: TreeRowLike): string {
     String(row.depth),
     String(row.overcomplication ?? ""),
     String(row.importance ?? ""),
-    String(row.blocksMoney ?? ""),
     metricValuesSignature,
     metricAggregatesSignature,
     String(row.overcomplicationSum ?? ""),
     String(row.importanceSum ?? ""),
-    String(row.blocksMoneySum ?? ""),
   ].join(":")
 }
 
@@ -359,7 +354,6 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
   const ratingColumnWidthByKey: Record<string, string> = {
     overcomplication: props.tableColumnWidths.overcomplication,
     importance: props.tableColumnWidths.importance,
-    blocksMoney: props.tableColumnWidths.blocksMoney,
   }
 
   return (
@@ -381,9 +375,8 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
               "--overcomplication-col-width":
                 props.tableColumnWidths.overcomplication,
               "--importance-col-width": props.tableColumnWidths.importance,
-              "--blocks-money-col-width": props.tableColumnWidths.blocksMoney,
               "--workspace-metric-col-width":
-                props.tableColumnWidths.blocksMoney,
+                props.tableColumnWidths.importance,
               "--problems-col-width": props.tableColumnWidths.currentProblems,
               "--solutions-col-width": props.tableColumnWidths.solutionVariants,
               "--removable-col-width": props.tableColumnWidths.removable,

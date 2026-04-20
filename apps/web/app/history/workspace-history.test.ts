@@ -31,7 +31,6 @@ function makeNode(
     siblingOrder,
     overcomplication: null,
     importance: null,
-    blocksMoney: null,
     currentProblems: [],
     solutionVariants: [],
     children,

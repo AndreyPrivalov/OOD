@@ -38,7 +38,6 @@ export const CreateWorkItemInputSchema = z.object({
   siblingOrder: z.number().int().nonnegative().optional(),
   overcomplication: RatingSchema.nullable().optional(),
   importance: RatingSchema.nullable().optional(),
-  blocksMoney: RatingSchema.nullable().optional(),
   currentProblems: z.array(z.string()).optional(),
   solutionVariants: z.array(z.string()).optional(),
 })
@@ -63,7 +62,6 @@ export const UpdateWorkItemInputSchema = z.object({
   possiblyRemovable: z.boolean().optional(),
   overcomplication: RatingSchema.nullable().optional(),
   importance: RatingSchema.nullable().optional(),
-  blocksMoney: RatingSchema.nullable().optional(),
   metricValues: WorkItemMetricValuesSchema.optional(),
   currentProblems: z.array(z.string()).optional(),
   solutionVariants: z.array(z.string()).optional(),
@@ -97,7 +95,6 @@ export const RestoreWorkItemSnapshotSchema: z.ZodType<RestoreWorkItemSnapshot> =
       siblingOrder: z.number().int().nonnegative(),
       overcomplication: RatingSchema.nullable().optional(),
       importance: RatingSchema.nullable().optional(),
-      blocksMoney: RatingSchema.nullable().optional(),
       currentProblems: z.array(z.string()),
       solutionVariants: z.array(z.string()),
       children: z.array(RestoreWorkItemSnapshotSchema),

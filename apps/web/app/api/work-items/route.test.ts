@@ -50,10 +50,8 @@ describe("GET /api/work-items contract", () => {
         siblingOrder: 0,
         overcomplication: null,
         importance: null,
-        blocksMoney: null,
         overcomplicationSum: 0,
         importanceSum: 0,
-        blocksMoneySum: 0,
         currentProblems: [],
         solutionVariants: [],
         children: [
@@ -66,10 +64,8 @@ describe("GET /api/work-items contract", () => {
             siblingOrder: 0,
             overcomplication: 2,
             importance: 3,
-            blocksMoney: 1,
             overcomplicationSum: 0,
             importanceSum: 3,
-            blocksMoneySum: 0,
             currentProblems: [],
             solutionVariants: [],
             children: [],
@@ -92,13 +88,11 @@ describe("GET /api/work-items contract", () => {
     expect(payload.data[0]).toMatchObject({
       overcomplicationSum: 0,
       importanceSum: 0,
-      blocksMoneySum: 0,
       metricAggregates: { "metric-1": "direct" },
     })
     expect(payload.data[0].children[0]).toMatchObject({
       overcomplicationSum: 0,
       importanceSum: 3,
-      blocksMoneySum: 0,
       metricValues: { "metric-1": "direct" },
       metricAggregates: { "metric-1": "direct" },
     })
@@ -115,7 +109,6 @@ describe("GET /api/work-items contract", () => {
       siblingOrder: 0,
       overcomplication: null,
       importance: null,
-      blocksMoney: null,
       currentProblems: [],
       solutionVariants: [],
     })

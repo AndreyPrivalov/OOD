@@ -6,7 +6,6 @@ export type TreeRowModel = {
   hasChildren: boolean
   overcomplication?: number | null
   importance?: number | null
-  blocksMoney?: number | null
 }
 
 export type TreeColumnLabels = {
@@ -14,7 +13,6 @@ export type TreeColumnLabels = {
   object: string
   overcomplication: string
   importance: string
-  blocksMoney: string
 }
 
 export const defaultTreeColumnLabels: TreeColumnLabels = {
@@ -22,5 +20,4 @@ export const defaultTreeColumnLabels: TreeColumnLabels = {
   object: "Объект",
   overcomplication: "Переусл.",
   importance: "Важность",
-  blocksMoney: "Деньги",
 }

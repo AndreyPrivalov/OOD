@@ -11,14 +11,12 @@ export type WorkTreeNode = {
   siblingOrder: number
   overcomplication: number | null
   importance: number | null
-  blocksMoney: number | null
   metricValues?: Record<string, "none" | "indirect" | "direct">
   metricAggregates?: Record<string, "none" | "indirect" | "direct">
   currentProblems: string[]
   solutionVariants: string[]
   overcomplicationSum?: number
   importanceSum?: number
-  blocksMoneySum?: number
   children: WorkTreeNode[]
 }
 
@@ -129,7 +127,6 @@ function isWorkTreeNode(input: unknown): input is WorkTreeNode {
     (typeof node.overcomplication === "number" ||
       node.overcomplication === null) &&
     (typeof node.importance === "number" || node.importance === null) &&
-    (typeof node.blocksMoney === "number" || node.blocksMoney === null) &&
     (node.metricValues === undefined || isMetricValueMap(node.metricValues)) &&
     (node.metricAggregates === undefined ||
       isMetricValueMap(node.metricAggregates)) &&
@@ -139,8 +136,6 @@ function isWorkTreeNode(input: unknown): input is WorkTreeNode {
       node.overcomplicationSum === undefined) &&
     (typeof node.importanceSum === "number" ||
       node.importanceSum === undefined) &&
-    (typeof node.blocksMoneySum === "number" ||
-      node.blocksMoneySum === undefined) &&
     Array.isArray(node.children) &&
     node.children.every(isWorkTreeNode)
   )
@@ -264,13 +259,11 @@ function getNodeRatingTotals(node: WorkTreeNode) {
 
   if (
     typeof node.overcomplicationSum === "number" &&
-    typeof node.importanceSum === "number" &&
-    typeof node.blocksMoneySum === "number"
+    typeof node.importanceSum === "number"
   ) {
     return {
       overcomplicationSum: node.overcomplicationSum,
       importanceSum: node.importanceSum,
-      blocksMoneySum: node.blocksMoneySum,
     }
   }
 
@@ -285,7 +278,6 @@ function leafRatingTotalsFromNode(node: WorkTreeNode) {
   return {
     overcomplicationSum: node.overcomplication ?? 0,
     importanceSum: node.importance ?? 0,
-    blocksMoneySum: node.blocksMoney ?? 0,
   }
 }
 
@@ -355,7 +347,6 @@ function makeOptimisticNode(input: Partial<WorkTreeNode>): WorkTreeNode | null {
     siblingOrder: input.siblingOrder ?? 0,
     overcomplication: input.overcomplication ?? null,
     importance: input.importance ?? null,
-    blocksMoney: input.blocksMoney ?? null,
     metricValues:
       input.metricValues && typeof input.metricValues === "object"
         ? input.metricValues
@@ -372,7 +363,6 @@ function makeOptimisticNode(input: Partial<WorkTreeNode>): WorkTreeNode | null {
       : [],
     overcomplicationSum: input.overcomplicationSum,
     importanceSum: input.importanceSum,
-    blocksMoneySum: input.blocksMoneySum,
     children: [],
   }
 }

@@ -9,7 +9,6 @@ export type EditableWorkItemRow = {
   possiblyRemovable: boolean
   overcomplication: number | null
   importance: number | null
-  blocksMoney: number | null
   metricValues?: Record<string, WorkspaceMetricValue>
   metricAggregates?: Record<string, WorkspaceMetricValue>
   currentProblems: string[]
@@ -36,7 +35,6 @@ export type RowEditPatch = {
   possiblyRemovable?: boolean
   overcomplication?: string
   importance?: string
-  blocksMoney?: string
   metricValues?: Record<string, WorkspaceMetricValue>
   currentProblems?: string
   solutionVariants?: string

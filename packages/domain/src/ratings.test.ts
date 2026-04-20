@@ -12,14 +12,12 @@ describe("ratings", () => {
     const ownRatings = {
       overcomplication: 2,
       importance: null,
-      blocksMoney: 5,
     } as const
     const totals = ratingTotalsFromOwnRatings(ownRatings)
 
     expect(ratingFieldDefinitions).toEqual([
       { key: "overcomplication", aggregateKey: "overcomplicationSum" },
       { key: "importance", aggregateKey: "importanceSum" },
-      { key: "blocksMoney", aggregateKey: "blocksMoneySum" },
     ])
 
     for (const field of ratingFieldDefinitions) {
@@ -38,18 +36,15 @@ describe("ratings", () => {
         {
           overcomplicationSum: 2,
           importanceSum: 1,
-          blocksMoneySum: 0,
         },
         {
           overcomplicationSum: 1,
           importanceSum: 0,
-          blocksMoneySum: 4,
         },
       ),
     ).toEqual({
       overcomplicationSum: 3,
       importanceSum: 1,
-      blocksMoneySum: 4,
     })
   })
 })

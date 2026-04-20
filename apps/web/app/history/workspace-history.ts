@@ -399,14 +399,12 @@ function normalizeTree(nodes: WorkTreeNode[]): unknown {
     siblingOrder: node.siblingOrder,
     overcomplication: node.overcomplication,
     importance: node.importance,
-    blocksMoney: node.blocksMoney,
     metricValues: { ...(node.metricValues ?? {}) },
     metricAggregates: { ...(node.metricAggregates ?? {}) },
     currentProblems: [...node.currentProblems],
     solutionVariants: [...node.solutionVariants],
     overcomplicationSum: node.overcomplicationSum ?? null,
     importanceSum: node.importanceSum ?? null,
-    blocksMoneySum: node.blocksMoneySum ?? null,
     children: normalizeTree(node.children),
   }))
 }

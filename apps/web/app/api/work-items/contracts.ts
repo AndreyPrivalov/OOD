@@ -62,7 +62,6 @@ export type SerializedWorkItem = {
   siblingOrder: number
   overcomplication: number | null
   importance: number | null
-  blocksMoney: number | null
   metricValues: WorkItemMetricValues
   metricAggregates: WorkItemMetricValues
   currentProblems: string[]
@@ -74,7 +73,6 @@ export type SerializedWorkItem = {
 export type SerializedWorkTreeNode = SerializedWorkItem & {
   overcomplicationSum: number
   importanceSum: number
-  blocksMoneySum: number
   children: SerializedWorkTreeNode[]
 }
 
@@ -93,7 +91,6 @@ type WorkItemContractInput = Pick<
   | "siblingOrder"
   | "overcomplication"
   | "importance"
-  | "blocksMoney"
   | "currentProblems"
   | "solutionVariants"
   | "createdAt"
@@ -111,14 +108,12 @@ type WorkTreeContractInput = Pick<
   | "siblingOrder"
   | "overcomplication"
   | "importance"
-  | "blocksMoney"
   | "currentProblems"
   | "solutionVariants"
   | "createdAt"
   | "updatedAt"
   | "overcomplicationSum"
   | "importanceSum"
-  | "blocksMoneySum"
   | "children"
 >
 
@@ -139,7 +134,6 @@ export function serializeWorkItem(
     siblingOrder: item.siblingOrder,
     overcomplication: item.overcomplication,
     importance: item.importance,
-    blocksMoney: item.blocksMoney,
     metricValues: sanitizedMetricValues,
     metricAggregates: sanitizedMetricAggregates,
     currentProblems: item.currentProblems,
@@ -186,7 +180,6 @@ export function serializeWorkTreeNode(
     ...serializeWorkItem(item, ownValues, metricAggregates),
     overcomplicationSum: item.overcomplicationSum,
     importanceSum: item.importanceSum,
-    blocksMoneySum: item.blocksMoneySum,
     children: childNodes,
   }
 }

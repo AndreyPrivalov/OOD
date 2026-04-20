@@ -597,12 +597,6 @@ button:focus-visible {
   max-width: var(--importance-col-width, 15ch);
 }
 
-.work-table .blocks-money-col {
-  width: var(--blocks-money-col-width, 15ch);
-  min-width: var(--blocks-money-col-width, 15ch);
-  max-width: var(--blocks-money-col-width, 15ch);
-}
-
 .work-table .workspace-metric-col {
   width: var(--workspace-metric-col-width, 14ch);
   min-width: var(--workspace-metric-col-width, 14ch);

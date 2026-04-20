@@ -55,7 +55,6 @@ function toDomainWorkItem(row: WorkItemRow): WorkItem {
     overcomplication:
       (row.overcomplication as WorkItem["overcomplication"]) ?? null,
     importance: (row.importance as WorkItem["importance"]) ?? null,
-    blocksMoney: null,
     currentProblems: parseStringArray(row.currentProblems),
     solutionVariants: parseStringArray(row.solutionVariants),
     createdAt: row.createdAt,
@@ -70,11 +69,7 @@ function clampIndex(index: number, maxLength: number): number {
 }
 
 function hasRatingUpdate(patch: UpdateWorkItemInput): boolean {
-  return (
-    patch.overcomplication !== undefined ||
-    patch.importance !== undefined ||
-    patch.blocksMoney !== undefined
-  )
+  return patch.overcomplication !== undefined || patch.importance !== undefined
 }
 
 function siblingFilter(workspaceId: string, parentId: string | null) {

@@ -13,7 +13,6 @@ describe("validation", () => {
       possiblyRemovable: true,
       overcomplication: 5,
       importance: 0,
-      blocksMoney: 3,
     })
     expect(parsed.workspaceId).toBe("default-workspace")
     expect(parsed.possiblyRemovable).toBe(true)

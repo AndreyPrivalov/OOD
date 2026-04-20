@@ -8,7 +8,6 @@ import type { EditableWorkItemPatch, EditableWorkItemRow } from "./types"
 const RATING_PATCH_KEYS = [
   "overcomplication",
   "importance",
-  "blocksMoney",
 ] satisfies RatingFieldKey[]
 
 export function buildRowPatchFromServer(

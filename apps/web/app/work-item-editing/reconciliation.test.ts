@@ -13,7 +13,6 @@ describe("buildRowPatchFromServer", () => {
       object: null,
       possiblyRemovable: true,
       overcomplication: 4,
-      blocksMoney: null,
       currentProblems: ["a", 1, "b"] as unknown as string[],
       solutionVariants: ["x", false, "y"] as unknown as string[],
     })
@@ -24,7 +23,6 @@ describe("buildRowPatchFromServer", () => {
       object: null,
       possiblyRemovable: true,
       overcomplication: 4,
-      blocksMoney: null,
       currentProblems: ["a", "b"],
       solutionVariants: ["x", "y"],
     })

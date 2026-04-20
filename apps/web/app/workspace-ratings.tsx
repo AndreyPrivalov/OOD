@@ -11,7 +11,6 @@ export function buildRatingEditValues(
     overcomplication:
       row.overcomplication === null ? "" : String(row.overcomplication),
     importance: row.importance === null ? "" : String(row.importance),
-    blocksMoney: row.blocksMoney === null ? "" : String(row.blocksMoney),
   }
 }
 

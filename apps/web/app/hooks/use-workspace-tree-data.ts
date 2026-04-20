@@ -175,7 +175,6 @@ function toHistoryBranchSnapshot(
     | "siblingOrder"
     | "overcomplication"
     | "importance"
-    | "blocksMoney"
     | "metricValues"
     | "metricAggregates"
     | "currentProblems"
@@ -192,7 +191,6 @@ function toHistoryBranchSnapshot(
     siblingOrder: row.siblingOrder,
     overcomplication: row.overcomplication,
     importance: row.importance,
-    blocksMoney: row.blocksMoney,
     metricValues: { ...(row.metricValues ?? {}) },
     metricAggregates: { ...(row.metricAggregates ?? {}) },
     currentProblems: [...row.currentProblems],
@@ -212,7 +210,6 @@ function toTreePatch(row: HistoryRowSnapshot | WorkTreeNode) {
     siblingOrder: row.siblingOrder,
     overcomplication: row.overcomplication,
     importance: row.importance,
-    blocksMoney: row.blocksMoney,
     metricValues: { ...(row.metricValues ?? {}) },
     metricAggregates: { ...(row.metricAggregates ?? {}) },
     currentProblems: [...row.currentProblems],
@@ -245,7 +242,6 @@ function buildPatchPayloadFromSnapshot(
     possiblyRemovable: snapshot.possiblyRemovable,
     overcomplication: snapshot.overcomplication,
     importance: snapshot.importance,
-    blocksMoney: snapshot.blocksMoney,
     ...(Object.keys(metricPatch).length > 0
       ? { metricValues: metricPatch }
       : {}),
@@ -497,7 +493,6 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
             possiblyRemovable: false,
             overcomplication: null,
             importance: null,
-            blocksMoney: null,
             currentProblems: [],
             solutionVariants: [],
           },

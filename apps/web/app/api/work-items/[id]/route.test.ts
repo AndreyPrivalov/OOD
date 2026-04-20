@@ -66,7 +66,6 @@ describe("PATCH /api/work-items/[id] contract", () => {
       siblingOrder: 0,
       overcomplication: null,
       importance: null,
-      blocksMoney: null,
       currentProblems: [],
       solutionVariants: [],
     })
@@ -100,7 +99,6 @@ describe("PATCH /api/work-items/[id] contract", () => {
       siblingOrder: 0,
       overcomplication: null,
       importance: null,
-      blocksMoney: null,
       currentProblems: ["p1", "p2"],
       solutionVariants: ["s1"],
     })
@@ -168,7 +166,6 @@ describe("PATCH /api/work-items/[id] contract", () => {
       siblingOrder: 0,
       overcomplication: null,
       importance: null,
-      blocksMoney: null,
       currentProblems: [],
       solutionVariants: [],
     })

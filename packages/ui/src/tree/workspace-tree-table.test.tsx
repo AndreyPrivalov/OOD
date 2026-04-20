@@ -31,7 +31,6 @@ describe("WorkspaceTreeTable", () => {
           children: [],
           overcomplication: 2,
           importance: 4,
-          blocksMoney: 1,
         },
       ],
       collapsedRowIds: new Set<string>(),
@@ -87,7 +86,6 @@ describe("WorkspaceTreeTable", () => {
         object: "180px",
         overcomplication: "120px",
         importance: "120px",
-        blocksMoney: "160px",
         currentProblems: "220px",
         solutionVariants: "220px",
         removable: "140px",
@@ -165,10 +163,8 @@ describe("WorkspaceTreeTable", () => {
       children: [{ id: "leaf" }],
       overcomplication: null,
       importance: null,
-      blocksMoney: null,
       overcomplicationSum: 2,
       importanceSum: 1,
-      blocksMoneySum: 0,
     }
 
     const before = buildRowRenderSignature(base)

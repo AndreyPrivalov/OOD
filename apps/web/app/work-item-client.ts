@@ -21,7 +21,6 @@ export type RestoreWorkTreeNode = {
   siblingOrder: number
   overcomplication: number | null
   importance: number | null
-  blocksMoney: number | null
   currentProblems: string[]
   solutionVariants: string[]
   children: RestoreWorkTreeNode[]
@@ -79,7 +78,6 @@ type PatchWorkItemPayload = Partial<
     | "possiblyRemovable"
     | "overcomplication"
     | "importance"
-    | "blocksMoney"
     | "metricValues"
     | "currentProblems"
     | "solutionVariants"

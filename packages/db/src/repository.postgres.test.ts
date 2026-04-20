@@ -69,7 +69,6 @@ function row(partial: Record<string, unknown>) {
     siblingOrder: 0,
     overcomplication: null,
     importance: null,
-    blocksMoney: null,
     currentProblems: [],
     solutionVariants: [],
     createdAt: new Date(),
@@ -113,7 +112,6 @@ describe("PostgresWorkItemRepository", () => {
             siblingOrder: 0,
             overcomplication: 5,
             importance: 5,
-            blocksMoney: 5,
           }),
           row({
             id: "leaf",
@@ -121,7 +119,6 @@ describe("PostgresWorkItemRepository", () => {
             siblingOrder: 0,
             overcomplication: 2,
             importance: null,
-            blocksMoney: 1,
           }),
         ],
       ],
@@ -141,12 +138,10 @@ describe("PostgresWorkItemRepository", () => {
     expect(root).toMatchObject({
       overcomplicationSum: 2,
       importanceSum: 0,
-      blocksMoneySum: 0,
     })
     expect(leaf).toMatchObject({
       overcomplicationSum: 2,
       importanceSum: 0,
-      blocksMoneySum: 0,
     })
   })
 
@@ -202,7 +197,6 @@ describe("PostgresWorkItemRepository", () => {
         siblingOrder: 0,
         overcomplication: null,
         importance: null,
-        blocksMoney: null,
         currentProblems: [],
         solutionVariants: [],
         children: [
@@ -216,7 +210,6 @@ describe("PostgresWorkItemRepository", () => {
             siblingOrder: 0,
             overcomplication: null,
             importance: null,
-            blocksMoney: null,
             currentProblems: [],
             solutionVariants: [],
             children: [],

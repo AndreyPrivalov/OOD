@@ -29,7 +29,6 @@ export type TableColumnWidths = {
   object: string
   overcomplication: string
   importance: string
-  blocksMoney: string
   currentProblems: string
   solutionVariants: string
   removable: string
@@ -44,7 +43,6 @@ const STABLE_TABLE_COLUMN_WIDTHS: TableColumnWidths = {
   object: "260px",
   overcomplication: "15ch",
   importance: "15ch",
-  blocksMoney: "15ch",
   currentProblems: `${FIXED_MULTILINE_COLUMN_WIDTH_CH}ch`,
   solutionVariants: `${FIXED_MULTILINE_COLUMN_WIDTH_CH}ch`,
   removable: "15ch",
@@ -114,7 +112,6 @@ export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions) {
       object: `${clampColumnChars(maxObject, 16)}ch`,
       overcomplication: STABLE_TABLE_COLUMN_WIDTHS.overcomplication,
       importance: STABLE_TABLE_COLUMN_WIDTHS.importance,
-      blocksMoney: STABLE_TABLE_COLUMN_WIDTHS.blocksMoney,
       currentProblems: STABLE_TABLE_COLUMN_WIDTHS.currentProblems,
       solutionVariants: STABLE_TABLE_COLUMN_WIDTHS.solutionVariants,
       removable: STABLE_TABLE_COLUMN_WIDTHS.removable,
@@ -126,7 +123,6 @@ export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions) {
         current.object === next.object &&
         current.overcomplication === next.overcomplication &&
         current.importance === next.importance &&
-        current.blocksMoney === next.blocksMoney &&
         current.currentProblems === next.currentProblems &&
         current.solutionVariants === next.solutionVariants &&
         current.removable === next.removable

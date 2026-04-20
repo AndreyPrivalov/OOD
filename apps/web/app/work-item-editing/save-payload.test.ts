@@ -12,7 +12,6 @@ function createRow(
     possiblyRemovable: false,
     overcomplication: 2,
     importance: 3,
-    blocksMoney: 1,
     metricValues: {},
     metricAggregates: {},
     currentProblems: ["p1"],
@@ -29,7 +28,6 @@ function createEdit(overrides: Partial<EditState> = {}): EditState {
     possiblyRemovable: false,
     overcomplication: "2",
     importance: "3",
-    blocksMoney: "1",
     metricValues: {},
     currentProblems: "p1",
     solutionVariants: "s1",
@@ -71,7 +69,6 @@ describe("buildPatchPayload", () => {
       createEdit({
         overcomplication: "5",
         importance: "4",
-        blocksMoney: "",
         metricValues: { "m-1": "direct" },
       }),
     )

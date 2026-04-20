@@ -32,7 +32,6 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
       title: "root",
       overcomplication: 5,
       importance: 5,
-      blocksMoney: 5,
     })
     const parent = await repo.create({
       workspaceId,
@@ -40,7 +39,6 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
       title: "parent",
       overcomplication: 4,
       importance: 4,
-      blocksMoney: 4,
     })
     await repo.create({
       workspaceId,
@@ -48,7 +46,6 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
       title: "leaf-a",
       overcomplication: 2,
       importance: 3,
-      blocksMoney: 1,
     })
     const leafB = await repo.create({
       workspaceId,
@@ -56,7 +53,6 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
       title: "leaf-b",
       overcomplication: null,
       importance: 4,
-      blocksMoney: null,
     })
 
     const tree = await repo.listTree(workspaceId)
@@ -66,14 +62,11 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
 
     expect(parentNode?.overcomplicationSum).toBe(2)
     expect(parentNode?.importanceSum).toBe(7)
-    expect(parentNode?.blocksMoneySum).toBe(1)
     expect(rootNode?.overcomplicationSum).toBe(2)
     expect(rootNode?.importanceSum).toBe(7)
-    expect(rootNode?.blocksMoneySum).toBe(1)
 
     expect(leafBNode?.overcomplicationSum).toBe(0)
     expect(leafBNode?.importanceSum).toBe(4)
-    expect(leafBNode?.blocksMoneySum).toBe(0)
   })
 
   it("recalculates sums after moving a branch", async () => {
@@ -95,7 +88,6 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
       title: "leaf-a",
       overcomplication: 2,
       importance: 1,
-      blocksMoney: 3,
     })
     await repo.create({
       workspaceId,
@@ -103,7 +95,6 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
       title: "leaf-b",
       overcomplication: 1,
       importance: 2,
-      blocksMoney: 0,
     })
 
     await repo.move(leafA.id, { targetParentId: parentB.id, targetIndex: 0 })
@@ -114,15 +105,12 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
 
     expect(aNode?.overcomplicationSum).toBe(0)
     expect(aNode?.importanceSum).toBe(0)
-    expect(aNode?.blocksMoneySum).toBe(0)
 
     expect(bNode?.overcomplicationSum).toBe(3)
     expect(bNode?.importanceSum).toBe(3)
-    expect(bNode?.blocksMoneySum).toBe(3)
 
     expect(rootNode?.overcomplicationSum).toBe(3)
     expect(rootNode?.importanceSum).toBe(3)
-    expect(rootNode?.blocksMoneySum).toBe(3)
   })
 
   it("recalculates sums after deleting a branch", async () => {
@@ -144,7 +132,6 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
       title: "keep-leaf",
       overcomplication: 2,
       importance: 2,
-      blocksMoney: 2,
     })
     await repo.create({
       workspaceId,
@@ -152,7 +139,6 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
       title: "delete-leaf",
       overcomplication: 4,
       importance: 4,
-      blocksMoney: 4,
     })
 
     await repo.deleteCascade(deleteParent.id)
@@ -163,7 +149,6 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
     expect(removedNode).toBeUndefined()
     expect(rootNode?.overcomplicationSum).toBe(2)
     expect(rootNode?.importanceSum).toBe(2)
-    expect(rootNode?.blocksMoneySum).toBe(2)
   })
 
   it("rejects rating updates for parent nodes", async () => {

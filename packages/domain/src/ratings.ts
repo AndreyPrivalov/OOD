@@ -2,18 +2,13 @@ export const ratingValues = [0, 1, 2, 3, 4, 5] as const
 
 export type Rating = (typeof ratingValues)[number]
 
-export const ratingFieldKeys = [
-  "overcomplication",
-  "importance",
-  "blocksMoney",
-] as const
+export const ratingFieldKeys = ["overcomplication", "importance"] as const
 
 export type RatingFieldKey = (typeof ratingFieldKeys)[number]
 
 export const ratingAggregateKeyByField = {
   overcomplication: "overcomplicationSum",
   importance: "importanceSum",
-  blocksMoney: "blocksMoneySum",
 } as const satisfies Record<RatingFieldKey, string>
 
 export type RatingAggregateKey =
@@ -28,10 +23,6 @@ export const ratingFieldDefinitions = [
     key: "importance",
     aggregateKey: ratingAggregateKeyByField.importance,
   },
-  {
-    key: "blocksMoney",
-    aggregateKey: ratingAggregateKeyByField.blocksMoney,
-  },
 ] as const satisfies readonly {
   key: RatingFieldKey
   aggregateKey: RatingAggregateKey
@@ -40,20 +31,17 @@ export const ratingFieldDefinitions = [
 export interface WorkItemRatings {
   overcomplication: Rating | null
   importance: Rating | null
-  blocksMoney: Rating | null
 }
 
 export interface RatingTotals {
   overcomplicationSum: number
   importanceSum: number
-  blocksMoneySum: number
 }
 
 export function emptyRatingTotals(): RatingTotals {
   return {
     overcomplicationSum: 0,
     importanceSum: 0,
-    blocksMoneySum: 0,
   }
 }
 

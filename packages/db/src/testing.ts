@@ -56,11 +56,7 @@ function clampIndex(index: number, maxLength: number): number {
 }
 
 function hasRatingUpdate(patch: UpdateWorkItemInput): boolean {
-  return (
-    patch.overcomplication !== undefined ||
-    patch.importance !== undefined ||
-    patch.blocksMoney !== undefined
-  )
+  return patch.overcomplication !== undefined || patch.importance !== undefined
 }
 
 function getWorkspaceItems(workspaceId: WorkspaceId): WorkItem[] {
@@ -209,8 +205,6 @@ export class InMemoryWorkItemRepository implements WorkItemRepository {
         (validatedInput.overcomplication as WorkItem["overcomplication"]) ??
         null,
       importance: (validatedInput.importance as WorkItem["importance"]) ?? null,
-      blocksMoney:
-        (validatedInput.blocksMoney as WorkItem["blocksMoney"]) ?? null,
       currentProblems: validatedInput.currentProblems ?? [],
       solutionVariants: validatedInput.solutionVariants ?? [],
       createdAt: now,
@@ -249,9 +243,6 @@ export class InMemoryWorkItemRepository implements WorkItemRepository {
     }
     if (patch.importance !== undefined) {
       item.importance = patch.importance as WorkItem["importance"]
-    }
-    if (patch.blocksMoney !== undefined) {
-      item.blocksMoney = patch.blocksMoney as WorkItem["blocksMoney"]
     }
     if (patch.currentProblems !== undefined)
       item.currentProblems = patch.currentProblems
@@ -379,7 +370,6 @@ export class InMemoryWorkItemRepository implements WorkItemRepository {
         overcomplication:
           (node.overcomplication as WorkItem["overcomplication"]) ?? null,
         importance: (node.importance as WorkItem["importance"]) ?? null,
-        blocksMoney: (node.blocksMoney as WorkItem["blocksMoney"]) ?? null,
         currentProblems: [...node.currentProblems],
         solutionVariants: [...node.solutionVariants],
         createdAt: now,

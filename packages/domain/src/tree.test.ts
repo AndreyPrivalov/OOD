@@ -13,7 +13,6 @@ const baseItem = (partial: Partial<WorkItem>): WorkItem => ({
   siblingOrder: partial.siblingOrder ?? 0,
   overcomplication: partial.overcomplication ?? null,
   importance: partial.importance ?? null,
-  blocksMoney: partial.blocksMoney ?? null,
   currentProblems: partial.currentProblems ?? [],
   solutionVariants: partial.solutionVariants ?? [],
   createdAt: partial.createdAt ?? new Date("2024-01-01T00:00:00.000Z"),
@@ -66,28 +65,24 @@ describe("tree", () => {
         id: "root",
         overcomplication: 5,
         importance: 5,
-        blocksMoney: 5,
       }),
       baseItem({
         id: "parent",
         parentId: "root",
         overcomplication: 4,
         importance: 4,
-        blocksMoney: 4,
       }),
       baseItem({
         id: "leaf-a",
         parentId: "parent",
         overcomplication: 2,
         importance: 3,
-        blocksMoney: 1,
       }),
       baseItem({
         id: "leaf-b",
         parentId: "parent",
         overcomplication: null,
         importance: 4,
-        blocksMoney: null,
       }),
     ]
 
@@ -99,18 +94,14 @@ describe("tree", () => {
 
     expect(leafA?.overcomplicationSum).toBe(2)
     expect(leafA?.importanceSum).toBe(3)
-    expect(leafA?.blocksMoneySum).toBe(1)
 
     expect(leafB?.overcomplicationSum).toBe(0)
     expect(leafB?.importanceSum).toBe(4)
-    expect(leafB?.blocksMoneySum).toBe(0)
 
     expect(parent.overcomplicationSum).toBe(2)
     expect(parent.importanceSum).toBe(7)
-    expect(parent.blocksMoneySum).toBe(1)
 
     expect(root.overcomplicationSum).toBe(2)
     expect(root.importanceSum).toBe(7)
-    expect(root.blocksMoneySum).toBe(1)
   })
 })
