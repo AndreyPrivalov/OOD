@@ -316,6 +316,8 @@ button:focus-visible {
   left: 0;
   z-index: 20;
   width: min(574px, calc(100vw - 88px));
+  border: 0;
+  outline: none;
   background: var(--bg);
   border-radius: 8px;
   padding: var(--space-3);
@@ -329,6 +331,10 @@ button:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
+}
+
+.workspace-settings-row-head {
+  flex: 1;
 }
 
 .workspace-settings-title {
@@ -447,6 +453,12 @@ button:focus-visible {
 .workspace-settings-button:disabled {
   opacity: 0.56;
   cursor: default;
+}
+
+.workspace-settings-delete-trigger {
+  border: 0;
+  padding-left: 0;
+  padding-right: 0;
 }
 
 .workspace-settings-metric-list {
