@@ -523,6 +523,19 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
                       </div>
 
                       <div className="workspace-settings-form">
+                        <div
+                          className="workspace-settings-metric-head"
+                          aria-hidden
+                        >
+                          <span className="workspace-settings-metric-head-cell">
+                            Короткое имя
+                          </span>
+                          <span className="workspace-settings-metric-head-cell">
+                            Описание
+                          </span>
+                          <span className="workspace-settings-metric-head-cell" />
+                        </div>
+
                         {settingsData.metrics.length === 0 ? null : (
                           <ul className="workspace-settings-metric-list">
                             {settingsData.metrics.map((metric) => {
@@ -672,7 +685,7 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
                             onClick={() => setIsCreateMetricOpen(true)}
                             type="button"
                           >
-                            Добавить метрику
+                            +
                           </button>
                         )}
                         {createMetricErrorText ? (
