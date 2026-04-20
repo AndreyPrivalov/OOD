@@ -228,6 +228,7 @@ button:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  position: relative;
 }
 
 .workspace-inline-trigger,
@@ -307,6 +308,182 @@ button:focus-visible {
 
 .workspace-inline-item-create {
   margin-left: 2px;
+}
+
+.workspace-settings-popup {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 20;
+  width: min(820px, calc(100vw - 88px));
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  display: grid;
+  gap: var(--space-3);
+  box-shadow: 0 8px 20px rgba(19, 25, 32, 0.08);
+}
+
+.workspace-settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.workspace-settings-title {
+  margin: 0;
+  font-size: var(--text-secondary);
+  line-height: 1.2;
+  color: var(--fg);
+  font-family: var(--font-serif), Georgia, serif;
+}
+
+.workspace-settings-close {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.workspace-settings-close:hover,
+.workspace-settings-close:focus-visible {
+  color: var(--fg);
+  background: rgba(225, 221, 219, 0.72);
+}
+
+.workspace-settings-body {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.workspace-settings-form {
+  display: grid;
+  gap: var(--space-2);
+  border-top: 1px solid var(--line);
+  padding-top: var(--space-3);
+}
+
+.workspace-settings-label {
+  margin: 0;
+  color: var(--fg);
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: var(--text-secondary);
+  line-height: 1.2;
+}
+
+.workspace-settings-row,
+.workspace-settings-metric-create,
+.workspace-settings-metric-row,
+.workspace-settings-delete-actions {
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: minmax(160px, 1fr) minmax(180px, 1fr) auto auto;
+  align-items: center;
+}
+
+.workspace-settings-row {
+  grid-template-columns: minmax(220px, 1fr) auto;
+}
+
+.workspace-settings-metric-create {
+  grid-template-columns: minmax(160px, 1fr) minmax(180px, 1fr) auto;
+}
+
+.workspace-settings-delete-actions {
+  grid-template-columns: auto auto;
+  justify-content: flex-start;
+}
+
+.workspace-settings-input {
+  height: 32px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg);
+  padding: 0 8px;
+  font-size: var(--text-secondary);
+  line-height: 1.2;
+}
+
+.workspace-settings-button {
+  height: 32px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  font-size: var(--text-secondary);
+  line-height: 1.1;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.workspace-settings-button:hover,
+.workspace-settings-button:focus-visible {
+  background: rgba(225, 221, 219, 0.72);
+}
+
+.workspace-settings-button-danger {
+  color: var(--danger);
+}
+
+.workspace-settings-button:disabled {
+  opacity: 0.56;
+  cursor: default;
+}
+
+.workspace-settings-metric-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.workspace-settings-metric-item {
+  display: grid;
+  gap: 6px;
+}
+
+.workspace-settings-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.workspace-settings-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.workspace-settings-delete {
+  padding-bottom: 2px;
+}
+
+.workspace-settings-delete-confirm {
+  display: grid;
+  gap: var(--space-2);
+}
+
+@media (max-width: 1024px) {
+  .workspace-settings-popup {
+    width: min(640px, calc(100vw - 56px));
+  }
+
+  .workspace-settings-metric-row,
+  .workspace-settings-metric-create {
+    grid-template-columns: 1fr;
+  }
 }
 
 .work-table-wrap {

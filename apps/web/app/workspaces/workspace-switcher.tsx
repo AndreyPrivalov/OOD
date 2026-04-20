@@ -2,6 +2,13 @@
 
 import { type FormEvent, useEffect, useRef, useState } from "react"
 import type { WorkspaceSummary } from "./types"
+import {
+  type MetricDraft,
+  type WorkspaceSettingsView,
+  createMetricDrafts,
+  mapSettingsErrorMessage,
+  parseWorkspaceSettings,
+} from "./workspace-settings"
 
 type WorkspaceSwitcherProps = {
   currentWorkspaceId: string | null
@@ -21,7 +28,37 @@ const CREATE_DRAFT_ID = "__create-workspace__"
 export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draftName, setDraftName] = useState("")
+  const [settingsWorkspaceId, setSettingsWorkspaceId] = useState<string | null>(
+    null,
+  )
+  const [settingsData, setSettingsData] =
+    useState<WorkspaceSettingsView | null>(null)
+  const [isSettingsLoading, setIsSettingsLoading] = useState(false)
+  const [settingsErrorText, setSettingsErrorText] = useState("")
+  const [renameDraft, setRenameDraft] = useState("")
+  const [renameErrorText, setRenameErrorText] = useState("")
+  const [isSavingRename, setIsSavingRename] = useState(false)
+  const [createMetricDraft, setCreateMetricDraft] = useState<MetricDraft>({
+    shortName: "",
+    description: "",
+  })
+  const [createMetricErrorText, setCreateMetricErrorText] = useState("")
+  const [isCreatingMetric, setIsCreatingMetric] = useState(false)
+  const [metricDrafts, setMetricDrafts] = useState<Record<string, MetricDraft>>(
+    {},
+  )
+  const [metricErrors, setMetricErrors] = useState<Record<string, string>>({})
+  const [activeMetricSaveId, setActiveMetricSaveId] = useState<string | null>(
+    null,
+  )
+  const [activeMetricDeleteId, setActiveMetricDeleteId] = useState<
+    string | null
+  >(null)
+  const [isDeleteWorkspaceConfirm, setIsDeleteWorkspaceConfirm] =
+    useState(false)
+  const [deleteWorkspaceErrorText, setDeleteWorkspaceErrorText] = useState("")
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const settingsRequestRef = useRef(0)
 
   useEffect(() => {
     if (!editingId) {
@@ -30,6 +67,26 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
     inputRef.current?.focus()
     inputRef.current?.select()
   }, [editingId])
+
+  useEffect(() => {
+    if (!settingsWorkspaceId) {
+      return
+    }
+    if (
+      !props.workspaces.some(
+        (workspace) => workspace.id === settingsWorkspaceId,
+      )
+    ) {
+      setSettingsWorkspaceId(null)
+      setSettingsData(null)
+      setSettingsErrorText("")
+      setRenameErrorText("")
+      setCreateMetricErrorText("")
+      setMetricErrors({})
+      setDeleteWorkspaceErrorText("")
+      setIsDeleteWorkspaceConfirm(false)
+    }
+  }, [props.workspaces, settingsWorkspaceId])
 
   async function submitEdit(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault()
@@ -47,8 +104,6 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
     try {
       if (editingId === CREATE_DRAFT_ID) {
         await props.onCreateWorkspace(nextName)
-      } else {
-        await props.onRenameWorkspace(editingId, nextName)
       }
       setEditingId(null)
       setDraftName("")
@@ -62,23 +117,287 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
     setDraftName("")
   }
 
-  function beginRename(workspace: WorkspaceSummary) {
-    setEditingId(workspace.id)
-    setDraftName(workspace.name)
+  function resetSettingsState() {
+    setSettingsData(null)
+    setSettingsErrorText("")
+    setRenameDraft("")
+    setRenameErrorText("")
+    setCreateMetricDraft({ shortName: "", description: "" })
+    setCreateMetricErrorText("")
+    setMetricDrafts({})
+    setMetricErrors({})
+    setActiveMetricSaveId(null)
+    setActiveMetricDeleteId(null)
+    setIsDeleteWorkspaceConfirm(false)
+    setDeleteWorkspaceErrorText("")
   }
 
-  async function handleDelete(workspace: WorkspaceSummary) {
-    const isConfirmed = window.confirm(
-      `Удалить пространство "${workspace.name}"? Все связанные работы будут удалены без возможности восстановления.`,
-    )
-    if (!isConfirmed) {
+  function applySettings(nextSettings: WorkspaceSettingsView) {
+    setSettingsData(nextSettings)
+    setRenameDraft(nextSettings.workspace.name)
+    setRenameErrorText("")
+    setCreateMetricDraft({ shortName: "", description: "" })
+    setCreateMetricErrorText("")
+    setMetricDrafts(createMetricDrafts(nextSettings.metrics))
+    setMetricErrors({})
+    setDeleteWorkspaceErrorText("")
+  }
+
+  async function loadWorkspaceSettings(workspaceId: string) {
+    const requestId = settingsRequestRef.current + 1
+    settingsRequestRef.current = requestId
+    setIsSettingsLoading(true)
+    setSettingsErrorText("")
+
+    try {
+      const response = await fetch(
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/settings`,
+        { cache: "no-store" },
+      )
+      const payload = await response.json()
+      const parsed = parseWorkspaceSettings(payload)
+      if (!response.ok) {
+        throw new Error(
+          mapSettingsErrorMessage(payload, "Не удалось загрузить настройки."),
+        )
+      }
+      if (!parsed) {
+        throw new Error("Не удалось прочитать настройки рабочего пространства.")
+      }
+      if (settingsRequestRef.current !== requestId) {
+        return
+      }
+      applySettings(parsed)
+    } catch (error) {
+      if (settingsRequestRef.current !== requestId) {
+        return
+      }
+      setSettingsErrorText(
+        error instanceof Error
+          ? error.message
+          : "Не удалось загрузить настройки.",
+      )
+    } finally {
+      if (settingsRequestRef.current === requestId) {
+        setIsSettingsLoading(false)
+      }
+    }
+  }
+
+  function toggleSettings(workspaceId: string) {
+    if (settingsWorkspaceId === workspaceId) {
+      setSettingsWorkspaceId(null)
+      resetSettingsState()
       return
     }
 
-    await props.onDeleteWorkspace(workspace.id)
-    if (editingId === workspace.id) {
-      setEditingId(null)
-      setDraftName("")
+    setSettingsWorkspaceId(workspaceId)
+    resetSettingsState()
+    void loadWorkspaceSettings(workspaceId)
+  }
+
+  async function handleRenameWorkspace(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!settingsData) {
+      return
+    }
+
+    const nextName = renameDraft.trim()
+    if (nextName.length === 0) {
+      setRenameErrorText("Название рабочего пространства не может быть пустым.")
+      return
+    }
+
+    setIsSavingRename(true)
+    setRenameErrorText("")
+
+    try {
+      await props.onRenameWorkspace(settingsData.workspace.id, nextName)
+      setSettingsData((current) =>
+        current
+          ? {
+              ...current,
+              workspace: {
+                ...current.workspace,
+                name: nextName,
+              },
+            }
+          : current,
+      )
+      setRenameDraft(nextName)
+    } catch (error) {
+      setRenameErrorText(
+        error instanceof Error
+          ? error.message
+          : "Не удалось переименовать рабочее пространство.",
+      )
+    } finally {
+      setIsSavingRename(false)
+    }
+  }
+
+  async function handleCreateMetric(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!settingsData) {
+      return
+    }
+
+    const shortName = createMetricDraft.shortName.trim()
+    if (shortName.length === 0) {
+      setCreateMetricErrorText("Короткое имя метрики не может быть пустым.")
+      return
+    }
+
+    const description = createMetricDraft.description.trim()
+    setIsCreatingMetric(true)
+    setCreateMetricErrorText("")
+
+    try {
+      const response = await fetch(
+        `/api/workspaces/${encodeURIComponent(settingsData.workspace.id)}/settings/metrics`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            shortName,
+            description: description.length > 0 ? description : null,
+          }),
+        },
+      )
+      const payload = await response.json()
+      const parsed = parseWorkspaceSettings(payload)
+      if (!response.ok) {
+        throw new Error(
+          mapSettingsErrorMessage(payload, "Не удалось добавить метрику."),
+        )
+      }
+      if (!parsed) {
+        throw new Error("Сервер вернул некорректные данные метрик.")
+      }
+      applySettings(parsed)
+    } catch (error) {
+      setCreateMetricErrorText(
+        error instanceof Error ? error.message : "Не удалось добавить метрику.",
+      )
+    } finally {
+      setIsCreatingMetric(false)
+    }
+  }
+
+  async function handleSaveMetric(metricId: string) {
+    if (!settingsData) {
+      return
+    }
+    const draft = metricDrafts[metricId]
+    if (!draft) {
+      return
+    }
+
+    const shortName = draft.shortName.trim()
+    if (shortName.length === 0) {
+      setMetricErrors((current) => ({
+        ...current,
+        [metricId]: "Короткое имя метрики не может быть пустым.",
+      }))
+      return
+    }
+
+    const description = draft.description.trim()
+    setActiveMetricSaveId(metricId)
+    setMetricErrors((current) => ({ ...current, [metricId]: "" }))
+
+    try {
+      const response = await fetch(
+        `/api/workspaces/${encodeURIComponent(
+          settingsData.workspace.id,
+        )}/settings/metrics/${encodeURIComponent(metricId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            shortName,
+            description: description.length > 0 ? description : null,
+          }),
+        },
+      )
+      const payload = await response.json()
+      const parsed = parseWorkspaceSettings(payload)
+      if (!response.ok) {
+        throw new Error(
+          mapSettingsErrorMessage(payload, "Не удалось сохранить метрику."),
+        )
+      }
+      if (!parsed) {
+        throw new Error("Сервер вернул некорректные данные метрик.")
+      }
+      applySettings(parsed)
+    } catch (error) {
+      setMetricErrors((current) => ({
+        ...current,
+        [metricId]:
+          error instanceof Error
+            ? error.message
+            : "Не удалось сохранить метрику.",
+      }))
+    } finally {
+      setActiveMetricSaveId(null)
+    }
+  }
+
+  async function handleDeleteMetric(metricId: string) {
+    if (!settingsData) {
+      return
+    }
+    setActiveMetricDeleteId(metricId)
+    setMetricErrors((current) => ({ ...current, [metricId]: "" }))
+
+    try {
+      const response = await fetch(
+        `/api/workspaces/${encodeURIComponent(
+          settingsData.workspace.id,
+        )}/settings/metrics/${encodeURIComponent(metricId)}`,
+        { method: "DELETE" },
+      )
+      const payload = await response.json()
+      const parsed = parseWorkspaceSettings(payload)
+      if (!response.ok) {
+        throw new Error(
+          mapSettingsErrorMessage(payload, "Не удалось удалить метрику."),
+        )
+      }
+      if (!parsed) {
+        throw new Error("Сервер вернул некорректные данные метрик.")
+      }
+      applySettings(parsed)
+    } catch (error) {
+      setMetricErrors((current) => ({
+        ...current,
+        [metricId]:
+          error instanceof Error
+            ? error.message
+            : "Не удалось удалить метрику.",
+      }))
+    } finally {
+      setActiveMetricDeleteId(null)
+    }
+  }
+
+  async function confirmDeleteWorkspace() {
+    if (!settingsData) {
+      return
+    }
+    setDeleteWorkspaceErrorText("")
+
+    try {
+      await props.onDeleteWorkspace(settingsData.workspace.id)
+      setSettingsWorkspaceId(null)
+      resetSettingsState()
+    } catch (error) {
+      setDeleteWorkspaceErrorText(
+        error instanceof Error
+          ? error.message
+          : "Не удалось удалить рабочее пространство.",
+      )
     }
   }
 
@@ -104,72 +423,314 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
       >
         {props.workspaces.map((workspace) => {
           const isActive = workspace.id === props.currentWorkspaceId
-          const isEditing = editingId === workspace.id
-          const isRenaming = props.isRenamingWorkspaceId === workspace.id
+          const isSettingsOpen = settingsWorkspaceId === workspace.id
+          const isRenaming =
+            props.isRenamingWorkspaceId === workspace.id || isSavingRename
           const isDeleting = props.isDeletingWorkspaceId === workspace.id
-          const isBusy = isRenaming || isDeleting
 
           return (
             <div className="workspace-inline-item" key={workspace.id}>
-              {isEditing ? (
-                <form className="workspace-inline-edit" onSubmit={submitEdit}>
-                  <input
-                    aria-label="Переименовать рабочее пространство"
-                    className="workspace-inline-input"
-                    disabled={isBusy}
-                    onBlur={() => {
-                      void submitEdit()
-                    }}
-                    onChange={(event) => setDraftName(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Escape") {
-                        event.preventDefault()
-                        setEditingId(null)
-                        setDraftName("")
-                      }
-                    }}
-                    ref={inputRef}
-                    value={draftName}
-                  />
-                </form>
-              ) : (
-                <>
-                  <button
-                    aria-selected={isActive}
-                    className={[
-                      "workspace-inline-trigger",
-                      isActive ? "is-active" : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                    onDoubleClick={() => {
-                      if (isDeleting || isRenaming || props.isCreating) {
-                        return
-                      }
-                      beginRename(workspace)
-                    }}
-                    onClick={() => props.onOpenWorkspace(workspace.id)}
-                    role="tab"
-                    type="button"
-                  >
-                    {workspace.name}
-                  </button>
+              <button
+                aria-selected={isActive}
+                className={[
+                  "workspace-inline-trigger",
+                  isActive ? "is-active" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                onClick={() => props.onOpenWorkspace(workspace.id)}
+                role="tab"
+                type="button"
+              >
+                {workspace.name}
+              </button>
 
-                  <div className="workspace-inline-actions">
+              <div className="workspace-inline-actions">
+                <button
+                  aria-expanded={isSettingsOpen}
+                  aria-haspopup="dialog"
+                  aria-label={`Настройки пространства ${workspace.name}`}
+                  className="workspace-inline-action"
+                  disabled={isDeleting || props.isCreating}
+                  onClick={() => toggleSettings(workspace.id)}
+                  type="button"
+                >
+                  <i aria-hidden className="ri-settings-3-line" />
+                </button>
+              </div>
+
+              {isSettingsOpen ? (
+                <dialog
+                  aria-label={`Настройки workspace ${workspace.name}`}
+                  className="workspace-settings-popup"
+                  open
+                >
+                  <div className="workspace-settings-head">
+                    <h3 className="workspace-settings-title">
+                      Настройки workspace
+                    </h3>
                     <button
-                      aria-label={`Удалить пространство ${workspace.name}`}
-                      className="workspace-inline-action"
-                      disabled={isDeleting || isRenaming || props.isCreating}
+                      aria-label="Закрыть настройки"
+                      className="workspace-settings-close"
                       onClick={() => {
-                        void handleDelete(workspace)
+                        setSettingsWorkspaceId(null)
+                        resetSettingsState()
                       }}
                       type="button"
                     >
-                      <i aria-hidden className="ri-delete-bin-line" />
+                      <i aria-hidden className="ri-close-line" />
                     </button>
                   </div>
-                </>
-              )}
+
+                  {isSettingsLoading ? (
+                    <p className="workspace-settings-hint">
+                      Загрузка настроек…
+                    </p>
+                  ) : null}
+                  {settingsErrorText ? (
+                    <p className="workspace-settings-error">
+                      {settingsErrorText}
+                    </p>
+                  ) : null}
+
+                  {settingsData && !isSettingsLoading ? (
+                    <div className="workspace-settings-body">
+                      <form
+                        className="workspace-settings-form"
+                        onSubmit={(event) => {
+                          void handleRenameWorkspace(event)
+                        }}
+                      >
+                        <p className="workspace-settings-label">
+                          Название workspace
+                        </p>
+                        <div className="workspace-settings-row">
+                          <input
+                            aria-label="Название рабочего пространства"
+                            className="workspace-settings-input"
+                            disabled={isRenaming || isDeleting}
+                            onChange={(event) =>
+                              setRenameDraft(event.target.value)
+                            }
+                            value={renameDraft}
+                          />
+                          <button
+                            className="workspace-settings-button"
+                            disabled={isRenaming || isDeleting}
+                            type="submit"
+                          >
+                            Сохранить
+                          </button>
+                        </div>
+                        {renameErrorText ? (
+                          <p className="workspace-settings-error">
+                            {renameErrorText}
+                          </p>
+                        ) : null}
+                      </form>
+
+                      <div className="workspace-settings-form">
+                        <p className="workspace-settings-label">Метрики</p>
+
+                        <form
+                          className="workspace-settings-metric-create"
+                          onSubmit={(event) => {
+                            void handleCreateMetric(event)
+                          }}
+                        >
+                          <input
+                            aria-label="Короткое имя новой метрики"
+                            className="workspace-settings-input"
+                            disabled={isCreatingMetric || isDeleting}
+                            onChange={(event) =>
+                              setCreateMetricDraft((current) => ({
+                                ...current,
+                                shortName: event.target.value,
+                              }))
+                            }
+                            placeholder="Короткое имя"
+                            value={createMetricDraft.shortName}
+                          />
+                          <input
+                            aria-label="Описание новой метрики"
+                            className="workspace-settings-input"
+                            disabled={isCreatingMetric || isDeleting}
+                            onChange={(event) =>
+                              setCreateMetricDraft((current) => ({
+                                ...current,
+                                description: event.target.value,
+                              }))
+                            }
+                            placeholder="Описание (опционально)"
+                            value={createMetricDraft.description}
+                          />
+                          <button
+                            className="workspace-settings-button"
+                            disabled={isCreatingMetric || isDeleting}
+                            type="submit"
+                          >
+                            Добавить
+                          </button>
+                        </form>
+                        {createMetricErrorText ? (
+                          <p className="workspace-settings-error">
+                            {createMetricErrorText}
+                          </p>
+                        ) : null}
+
+                        {settingsData.metrics.length === 0 ? (
+                          <p className="workspace-settings-hint">
+                            Для этого workspace пока нет метрик.
+                          </p>
+                        ) : (
+                          <ul className="workspace-settings-metric-list">
+                            {settingsData.metrics.map((metric) => {
+                              const draft = metricDrafts[metric.id] ?? {
+                                shortName: metric.shortName,
+                                description: metric.description ?? "",
+                              }
+                              const isSavingMetric =
+                                activeMetricSaveId === metric.id
+                              const isDeletingMetric =
+                                activeMetricDeleteId === metric.id
+                              const metricBusy =
+                                isSavingMetric || isDeletingMetric
+
+                              return (
+                                <li
+                                  className="workspace-settings-metric-item"
+                                  key={metric.id}
+                                >
+                                  <div className="workspace-settings-metric-row">
+                                    <input
+                                      aria-label={`Имя метрики ${metric.shortName}`}
+                                      className="workspace-settings-input"
+                                      disabled={metricBusy || isDeleting}
+                                      onChange={(event) =>
+                                        setMetricDrafts((current) => ({
+                                          ...current,
+                                          [metric.id]: {
+                                            ...(current[metric.id] ?? {
+                                              shortName: metric.shortName,
+                                              description:
+                                                metric.description ?? "",
+                                            }),
+                                            shortName: event.target.value,
+                                          },
+                                        }))
+                                      }
+                                      value={draft.shortName}
+                                    />
+                                    <input
+                                      aria-label={`Описание метрики ${metric.shortName}`}
+                                      className="workspace-settings-input"
+                                      disabled={metricBusy || isDeleting}
+                                      onChange={(event) =>
+                                        setMetricDrafts((current) => ({
+                                          ...current,
+                                          [metric.id]: {
+                                            ...(current[metric.id] ?? {
+                                              shortName: metric.shortName,
+                                              description:
+                                                metric.description ?? "",
+                                            }),
+                                            description: event.target.value,
+                                          },
+                                        }))
+                                      }
+                                      value={draft.description}
+                                    />
+                                    <button
+                                      className="workspace-settings-button"
+                                      disabled={metricBusy || isDeleting}
+                                      onClick={() => {
+                                        void handleSaveMetric(metric.id)
+                                      }}
+                                      type="button"
+                                    >
+                                      Сохранить
+                                    </button>
+                                    <button
+                                      className="workspace-settings-button workspace-settings-button-danger"
+                                      disabled={metricBusy || isDeleting}
+                                      onClick={() => {
+                                        void handleDeleteMetric(metric.id)
+                                      }}
+                                      type="button"
+                                    >
+                                      Удалить
+                                    </button>
+                                  </div>
+                                  {metricErrors[metric.id] ? (
+                                    <p className="workspace-settings-error">
+                                      {metricErrors[metric.id]}
+                                    </p>
+                                  ) : null}
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        )}
+                      </div>
+
+                      <div className="workspace-settings-form workspace-settings-delete">
+                        <p className="workspace-settings-label">
+                          Удаление workspace
+                        </p>
+                        <p className="workspace-settings-hint">
+                          Удаляется весь tree и каталог метрик этого workspace.
+                        </p>
+                        {!isDeleteWorkspaceConfirm ? (
+                          <button
+                            className="workspace-settings-button workspace-settings-button-danger"
+                            disabled={isDeleting}
+                            onClick={() => setIsDeleteWorkspaceConfirm(true)}
+                            type="button"
+                          >
+                            Удалить workspace
+                          </button>
+                        ) : (
+                          <div className="workspace-settings-delete-confirm">
+                            <p className="workspace-settings-error">
+                              Подтвердите удаление workspace «
+                              {settingsData.workspace.name}».
+                            </p>
+                            <div className="workspace-settings-delete-actions">
+                              <button
+                                className="workspace-settings-button"
+                                disabled={isDeleting}
+                                onClick={() =>
+                                  setIsDeleteWorkspaceConfirm(false)
+                                }
+                                type="button"
+                              >
+                                Отмена
+                              </button>
+                              <button
+                                className="workspace-settings-button workspace-settings-button-danger"
+                                disabled={isDeleting}
+                                onClick={() => {
+                                  void confirmDeleteWorkspace()
+                                }}
+                                type="button"
+                              >
+                                {isDeleting
+                                  ? "Удаление…"
+                                  : "Подтвердить удаление"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        {deleteWorkspaceErrorText ? (
+                          <p className="workspace-settings-error">
+                            {deleteWorkspaceErrorText}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+                </dialog>
+              ) : null}
             </div>
           )
         })}
