@@ -7,7 +7,6 @@ import {
   applyOptimisticMove,
   mapWorkItemErrorText,
   normalizeTreeData,
-  recomputeTreeRatingSums,
 } from "../state/workspace-tree-state"
 import {
   WorkItemRequestError,
@@ -59,11 +58,7 @@ function removeLocalRow(nodes: WorkTreeNode[], rowId: string): WorkTreeNode[] {
     return nodes
   }
 
-  const resequenced = nextNodes.map((node, index) => ({
-    ...node,
-    siblingOrder: index,
-  }))
-  return recomputeTreeRatingSums(resequenced)
+  return nextNodes.map((node, index) => ({ ...node, siblingOrder: index }))
 }
 
 function findRow(nodes: WorkTreeNode[], rowId: string): WorkTreeNode | null {
