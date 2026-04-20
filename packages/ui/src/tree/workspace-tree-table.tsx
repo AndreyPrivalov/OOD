@@ -17,9 +17,9 @@ type TreeRowLike = {
   overcomplication: number | null
   importance: number | null
   blocksMoney: number | null
-  overcomplicationTotal?: number
-  importanceTotal?: number
-  blocksMoneyTotal?: number
+  overcomplicationSum?: number
+  importanceSum?: number
+  blocksMoneySum?: number
 }
 
 type FieldControl = {
@@ -287,6 +287,21 @@ const MemoWorkRow = memo(
     prev.editRenderSignature === next.editRenderSignature,
 )
 
+export function buildRowRenderSignature(row: TreeRowLike): string {
+  return [
+    row.id,
+    row.parentId ?? "root",
+    String(row.siblingOrder),
+    String(row.depth),
+    String(row.overcomplication ?? ""),
+    String(row.importance ?? ""),
+    String(row.blocksMoney ?? ""),
+    String(row.overcomplicationSum ?? ""),
+    String(row.importanceSum ?? ""),
+    String(row.blocksMoneySum ?? ""),
+  ].join(":")
+}
+
 export type WorkspaceTreeTableProps = {
   rows: TreeRowLike[]
   collapsedRowIds: ReadonlySet<string>
@@ -428,7 +443,7 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
               ]
                 .filter(Boolean)
                 .join(" ")
-              const rowRenderSignature = `${row.id}:${row.parentId ?? "root"}:${row.siblingOrder}:${row.depth}`
+              const rowRenderSignature = buildRowRenderSignature(row)
               const editRenderSignature = rowUi.renderSignature
               const isCollapsible = row.children.length > 0
               const isCollapsed = props.collapsedRowIds.has(row.id)

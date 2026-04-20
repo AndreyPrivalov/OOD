@@ -1,7 +1,10 @@
 import type { ReactNode } from "react"
 import { isValidElement } from "react"
 import { describe, expect, it } from "vitest"
-import { WorkspaceTreeTable } from "./workspace-tree-table"
+import {
+  WorkspaceTreeTable,
+  buildRowRenderSignature,
+} from "./workspace-tree-table"
 
 function collectText(node: ReactNode): string[] {
   if (typeof node === "string" || typeof node === "number") {
@@ -143,5 +146,29 @@ describe("WorkspaceTreeTable", () => {
 
     expect(text).toContain("Работа")
     expect(text).toContain("R1")
+  })
+
+  it("changes row render signature when parent aggregate sums change", () => {
+    const base = {
+      id: "parent-row",
+      parentId: null,
+      depth: 0,
+      siblingOrder: 0,
+      children: [{ id: "leaf" }],
+      overcomplication: null,
+      importance: null,
+      blocksMoney: null,
+      overcomplicationSum: 2,
+      importanceSum: 1,
+      blocksMoneySum: 0,
+    }
+
+    const before = buildRowRenderSignature(base)
+    const after = buildRowRenderSignature({
+      ...base,
+      overcomplicationSum: 5,
+    })
+
+    expect(after).not.toBe(before)
   })
 })
