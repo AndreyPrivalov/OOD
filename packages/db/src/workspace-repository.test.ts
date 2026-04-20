@@ -32,6 +32,15 @@ describe("InMemoryWorkspaceRepository", () => {
     expect(workspaces.map((workspace) => workspace.id)).toContain(created.id)
   })
 
+  it("returns workspace by id", async () => {
+    const repo = new InMemoryWorkspaceRepository()
+    const created = await repo.create({ name: "Alpha" })
+
+    const found = await repo.getById(created.id)
+
+    expect(found).toMatchObject({ id: created.id, name: "Alpha" })
+  })
+
   it("renames an existing workspace", async () => {
     const repo = new InMemoryWorkspaceRepository()
     const created = await repo.create({ name: "Alpha" })

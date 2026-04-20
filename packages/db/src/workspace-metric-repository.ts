@@ -37,10 +37,11 @@ export interface WorkspaceMetricRepository {
   listMetrics(workspaceId: WorkspaceId): Promise<WorkspaceMetric[]>
   createMetric(input: CreateWorkspaceMetricInput): Promise<WorkspaceMetric>
   updateMetric(
+    workspaceId: WorkspaceId,
     metricId: string,
     input: UpdateWorkspaceMetricInput,
   ): Promise<WorkspaceMetric | null>
-  deleteMetric(metricId: string): Promise<boolean>
+  deleteMetric(workspaceId: WorkspaceId, metricId: string): Promise<boolean>
   setWorkItemMetricValue(input: SetWorkItemMetricValueInput): Promise<void>
   listWorkItemMetricValues(
     workItemId: string,
@@ -116,6 +117,7 @@ export class PostgresWorkspaceMetricRepository
   }
 
   async updateMetric(
+    workspaceId: WorkspaceId,
     metricId: string,
     input: UpdateWorkspaceMetricInput,
   ): Promise<WorkspaceMetric | null> {
@@ -131,7 +133,12 @@ export class PostgresWorkspaceMetricRepository
         description: normalized.description,
         updatedAt: new Date(),
       })
-      .where(eq(workspaceMetrics.id, metricId))
+      .where(
+        and(
+          eq(workspaceMetrics.id, metricId),
+          eq(workspaceMetrics.workspaceId, workspaceId),
+        ),
+      )
       .returning()
 
     if (updated.length === 0) {
@@ -140,11 +147,19 @@ export class PostgresWorkspaceMetricRepository
     return toWorkspaceMetric(updated[0])
   }
 
-  async deleteMetric(metricId: string): Promise<boolean> {
+  async deleteMetric(
+    workspaceId: WorkspaceId,
+    metricId: string,
+  ): Promise<boolean> {
     return this.db.transaction(async (tx) => {
       const deleted = await tx
         .delete(workspaceMetrics)
-        .where(eq(workspaceMetrics.id, metricId))
+        .where(
+          and(
+            eq(workspaceMetrics.id, metricId),
+            eq(workspaceMetrics.workspaceId, workspaceId),
+          ),
+        )
         .returning({
           id: workspaceMetrics.id,
           workspaceId: workspaceMetrics.workspaceId,

@@ -14,6 +14,7 @@ function isWorkspaceRepository(
 
   return (
     typeof value.list === "function" &&
+    typeof value.getById === "function" &&
     typeof value.create === "function" &&
     typeof value.rename === "function" &&
     typeof value.delete === "function"

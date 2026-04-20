@@ -29,11 +29,11 @@ describe("InMemoryWorkspaceMetricRepository", () => {
       shortName: "  ROI  ",
       description: "  return  ",
     })
-    const updated = await metricRepo.updateMetric(created.id, {
+    const updated = await metricRepo.updateMetric(workspace.id, created.id, {
       shortName: " Impact ",
       description: " direct impact ",
     })
-    const deleted = await metricRepo.deleteMetric(created.id)
+    const deleted = await metricRepo.deleteMetric(workspace.id, created.id)
     const metrics = await metricRepo.listMetrics(workspace.id)
 
     expect(created).toMatchObject({
@@ -71,7 +71,7 @@ describe("InMemoryWorkspaceMetricRepository", () => {
     })
     const beforeDelete = await metricRepo.listWorkItemMetricValues(item.id)
 
-    await metricRepo.deleteMetric(metric.id)
+    await metricRepo.deleteMetric(workspace.id, metric.id)
     const afterDelete = await metricRepo.listWorkItemMetricValues(item.id)
 
     expect(beforeDelete).toEqual([

@@ -412,6 +412,14 @@ export class InMemoryWorkspaceRepository implements WorkspaceRepository {
     )
   }
 
+  async getById(id: string): Promise<Workspace | null> {
+    const existing = memoryStore.workspaces.get(id)
+    if (!existing) {
+      return null
+    }
+    return { ...existing }
+  }
+
   async create(input: CreateWorkspaceInput): Promise<Workspace> {
     const workspace = ensureWorkspace(randomUUID(), input.name)
     return { ...workspace }
@@ -480,6 +488,7 @@ export class InMemoryWorkspaceMetricRepository
   }
 
   async updateMetric(
+    workspaceId: WorkspaceId,
     metricId: string,
     input: UpdateWorkspaceMetricInput,
   ): Promise<WorkspaceMetric | null> {
@@ -487,33 +496,27 @@ export class InMemoryWorkspaceMetricRepository
       shortName: input.shortName,
       description: input.description,
     })
-    for (const metrics of memoryStore.metricsByWorkspace.values()) {
-      const metric = metrics.find((item) => item.id === metricId)
-      if (!metric) {
-        continue
-      }
-      metric.shortName = normalized.shortName
-      metric.description = normalized.description
-      metric.updatedAt = new Date()
-      return { ...metric }
+    const metrics = memoryStore.metricsByWorkspace.get(workspaceId) ?? []
+    const metric = metrics.find((item) => item.id === metricId)
+    if (!metric) {
+      return null
     }
-    return null
+    metric.shortName = normalized.shortName
+    metric.description = normalized.description
+    metric.updatedAt = new Date()
+    return { ...metric }
   }
 
-  async deleteMetric(metricId: string): Promise<boolean> {
-    let deleted = false
-    for (const [workspaceId, metrics] of memoryStore.metricsByWorkspace) {
-      const nextMetrics = metrics.filter((metric) => metric.id !== metricId)
-      if (nextMetrics.length === metrics.length) {
-        continue
-      }
-      memoryStore.metricsByWorkspace.set(workspaceId, nextMetrics)
-      deleted = true
-      break
-    }
-    if (!deleted) {
+  async deleteMetric(
+    workspaceId: WorkspaceId,
+    metricId: string,
+  ): Promise<boolean> {
+    const metrics = memoryStore.metricsByWorkspace.get(workspaceId) ?? []
+    const nextMetrics = metrics.filter((metric) => metric.id !== metricId)
+    if (nextMetrics.length === metrics.length) {
       return false
     }
+    memoryStore.metricsByWorkspace.set(workspaceId, nextMetrics)
 
     for (const values of memoryStore.metricValuesByWorkItem.values()) {
       values.delete(metricId)

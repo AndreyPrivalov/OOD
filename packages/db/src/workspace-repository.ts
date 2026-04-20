@@ -17,6 +17,7 @@ export interface RenameWorkspaceInput {
 
 export interface WorkspaceRepository {
   list(): Promise<Workspace[]>
+  getById(id: string): Promise<Workspace | null>
   create(input: CreateWorkspaceInput): Promise<Workspace>
   rename(id: string, input: RenameWorkspaceInput): Promise<Workspace | null>
   delete(id: string): Promise<boolean>
@@ -31,6 +32,16 @@ export class PostgresWorkspaceRepository implements WorkspaceRepository {
 
   async list(): Promise<Workspace[]> {
     return listWorkspaceRows(this.db)
+  }
+
+  async getById(id: string): Promise<Workspace | null> {
+    const rows = await this.db
+      .select()
+      .from(workspaces)
+      .where(eq(workspaces.id, id))
+      .limit(1)
+
+    return rows[0] ? toWorkspace(rows[0]) : null
   }
 
   async create(input: CreateWorkspaceInput): Promise<Workspace> {
