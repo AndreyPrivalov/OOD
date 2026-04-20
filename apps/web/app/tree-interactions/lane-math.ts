@@ -37,15 +37,22 @@ export function buildInsertLanes(
   for (let index = 1; index < rows.length; index += 1) {
     const upperRow = rows[index - 1]
     const lowerRow = rows[index]
-    const siblings = siblingsByParent.get(upperRow.parentId) ?? []
+    const shouldUseLowerLevel = upperRow.depth < lowerRow.depth
+    const anchorRow = shouldUseLowerLevel ? lowerRow : upperRow
+    const siblings = siblingsByParent.get(anchorRow.parentId) ?? []
     const siblingIndex = siblings.findIndex(
-      (candidate) => candidate.id === upperRow.id,
+      (candidate) => candidate.id === anchorRow.id,
     )
     lanes.push({
       id: `lane:between:${upperRow.id}:${lowerRow.id}`,
-      parentId: upperRow.parentId,
-      depth: upperRow.depth,
-      targetIndex: siblingIndex < 0 ? 0 : siblingIndex + 1,
+      parentId: anchorRow.parentId,
+      depth: anchorRow.depth,
+      targetIndex:
+        siblingIndex < 0
+          ? 0
+          : shouldUseLowerLevel
+            ? siblingIndex
+            : siblingIndex + 1,
       anchorRowId: lowerRow.id,
       anchorPlacement: "before",
       anchorY: null,

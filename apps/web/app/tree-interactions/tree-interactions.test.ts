@@ -51,7 +51,7 @@ describe("buildInsertLanes", () => {
     ])
 
     expect(lanes[0]).toMatchObject({ parentId: null, targetIndex: 0 })
-    expect(lanes[1]).toMatchObject({ parentId: null, targetIndex: 1 })
+    expect(lanes[1]).toMatchObject({ parentId: "root-a", targetIndex: 0 })
     expect(lanes[2]).toMatchObject({ parentId: "root-a", targetIndex: 1 })
     expect(lanes[3]).toMatchObject({ parentId: null, targetIndex: 2 })
   })
