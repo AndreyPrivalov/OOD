@@ -8,8 +8,16 @@ const repository = {
   deleteCascade: vi.fn(),
 }
 
+const workspaceMetricRepository = {
+  listMetrics: vi.fn(),
+  listWorkItemMetricValues: vi.fn(),
+}
+
 vi.mock("../../../lib/repository", () => ({
   getRepository: () => repository,
+}))
+vi.mock("../../../lib/workspace-metric-repository", () => ({
+  getWorkspaceMetricRepository: () => workspaceMetricRepository,
 }))
 
 import { GET, POST } from "./route"
@@ -17,9 +25,21 @@ import { GET, POST } from "./route"
 describe("GET /api/work-items contract", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    workspaceMetricRepository.listMetrics.mockResolvedValue([])
+    workspaceMetricRepository.listWorkItemMetricValues.mockResolvedValue([])
   })
 
   it("returns mandatory top-level score sums for every node", async () => {
+    workspaceMetricRepository.listMetrics.mockResolvedValueOnce([
+      {
+        id: "metric-1",
+        workspaceId: "ws",
+        shortName: "Impact",
+        description: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ])
     repository.listTree.mockResolvedValueOnce([
       {
         id: "root",
@@ -57,6 +77,11 @@ describe("GET /api/work-items contract", () => {
         ],
       },
     ])
+    workspaceMetricRepository.listWorkItemMetricValues
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { workItemId: "leaf", metricId: "metric-1", value: "direct" },
+      ])
 
     const response = await GET(
       new Request("http://localhost/api/work-items?workspaceId=ws"),
@@ -68,11 +93,14 @@ describe("GET /api/work-items contract", () => {
       overcomplicationSum: 0,
       importanceSum: 0,
       blocksMoneySum: 0,
+      metricAggregates: { "metric-1": "direct" },
     })
     expect(payload.data[0].children[0]).toMatchObject({
       overcomplicationSum: 0,
       importanceSum: 3,
       blocksMoneySum: 0,
+      metricValues: { "metric-1": "direct" },
+      metricAggregates: { "metric-1": "direct" },
     })
   })
 

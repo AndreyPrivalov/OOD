@@ -13,6 +13,8 @@ function createRow(
     overcomplication: 2,
     importance: 3,
     blocksMoney: 1,
+    metricValues: {},
+    metricAggregates: {},
     currentProblems: ["p1"],
     solutionVariants: ["s1"],
     children: [],
@@ -28,6 +30,7 @@ function createEdit(overrides: Partial<EditState> = {}): EditState {
     overcomplication: "2",
     importance: "3",
     blocksMoney: "1",
+    metricValues: {},
     currentProblems: "p1",
     solutionVariants: "s1",
     ...overrides,
@@ -69,9 +72,27 @@ describe("buildPatchPayload", () => {
         overcomplication: "5",
         importance: "4",
         blocksMoney: "",
+        metricValues: { "m-1": "direct" },
       }),
     )
 
     expect(payload).toEqual({})
+  })
+
+  it("builds metricValues patch for changed dropdown values on leaf rows", () => {
+    const payload = buildPatchPayload(
+      createRow({
+        metricValues: { "m-1": "indirect" },
+      }),
+      createEdit({
+        metricValues: { "m-1": "direct", "m-2": "none" },
+      }),
+    )
+
+    expect(payload).toEqual({
+      metricValues: {
+        "m-1": "direct",
+      },
+    })
   })
 })

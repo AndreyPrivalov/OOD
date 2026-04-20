@@ -29,6 +29,18 @@ describe("buildRowPatchFromServer", () => {
       solutionVariants: ["x", "y"],
     })
   })
+
+  it("keeps canonical metric maps from server payload", () => {
+    const patch = buildRowPatchFromServer({
+      metricValues: { "m-1": "direct", "m-2": "indirect" },
+      metricAggregates: { "m-1": "direct", "m-2": "none" },
+    })
+
+    expect(patch).toEqual({
+      metricValues: { "m-1": "direct", "m-2": "indirect" },
+      metricAggregates: { "m-1": "direct", "m-2": "none" },
+    })
+  })
 })
 
 describe("isServerPatchEchoingPayload", () => {

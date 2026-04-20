@@ -97,24 +97,11 @@ function getMetricValueForRow(
   metricId: string,
   isParentRow: boolean,
 ) {
-  const metricValues =
-    "metricValues" in row &&
-    row.metricValues &&
-    typeof row.metricValues === "object"
-      ? (row.metricValues as Record<string, string>)
-      : null
-  const metricAggregates =
-    "metricAggregateValues" in row &&
-    row.metricAggregateValues &&
-    typeof row.metricAggregateValues === "object"
-      ? (row.metricAggregateValues as Record<string, string>)
-      : null
-
   if (isParentRow) {
-    return metricAggregates?.[metricId] ?? "—"
+    return row.metricAggregates?.[metricId] ?? "none"
   }
 
-  return metricValues?.[metricId] ?? "none"
+  return row.metricValues?.[metricId] ?? "none"
 }
 
 export function useWorkspaceEditingComposition(
@@ -268,14 +255,39 @@ export function useWorkspaceEditingComposition(
         ))}
         {workspaceMetrics.map((metric) => (
           <td className="score-col workspace-metric-col" key={metric.id}>
-            <span className="score-summary">
-              {getMetricValueForRow(row, metric.id, isParentRow)}
-            </span>
+            {isParentRow ? (
+              <span className="score-summary">
+                {getMetricValueForRow(row, metric.id, true)}
+              </span>
+            ) : (
+              <select
+                className="metric-select"
+                value={edit.metricValues[metric.id] ?? "none"}
+                onFocus={() => handleFieldFocus(row.id)}
+                onBlur={() => handleFieldBlur(row.id)}
+                onChange={(event) =>
+                  onCommitEdit({
+                    metricValues: {
+                      ...edit.metricValues,
+                      [metric.id]: event.currentTarget.value as
+                        | "none"
+                        | "indirect"
+                        | "direct",
+                    },
+                  })
+                }
+                aria-label={`${metric.shortName} значение`}
+              >
+                <option value="none">none</option>
+                <option value="indirect">indirect</option>
+                <option value="direct">direct</option>
+              </select>
+            )}
           </td>
         ))}
       </>
     ),
-    [workspaceMetrics],
+    [handleFieldBlur, handleFieldFocus, workspaceMetrics],
   )
 
   return {

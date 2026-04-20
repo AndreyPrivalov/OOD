@@ -80,6 +80,7 @@ type PatchWorkItemPayload = Partial<
     | "overcomplication"
     | "importance"
     | "blocksMoney"
+    | "metricValues"
     | "currentProblems"
     | "solutionVariants"
   >

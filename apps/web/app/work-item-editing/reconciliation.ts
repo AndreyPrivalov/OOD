@@ -27,6 +27,14 @@ export function buildRowPatchFromServer(
   if (typeof updated.possiblyRemovable === "boolean") {
     patch.possiblyRemovable = updated.possiblyRemovable
   }
+  const metricValues = sanitizeMetricMap(updated.metricValues)
+  if (metricValues) {
+    patch.metricValues = metricValues
+  }
+  const metricAggregates = sanitizeMetricMap(updated.metricAggregates)
+  if (metricAggregates) {
+    patch.metricAggregates = metricAggregates
+  }
   Object.assign(
     patch,
     buildRatingServerPatch(updated as Partial<WorkspaceRatingValues>),
@@ -52,6 +60,22 @@ function isSamePrimitiveOrList(left: unknown, right: unknown): boolean {
     return left.every((item, index) => item === right[index])
   }
   return left === right
+}
+
+function sanitizeMetricMap(
+  input: unknown,
+): Record<string, "none" | "indirect" | "direct"> | null {
+  if (!input || typeof input !== "object") {
+    return null
+  }
+
+  const next: Record<string, "none" | "indirect" | "direct"> = {}
+  for (const [metricId, value] of Object.entries(input)) {
+    if (value === "none" || value === "indirect" || value === "direct") {
+      next[metricId] = value
+    }
+  }
+  return next
 }
 
 export function isServerPatchEchoingPayload(

@@ -603,6 +603,12 @@ button:focus-visible {
   max-width: var(--blocks-money-col-width, 15ch);
 }
 
+.work-table .workspace-metric-col {
+  width: var(--workspace-metric-col-width, 14ch);
+  min-width: var(--workspace-metric-col-width, 14ch);
+  max-width: var(--workspace-metric-col-width, 14ch);
+}
+
 .work-table .problems-col {
   width: var(--problems-col-width, 16ch);
   min-width: var(--problems-col-width, 16ch);
@@ -900,6 +906,23 @@ button:focus-visible {
   font-size: var(--text-main);
   font-weight: 400;
   color: var(--fg);
+}
+
+.metric-select {
+  width: 100%;
+  min-height: var(--table-control-height);
+  border: 1px solid rgba(24, 34, 46, 0.14);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg);
+  padding: 0 8px;
+  font-family: var(--font-sans), "Segoe UI", sans-serif;
+  font-size: var(--text-main);
+}
+
+.metric-select:focus-visible {
+  outline: 1px solid rgba(25, 108, 255, 0.55);
+  outline-offset: 0;
 }
 
 .btn {

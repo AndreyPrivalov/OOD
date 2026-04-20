@@ -522,7 +522,9 @@ export function useWorkspaceClientComposition() {
           edit.object,
           edit.overcomplication,
           edit.importance,
-          edit.blocksMoney,
+          ...Object.entries(edit.metricValues)
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([metricId, value]) => `${metricId}:${value}`),
           edit.currentProblems,
           edit.solutionVariants,
           edit.possiblyRemovable ? "1" : "0",

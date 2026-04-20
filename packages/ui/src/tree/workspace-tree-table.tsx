@@ -17,6 +17,8 @@ type TreeRowLike = {
   overcomplication: number | null
   importance: number | null
   blocksMoney: number | null
+  metricValues?: Record<string, "none" | "indirect" | "direct">
+  metricAggregates?: Record<string, "none" | "indirect" | "direct">
   overcomplicationSum?: number
   importanceSum?: number
   blocksMoneySum?: number
@@ -288,6 +290,15 @@ const MemoWorkRow = memo(
 )
 
 export function buildRowRenderSignature(row: TreeRowLike): string {
+  const metricValuesSignature = Object.entries(row.metricValues ?? {})
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([metricId, value]) => `${metricId}:${value}`)
+    .join("|")
+  const metricAggregatesSignature = Object.entries(row.metricAggregates ?? {})
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([metricId, value]) => `${metricId}:${value}`)
+    .join("|")
+
   return [
     row.id,
     row.parentId ?? "root",
@@ -296,6 +307,8 @@ export function buildRowRenderSignature(row: TreeRowLike): string {
     String(row.overcomplication ?? ""),
     String(row.importance ?? ""),
     String(row.blocksMoney ?? ""),
+    metricValuesSignature,
+    metricAggregatesSignature,
     String(row.overcomplicationSum ?? ""),
     String(row.importanceSum ?? ""),
     String(row.blocksMoneySum ?? ""),
@@ -369,6 +382,8 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                 props.tableColumnWidths.overcomplication,
               "--importance-col-width": props.tableColumnWidths.importance,
               "--blocks-money-col-width": props.tableColumnWidths.blocksMoney,
+              "--workspace-metric-col-width":
+                props.tableColumnWidths.blocksMoney,
               "--problems-col-width": props.tableColumnWidths.currentProblems,
               "--solutions-col-width": props.tableColumnWidths.solutionVariants,
               "--removable-col-width": props.tableColumnWidths.removable,

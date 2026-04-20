@@ -64,6 +64,7 @@ export const UpdateWorkItemInputSchema = z.object({
   overcomplication: RatingSchema.nullable().optional(),
   importance: RatingSchema.nullable().optional(),
   blocksMoney: RatingSchema.nullable().optional(),
+  metricValues: WorkItemMetricValuesSchema.optional(),
   currentProblems: z.array(z.string()).optional(),
   solutionVariants: z.array(z.string()).optional(),
 })
@@ -157,6 +158,7 @@ export function validateUpdateWorkItemInput(input: UpdateWorkItemInput) {
   for (const field of ratingFieldKeys) {
     assertRating(field, input[field])
   }
+  assertMetricValues(input.metricValues)
   return input
 }
 

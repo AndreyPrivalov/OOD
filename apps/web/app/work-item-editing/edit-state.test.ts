@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest"
 import { buildEditState, isSameEditState } from "./edit-state"
 import type { EditableWorkItemRow } from "./types"
-import { buildOptimisticRatingPatch } from "./use-work-item-editing"
+import {
+  buildOptimisticMetricPatch,
+  buildOptimisticRatingPatch,
+} from "./use-work-item-editing"
 
 function createRow(
   overrides: Partial<EditableWorkItemRow> = {},
@@ -14,6 +17,8 @@ function createRow(
     overcomplication: 2,
     importance: 3,
     blocksMoney: null,
+    metricValues: {},
+    metricAggregates: {},
     currentProblems: ["alpha", "beta"],
     solutionVariants: ["one"],
     children: [],
@@ -33,6 +38,7 @@ describe("buildEditState", () => {
       overcomplication: "2",
       importance: "3",
       blocksMoney: "",
+      metricValues: {},
       currentProblems: "alpha\nbeta",
       solutionVariants: "one",
     })
@@ -64,6 +70,8 @@ describe("buildOptimisticRatingPatch", () => {
         overcomplication: 2,
         importance: 3,
         blocksMoney: null,
+        metricValues: {},
+        metricAggregates: {},
         currentProblems: [],
         solutionVariants: [],
         children: [],
@@ -84,6 +92,8 @@ describe("buildOptimisticRatingPatch", () => {
         overcomplication: null,
         importance: null,
         blocksMoney: null,
+        metricValues: {},
+        metricAggregates: {},
         currentProblems: [],
         solutionVariants: [],
         children: [{ id: "child" }],
@@ -92,5 +102,29 @@ describe("buildOptimisticRatingPatch", () => {
     )
 
     expect(patch).toBeNull()
+  })
+})
+
+describe("buildOptimisticMetricPatch", () => {
+  it("builds immediate leaf metric patch for changed dropdown value", () => {
+    const patch = buildOptimisticMetricPatch(
+      {
+        id: "leaf",
+        title: "Leaf",
+        object: null,
+        possiblyRemovable: false,
+        overcomplication: 2,
+        importance: 3,
+        blocksMoney: null,
+        metricValues: {},
+        metricAggregates: {},
+        currentProblems: [],
+        solutionVariants: [],
+        children: [],
+      },
+      { metricValues: { "m-1": "direct" } },
+    )
+
+    expect(patch).toEqual({ metricValues: { "m-1": "direct" } })
   })
 })

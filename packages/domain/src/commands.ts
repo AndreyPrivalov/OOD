@@ -37,6 +37,7 @@ export interface UpdateWorkItemInput {
   overcomplication?: Rating | null
   importance?: Rating | null
   blocksMoney?: Rating | null
+  metricValues?: WorkItemMetricValues
   currentProblems?: string[]
   solutionVariants?: string[]
 }
