@@ -96,7 +96,6 @@ type DragPreviewLike = {
   x: number
   y: number
   title: string
-  numbering: string
 }
 
 type OverlayNestTargetLike = {
@@ -290,6 +289,7 @@ const MemoWorkRow = memo(
 
 export type WorkspaceTreeTableProps = {
   rows: TreeRowLike[]
+  collapsedRowIds: ReadonlySet<string>
   rowUiById: Record<string, WorkspaceTreeRowUiModel>
   numberingById: Map<string, string>
   draggedRowId: string | null
@@ -324,6 +324,7 @@ export type WorkspaceTreeTableProps = {
   onHandlePointerCancel: (event: PointerEvent<HTMLButtonElement>) => void
   onCreateAtPosition: (parentId: string | null, targetIndex: number) => void
   onDeleteRow: (rowId: string) => void
+  onToggleRowCollapse: (rowId: string) => void
 }
 
 export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
@@ -415,6 +416,7 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                 rowUi.solutionVariants.value.includes("\n")
               const rowClassName = [
                 props.draggedRowId === row.id ? "drag-source" : "",
+                props.collapsedRowIds.has(row.id) ? "is-collapsed" : "",
                 props.dropIntent?.type === "between" &&
                 props.dropIntent.rowId === row.id
                   ? `drop-between-target-${props.dropIntent.position}`
@@ -428,6 +430,8 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                 .join(" ")
               const rowRenderSignature = `${row.id}:${row.parentId ?? "root"}:${row.siblingOrder}:${row.depth}`
               const editRenderSignature = rowUi.renderSignature
+              const isCollapsible = row.children.length > 0
+              const isCollapsed = props.collapsedRowIds.has(row.id)
               return (
                 <MemoWorkRow
                   key={row.id}
@@ -469,6 +473,37 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                         workContentIndentPx={props.workContentIndentPx}
                       />
                       <div className="work-col-actions">
+                        {isCollapsible ? (
+                          <button
+                            type="button"
+                            className={[
+                              "btn btn-secondary btn-icon collapse-handle",
+                              isCollapsed ? "is-collapsed" : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                            onClick={() => props.onToggleRowCollapse(row.id)}
+                            aria-label={
+                              isCollapsed
+                                ? "Показать вложенные работы"
+                                : "Скрыть вложенные работы"
+                            }
+                            title={
+                              isCollapsed
+                                ? "Показать вложенные работы"
+                                : "Скрыть вложенные работы"
+                            }
+                          >
+                            <i
+                              className={
+                                isCollapsed
+                                  ? "ri-arrow-right-s-line"
+                                  : "ri-arrow-down-s-line"
+                              }
+                              aria-hidden
+                            />
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           className="btn btn-secondary btn-icon delete-handle"
@@ -600,11 +635,6 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
               top: `${Math.round(props.dragPreview.y)}px`,
             }}
           >
-            {props.dragPreview.numbering ? (
-              <span className="drag-preview-number">
-                {props.dragPreview.numbering}
-              </span>
-            ) : null}
             <span className="drag-preview-title">
               {props.dragPreview.title.trim() || "Без названия"}
             </span>

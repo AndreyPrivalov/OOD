@@ -31,6 +31,7 @@ describe("WorkspaceTreeTable", () => {
           blocksMoney: 1,
         },
       ],
+      collapsedRowIds: new Set<string>(),
       rowUiById: {
         "row-1": {
           title: {
@@ -136,6 +137,7 @@ describe("WorkspaceTreeTable", () => {
       onHandlePointerCancel: () => {},
       onCreateAtPosition: () => {},
       onDeleteRow: () => {},
+      onToggleRowCollapse: () => {},
     })
     const text = collectText(rendered).join(" ")
 

@@ -477,6 +477,10 @@ button:focus-visible {
   opacity: 1;
 }
 
+.work-table tbody tr.drag-source {
+  opacity: 0.5;
+}
+
 .drag-handle {
   position: absolute;
   left: calc(var(--work-content-indent) + var(--number-anchor-left) - 2px);
@@ -655,16 +659,7 @@ button:focus-visible {
   border: 0;
   border-radius: 8px;
   background: var(--bg);
-  box-shadow: none;
-}
-
-.drag-preview-number {
-  color: var(--muted);
-  font-family: var(--font-serif), Georgia, serif;
-  font-size: var(--text-secondary);
-  font-style: italic;
-  line-height: 1;
-  white-space: nowrap;
+  box-shadow: 0 8px 18px rgba(19, 25, 32, 0.18);
 }
 
 .drag-preview-title {
@@ -784,11 +779,14 @@ button:focus-visible {
 }
 
 .delete-handle {
-  position: absolute;
-  right: 0;
-  top: 0;
-  transform: none;
   font-size: 20px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease;
+}
+
+.collapse-handle {
+  font-size: 18px;
   opacity: 0;
   visibility: hidden;
   transition: opacity 120ms ease;
@@ -796,7 +794,11 @@ button:focus-visible {
 
 .work-table tbody tr:hover .delete-handle,
 .work-table tbody tr.drag-source .delete-handle,
-.delete-handle:hover {
+.delete-handle:hover,
+.work-table tbody tr:hover .collapse-handle,
+.work-table tbody tr.drag-source .collapse-handle,
+.collapse-handle:hover,
+.work-table tbody tr.is-collapsed .collapse-handle {
   opacity: 1;
   visibility: visible;
 }
@@ -806,18 +808,30 @@ button:focus-visible {
   color: var(--danger);
 }
 
+.collapse-handle:hover {
+  background: transparent;
+}
+
+.work-table tbody tr.is-collapsed .collapse-handle {
+  color: var(--muted);
+}
+
 .work-col-actions {
   position: absolute;
   top: 4px;
   right: 0;
-  width: var(--table-control-height);
+  width: calc(var(--table-control-height) * 2 + 4px);
   height: var(--table-control-height);
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
   overflow: visible;
   pointer-events: none;
 }
 
-.work-col-actions .delete-handle {
-  right: 0;
+.work-col-actions .delete-handle,
+.work-col-actions .collapse-handle {
   pointer-events: auto;
 }
 
@@ -827,7 +841,7 @@ button:focus-visible {
   max-width: none;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  padding-right: calc(var(--table-control-height) + 4px);
+  padding-right: calc((var(--table-control-height) * 2) + 12px);
 }
 
 .input-object {

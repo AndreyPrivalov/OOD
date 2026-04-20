@@ -35,6 +35,7 @@ export function WorkspaceClient() {
           ) : null}
           <WorkspaceTreeTable
             rows={vm.rows}
+            collapsedRowIds={vm.collapsedRowIds}
             rowUiById={vm.rowUiById}
             numberingById={vm.numberingById}
             draggedRowId={vm.dnd.draggedRowId}
@@ -47,7 +48,6 @@ export function WorkspaceClient() {
                     title:
                       vm.rowUiById[vm.dnd.draggedRowId]?.title.value ??
                       "Без названия",
-                    numbering: vm.numberingById.get(vm.dnd.draggedRowId) ?? "",
                   }
                 : null
             }
@@ -78,6 +78,7 @@ export function WorkspaceClient() {
             onDeleteRow={(rowId) => {
               void vm.handlers.deleteRow(rowId)
             }}
+            onToggleRowCollapse={vm.handlers.toggleRowCollapse}
           />
         </section>
       </div>

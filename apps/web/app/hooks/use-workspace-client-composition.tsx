@@ -5,6 +5,11 @@ import {
   workspaceRatingFieldConfigs,
 } from "@ood/ui"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  areSetsEqual,
+  filterVisibleRows,
+  pruneCollapsedRowIds,
+} from "../state/tree-visibility"
 import { useWorkspaceContext } from "../workspaces/use-workspace-context"
 import { WorkspaceSwitcher } from "../workspaces/workspace-switcher"
 import {
@@ -59,6 +64,9 @@ export function useWorkspaceClientComposition() {
   const [escapeCancellableRowId, setEscapeCancellableRowId] = useState<
     string | null
   >(null)
+  const [collapsedRowIds, setCollapsedRowIds] = useState<Set<string>>(
+    () => new Set(),
+  )
   const discardPendingSaveRef = useRef<(id: string) => void>(() => {})
 
   const treeData = useWorkspaceTreeDataComposition({
@@ -79,11 +87,15 @@ export function useWorkspaceClientComposition() {
   })
 
   const editingState = useWorkspaceEditingStateComposition(treeData.rows)
+  const rows = useMemo(
+    () => filterVisibleRows(treeData.rows, collapsedRowIds),
+    [collapsedRowIds, treeData.rows],
+  )
 
   const layout = useWorkspaceLayout({
     getEditForRow: editingState.getEditForRow,
     isDev,
-    rows: treeData.rows,
+    rows,
   })
 
   const editing = useWorkspaceEditingComposition({
@@ -121,7 +133,7 @@ export function useWorkspaceClientComposition() {
     contentStartXPx: CONTENT_START_X_PX,
     moveRow: treeData.moveRow,
     rowAnchors: layout.rowAnchors,
-    rows: treeData.rows,
+    rows,
     rowsById: treeData.rowsById,
     rowTreeIndentPx: TREE_LEVEL_OFFSET_PX,
     scheduleOverlayRecalc: layout.scheduleOverlayRecalc,
@@ -170,6 +182,35 @@ export function useWorkspaceClientComposition() {
     readPatchLatencyMedian,
     treeData.refreshCount,
   ])
+
+  useEffect(() => {
+    setCollapsedRowIds((current) => {
+      const next = pruneCollapsedRowIds(treeData.rows, current)
+      if (areSetsEqual(current, next)) {
+        return current
+      }
+      return next
+    })
+  }, [treeData.rows])
+
+  const toggleRowCollapse = useCallback(
+    (rowId: string) => {
+      const row = treeData.rowsById.get(rowId)
+      if (!row || row.children.length === 0) {
+        return
+      }
+      setCollapsedRowIds((current) => {
+        const next = new Set(current)
+        if (next.has(rowId)) {
+          next.delete(rowId)
+        } else {
+          next.add(rowId)
+        }
+        return next
+      })
+    },
+    [treeData.rowsById],
+  )
 
   const handleOpenWorkspace = useCallback(
     (workspaceId: string) => {
@@ -409,8 +450,9 @@ export function useWorkspaceClientComposition() {
     currentWorkspaceName,
     errorText: treeData.errorText,
     isLoading: treeData.isLoading,
-    rows: treeData.rows,
+    rows,
     numberingById: treeData.numberingById,
+    collapsedRowIds,
     rowUiById,
     dnd: dndOverlay.dnd,
     layout,
@@ -429,6 +471,7 @@ export function useWorkspaceClientComposition() {
     handlers: {
       createRowAtPosition: treeData.createRowAtPosition,
       deleteRow: treeData.deleteRow,
+      toggleRowCollapse,
       renderSwitcher,
     },
     workspaceRatingFieldConfigs,
