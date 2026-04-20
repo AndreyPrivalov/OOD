@@ -62,7 +62,6 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
   })
   const [createMetricErrorText, setCreateMetricErrorText] = useState("")
   const [isCreatingMetric, setIsCreatingMetric] = useState(false)
-  const [isCreateMetricOpen, setIsCreateMetricOpen] = useState(false)
   const [metricDrafts, setMetricDrafts] = useState<Record<string, MetricDraft>>(
     {},
   )
@@ -143,7 +142,6 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
     setRenameErrorText("")
     setCreateMetricDraft({ shortName: "", description: "" })
     setCreateMetricErrorText("")
-    setIsCreateMetricOpen(false)
     setMetricDrafts({})
     setMetricErrors({})
     setActiveMetricSaveId(null)
@@ -263,19 +261,11 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
     }
   }
 
-  async function handleCreateMetric(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  async function handleCreateMetric() {
     if (!settingsData) {
       return
     }
 
-    const shortName = createMetricDraft.shortName.trim()
-    if (shortName.length === 0) {
-      setCreateMetricErrorText("Короткое имя метрики не может быть пустым.")
-      return
-    }
-
-    const description = createMetricDraft.description.trim()
     setIsCreatingMetric(true)
     setCreateMetricErrorText("")
 
@@ -283,15 +273,14 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
       const nextMetrics = await props.onCreateMetric(
         settingsData.workspace.id,
         {
-          shortName,
-          description: description.length > 0 ? description : null,
+          shortName: "Новая метрика",
+          description: null,
         },
       )
       applySettings({
         workspace: settingsData.workspace,
         metrics: nextMetrics,
       })
-      setIsCreateMetricOpen(false)
     } catch (error) {
       setCreateMetricErrorText(
         error instanceof Error ? error.message : "Не удалось добавить метрику.",
@@ -635,59 +624,17 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
                           </ul>
                         )}
 
-                        {isCreateMetricOpen ? (
-                          <form
-                            className="workspace-settings-metric-create"
-                            onSubmit={(event) => {
-                              void handleCreateMetric(event)
-                            }}
-                          >
-                            <input
-                              aria-label="Короткое имя новой метрики"
-                              className="workspace-settings-input"
-                              disabled={isCreatingMetric || isDeleting}
-                              onChange={(event) =>
-                                setCreateMetricDraft((current) => ({
-                                  ...current,
-                                  shortName: event.target.value,
-                                }))
-                              }
-                              placeholder="Короткое имя"
-                              value={createMetricDraft.shortName}
-                            />
-                            <input
-                              aria-label="Описание новой метрики"
-                              className="workspace-settings-input"
-                              disabled={isCreatingMetric || isDeleting}
-                              onChange={(event) =>
-                                setCreateMetricDraft((current) => ({
-                                  ...current,
-                                  description: event.target.value,
-                                }))
-                              }
-                              placeholder="Описание (опционально)"
-                              value={createMetricDraft.description}
-                            />
-                            <button
-                              aria-label="Добавить метрику"
-                              className="workspace-settings-button workspace-settings-button-icon"
-                              disabled={isCreatingMetric || isDeleting}
-                              type="submit"
-                            >
-                              <i aria-hidden className="ri-add-line" />
-                            </button>
-                          </form>
-                        ) : (
-                          <button
-                            aria-label="Создать новую метрику"
-                            className="workspace-settings-button workspace-settings-button-danger workspace-settings-delete-trigger"
-                            disabled={isDeleting}
-                            onClick={() => setIsCreateMetricOpen(true)}
-                            type="button"
-                          >
-                            +
-                          </button>
-                        )}
+                        <button
+                          aria-label="Создать новую метрику"
+                          className="workspace-settings-button workspace-settings-button-danger workspace-settings-delete-trigger"
+                          disabled={isCreatingMetric || isDeleting}
+                          onClick={() => {
+                            void handleCreateMetric()
+                          }}
+                          type="button"
+                        >
+                          +
+                        </button>
                         {createMetricErrorText ? (
                           <p className="workspace-settings-error">
                             {createMetricErrorText}
