@@ -125,20 +125,98 @@ export function patchTreeRow(
   rowId: string,
   patch: Partial<WorkTreeNode>,
 ): WorkTreeNode[] {
-  let changed = false
-  const nextNodes = nodes.map((node) => {
+  const shouldRecomputeRatingSums =
+    patch.overcomplication !== undefined ||
+    patch.importance !== undefined ||
+    patch.blocksMoney !== undefined
+
+  const totalsFor = (node: WorkTreeNode) => {
+    if (node.children.length === 0) {
+      return {
+        overcomplicationSum: node.overcomplication ?? 0,
+        importanceSum: node.importance ?? 0,
+        blocksMoneySum: node.blocksMoney ?? 0,
+      }
+    }
+
+    return node.children.reduce(
+      (totals, child) => ({
+        overcomplicationSum:
+          totals.overcomplicationSum + (child.overcomplicationSum ?? 0),
+        importanceSum: totals.importanceSum + (child.importanceSum ?? 0),
+        blocksMoneySum: totals.blocksMoneySum + (child.blocksMoneySum ?? 0),
+      }),
+      {
+        overcomplicationSum: 0,
+        importanceSum: 0,
+        blocksMoneySum: 0,
+      },
+    )
+  }
+
+  function patchNode(node: WorkTreeNode): [WorkTreeNode, boolean] {
+    let changed = false
+    let subtreeHasTarget = false
+    let nextNode = node
+
     if (node.id === rowId) {
+      nextNode = { ...node, ...patch }
       changed = true
-      return { ...node, ...patch }
+      subtreeHasTarget = true
     }
-    const nextChildren = patchTreeRow(node.children, rowId, patch)
-    if (nextChildren !== node.children) {
-      changed = true
-      return { ...node, children: nextChildren }
+
+    if (nextNode.children.length > 0) {
+      let nextChildren: WorkTreeNode[] | null = null
+      for (let index = 0; index < nextNode.children.length; index += 1) {
+        const child = nextNode.children[index]
+        const [nextChild, childHasTarget] = patchNode(child)
+        if (childHasTarget) {
+          subtreeHasTarget = true
+        }
+        if (nextChild !== child) {
+          if (!nextChildren) {
+            nextChildren = [...nextNode.children]
+          }
+          nextChildren[index] = nextChild
+        }
+      }
+
+      if (nextChildren) {
+        nextNode = { ...nextNode, children: nextChildren }
+        changed = true
+      }
     }
-    return node
+
+    if (shouldRecomputeRatingSums && subtreeHasTarget) {
+      const totals = totalsFor(nextNode)
+      if (
+        nextNode.overcomplicationSum !== totals.overcomplicationSum ||
+        nextNode.importanceSum !== totals.importanceSum ||
+        nextNode.blocksMoneySum !== totals.blocksMoneySum
+      ) {
+        nextNode = {
+          ...nextNode,
+          overcomplicationSum: totals.overcomplicationSum,
+          importanceSum: totals.importanceSum,
+          blocksMoneySum: totals.blocksMoneySum,
+        }
+        changed = true
+      }
+    }
+
+    return [nextNode, changed || subtreeHasTarget]
+  }
+
+  let hasChanges = false
+  const nextNodes = nodes.map((node) => {
+    const [nextNode, changed] = patchNode(node)
+    if (changed) {
+      hasChanges = true
+    }
+    return nextNode
   })
-  return changed ? nextNodes : nodes
+
+  return hasChanges ? nextNodes : nodes
 }
 
 function cloneTree(nodes: WorkTreeNode[]): WorkTreeNode[] {
