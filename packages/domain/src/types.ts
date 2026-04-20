@@ -1,9 +1,16 @@
 export type {
+  CanonicalCreateWorkItemInput,
+  CanonicalRestoreWorkItemSnapshot,
+  CanonicalUpdateWorkItemInput,
   CreateWorkItemInput,
   MoveWorkItemInput,
+  RestoreWorkItemBranchInput,
+  RestoreWorkItemSnapshot,
   UpdateWorkItemInput,
 } from "./commands"
 export type {
+  CanonicalWorkItem,
+  CanonicalWorkspace,
   WorkItem,
   WorkTreeNode,
   WorkTreeReadNode,
@@ -17,3 +24,10 @@ export type {
   RatingTotals,
   WorkItemRatings,
 } from "./ratings"
+export type {
+  UpsertWorkspaceMetricInput,
+  WorkItemMetricValueEntry,
+  WorkItemMetricValues,
+  WorkspaceMetric,
+  WorkspaceMetricValue,
+} from "./workspace-metrics"
