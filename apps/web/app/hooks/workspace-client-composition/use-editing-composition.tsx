@@ -3,7 +3,6 @@
 import { WorkspaceRatingCell, type WorkspaceRatingFieldConfig } from "@ood/ui"
 import type { Dispatch, KeyboardEvent, SetStateAction } from "react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { isLocalDraftRowId } from "../workspace-tree-data/shared"
 import {
   type FlatRow,
   type WorkTreeNode,
@@ -15,6 +14,8 @@ import {
   useWorkItemEditing,
 } from "../../work-item-editing"
 import type { WorkspaceMetricSummary } from "../../workspaces/types"
+import { isLocalDraftRowId } from "../workspace-tree-data/shared"
+import { resolveTitleHotkeyAction } from "./title-hotkeys"
 
 export type UseWorkspaceEditingStateCompositionResult = {
   getEditForRow: (row: FlatRow) => EditState
@@ -75,38 +76,6 @@ type UseWorkspaceEditingCompositionOptions = {
       | { kind: "patch"; before: FlatRow; after: FlatRow }
       | { kind: "create"; before: FlatRow; after: FlatRow },
   ) => void
-}
-
-type TitleHotkeyAction = "create-child" | "create-sibling" | "blur" | "cancel"
-
-type ResolveTitleHotkeyActionOptions = {
-  isDraftRow: boolean
-  key: string
-  shiftKey: boolean
-  metaKey: boolean
-  ctrlKey: boolean
-}
-
-export function resolveTitleHotkeyAction(
-  options: ResolveTitleHotkeyActionOptions,
-): TitleHotkeyAction | null {
-  const { ctrlKey, isDraftRow, key, metaKey, shiftKey } = options
-  if (!isDraftRow) {
-    return null
-  }
-  if (key === "Tab" && !shiftKey) {
-    return "create-child"
-  }
-  if (key === "Enter" && !metaKey && !ctrlKey) {
-    if (shiftKey) {
-      return "blur"
-    }
-    return "create-sibling"
-  }
-  if (key === "Escape") {
-    return "cancel"
-  }
-  return null
 }
 
 const baseRatingFields: WorkspaceRatingFieldConfig[] = [
@@ -179,12 +148,15 @@ export function useWorkspaceEditingComposition(
   const [activeEditingRowId, setActiveEditingRowId] = useState<string | null>(
     null,
   )
+  const [focusRevision, setFocusRevision] = useState(0)
+  const skipTitleCommitOnBlurRef = useRef<Set<string>>(new Set())
 
   const {
     edits,
     commitEdit,
     commitTextEdit,
     discardPendingSave,
+    resetEdit,
     flushPendingEdits,
     handleFieldBlur: handleFieldBlurBase,
     handleFieldFocus: handleFieldFocusBase,
@@ -244,6 +216,7 @@ export function useWorkspaceEditingComposition(
   const handleFieldFocus = useCallback(
     (rowId: string) => {
       handleFieldFocusBase(rowId)
+      setFocusRevision((current) => current + 1)
       setActiveEditingRowId((current) => (current === rowId ? current : rowId))
     },
     [handleFieldFocusBase],
@@ -268,7 +241,6 @@ export function useWorkspaceEditingComposition(
   const handleTitleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>, rowId: string) => {
       const hotkeyAction = resolveTitleHotkeyAction({
-        isDraftRow: isLocalDraftRowId(rowId),
         key: event.key,
         shiftKey: event.shiftKey,
         metaKey: event.metaKey,
@@ -306,9 +278,16 @@ export function useWorkspaceEditingComposition(
       if (hotkeyAction === "cancel") {
         event.preventDefault()
         event.stopPropagation()
+        if (isLocalDraftRowId(rowId)) {
+          discardPendingSave(rowId)
+          setEscapeCancellableRowId(null)
+          void deleteRow(rowId)
+          return
+        }
         discardPendingSave(rowId)
-        setEscapeCancellableRowId(null)
-        void deleteRow(rowId)
+        resetEdit(rowId)
+        skipTitleCommitOnBlurRef.current.add(rowId)
+        event.currentTarget.blur()
         return
       }
 
@@ -340,6 +319,7 @@ export function useWorkspaceEditingComposition(
       deleteRow,
       discardPendingSave,
       escapeCancellableRowId,
+      resetEdit,
       rowsById,
       setEscapeCancellableRowId,
     ],
@@ -423,6 +403,7 @@ export function useWorkspaceEditingComposition(
 
   return {
     activeEditingRowId,
+    focusRevision,
     rowEdits,
     commitEdit,
     commitTextEdit,
@@ -432,6 +413,13 @@ export function useWorkspaceEditingComposition(
     handleFieldFocus,
     handleTitleBlur,
     handleTitleKeyDown,
+    shouldSkipTitleCommitOnBlur: (rowId: string) => {
+      if (!skipTitleCommitOnBlurRef.current.has(rowId)) {
+        return false
+      }
+      skipTitleCommitOnBlurRef.current.delete(rowId)
+      return true
+    },
     renderRatingCells,
     patchLatenciesRef,
     inputToPaintRef,

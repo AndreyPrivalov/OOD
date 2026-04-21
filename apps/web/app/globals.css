@@ -142,17 +142,18 @@ button:focus-visible {
 
 .workspace-title-row {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: baseline;
+  justify-content: flex-start;
   gap: var(--space-4);
+  flex-wrap: wrap;
 }
 
 .workspace-title-actions {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: flex-end;
   min-width: max-content;
-  padding-top: 6px;
+  padding-top: 0;
 }
 
 .section-head h1 {
@@ -258,51 +259,40 @@ button:focus-visible {
   height: 100%;
 }
 
-.workspace-view-mode-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  border: 1px solid var(--line);
-  background: rgba(250, 246, 244, 0.72);
-  padding: 2px;
-  margin: 0;
-  min-width: 0;
-}
-
-.workspace-view-mode-button {
+.workspace-view-toggle {
+  width: 28px;
+  height: 28px;
   border: 0;
   background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-family: var(--font-serif), Georgia, serif;
-  font-size: var(--text-secondary);
-  line-height: 1;
-  padding: 7px 10px;
+  color: var(--placeholder);
   cursor: pointer;
-  white-space: nowrap;
-  transition: background-color 120ms ease, color 120ms ease;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  line-height: 1;
 }
 
-.workspace-view-mode-button.is-active {
-  background: var(--text);
-  color: var(--surface);
+.workspace-view-toggle svg {
+  display: block;
+  line-height: 1;
+  transform: translateY(1px);
+  width: 1em;
+  height: 1em;
+  fill: currentColor;
 }
 
-.workspace-view-mode-button:hover,
-.workspace-view-mode-button:focus-visible {
-  color: var(--text);
-  background: rgba(19, 25, 32, 0.06);
+.workspace-view-toggle:hover {
+  color: var(--muted);
 }
 
-.workspace-view-mode-button.is-active:hover,
-.workspace-view-mode-button.is-active:focus-visible {
-  color: var(--surface);
-  background: var(--text);
+.workspace-view-toggle:focus-visible {
+  outline: none;
 }
 
-.workspace-view-mode-button:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 0;
+.workspace-view-toggle.is-active {
+  color: var(--accent);
 }
 
 .workspace-inline-switcher {

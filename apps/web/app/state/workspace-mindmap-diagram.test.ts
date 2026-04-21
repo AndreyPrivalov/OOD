@@ -287,7 +287,7 @@ describe("workspace-mindmap-diagram", () => {
     expect(externalGap).toBeGreaterThan(internalGap)
   })
 
-  it("includes editing row, parent and siblings for nested context", () => {
+  it("includes editing row, one parent level, sibling level and one child level", () => {
     const root = buildRow({ id: "root", title: "Root", depth: 0 })
     const childA = buildRow({
       id: "child-a",
@@ -303,6 +303,13 @@ describe("workspace-mindmap-diagram", () => {
       depth: 1,
       siblingOrder: 1,
     })
+    const grandchildA = buildRow({
+      id: "grandchild-a",
+      title: "Grandchild A",
+      parentId: "child-a",
+      depth: 2,
+      siblingOrder: 0,
+    })
 
     const context = buildEditingContextNodeIds({
       editingContextRowId: "child-a",
@@ -310,17 +317,61 @@ describe("workspace-mindmap-diagram", () => {
         [root.id, root],
         [childA.id, childA],
         [childB.id, childB],
+        [grandchildA.id, grandchildA],
       ]),
       siblingsByParent: new Map([
         [null, [root]],
         ["root", [childA, childB]],
+        ["child-a", [grandchildA]],
       ]),
     })
 
-    expect(context).toEqual(["child-a", "root", "child-b"])
+    expect(context).toEqual(["child-a", "grandchild-a", "root", "child-b"])
   })
 
-  it("includes root-level siblings when editing row is root", () => {
+  it("includes extended parent chain for leaf editing row", () => {
+    const root = buildRow({ id: "root", title: "Root", depth: 0 })
+    const parent = buildRow({
+      id: "parent",
+      title: "Parent",
+      parentId: "root",
+      depth: 1,
+      siblingOrder: 0,
+    })
+    const leaf = buildRow({
+      id: "leaf",
+      title: "Leaf",
+      parentId: "parent",
+      depth: 2,
+      siblingOrder: 0,
+    })
+    const parentSibling = buildRow({
+      id: "parent-sibling",
+      title: "Parent Sibling",
+      parentId: "root",
+      depth: 1,
+      siblingOrder: 1,
+    })
+
+    const context = buildEditingContextNodeIds({
+      editingContextRowId: "leaf",
+      rowsById: new Map([
+        [root.id, root],
+        [parent.id, parent],
+        [leaf.id, leaf],
+        [parentSibling.id, parentSibling],
+      ]),
+      siblingsByParent: new Map([
+        [null, [root]],
+        ["root", [parent, parentSibling]],
+        ["parent", [leaf]],
+      ]),
+    })
+
+    expect(context).toEqual(["leaf", "parent", "root"])
+  })
+
+  it("includes root-level siblings and first-level children when editing row is root", () => {
     const rootA = buildRow({
       id: "root-a",
       title: "Root A",
@@ -354,7 +405,7 @@ describe("workspace-mindmap-diagram", () => {
       ]),
     })
 
-    expect(context).toEqual(["root-a", "root-b"])
+    expect(context).toEqual(["root-a", "child", "root-b"])
   })
 
   it("returns empty editing context for missing or empty editing target", () => {

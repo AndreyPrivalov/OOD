@@ -120,6 +120,7 @@ type MemoRowProps = {
     rowId: string,
     node: HTMLTableRowElement | null,
   ) => void
+  onActivateRowForEditing?: (rowId: string) => void
   children: ReactNode
 }
 
@@ -263,6 +264,19 @@ const EditableTitleField = memo(function EditableTitleField(
 
 const MemoWorkRow = memo(
   function MemoWorkRow(props: MemoRowProps) {
+    const handlePointerDownCapture = (
+      event: PointerEvent<HTMLTableRowElement>,
+    ) => {
+      const target = event.target
+      if (!(target instanceof Element)) {
+        return
+      }
+      if (target.closest("button, input, textarea, select, a")) {
+        return
+      }
+      props.onActivateRowForEditing?.(props.rowId)
+    }
+
     return (
       <tr
         ref={(node) => props.registerRowElementRef(props.rowId, node)}
@@ -271,6 +285,7 @@ const MemoWorkRow = memo(
         data-depth={props.depth}
         data-multiline={props.hasMultilineField ? "true" : "false"}
         className={props.className}
+        onPointerDownCapture={handlePointerDownCapture}
       >
         {props.children}
       </tr>
@@ -348,6 +363,7 @@ export type WorkspaceTreeTableProps = {
   onCreateAtPosition: (parentId: string | null, targetIndex: number) => void
   onDeleteRow: (rowId: string) => void
   onToggleRowCollapse: (rowId: string) => void
+  onActivateRowForEditing?: (rowId: string) => void
 }
 
 export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
@@ -466,6 +482,7 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
                   rowRenderSignature={rowRenderSignature}
                   editRenderSignature={editRenderSignature}
                   registerRowElementRef={props.registerRowElementRef}
+                  onActivateRowForEditing={props.onActivateRowForEditing}
                 >
                   <td className="work-col">
                     <div

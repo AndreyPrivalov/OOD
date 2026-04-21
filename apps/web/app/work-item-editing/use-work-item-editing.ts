@@ -165,6 +165,30 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
     queue?.clearQueued()
   }, [])
 
+  const resetEdit = useCallback(
+    (id: string) => {
+      const currentRow = rowsByIdRef.current.get(id)
+      if (!currentRow) {
+        return
+      }
+
+      rowQueuesRef.current.get(id)?.clearQueued()
+      const meta = getRowMeta(id)
+      meta.isDirty = false
+      meta.hasUnackedChanges = false
+
+      setEdits((current) => {
+        const nextEdit = buildEditState(currentRow)
+        const currentEdit = current[id]
+        if (currentEdit && isSameEditState(currentEdit, nextEdit)) {
+          return current
+        }
+        return { ...current, [id]: nextEdit }
+      })
+    },
+    [getRowMeta],
+  )
+
   const remapRowState = useCallback((fromRowId: string, toRowId: string) => {
     if (fromRowId === toRowId) {
       return
@@ -548,6 +572,7 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
     commitEdit,
     commitTextEdit,
     discardPendingSave,
+    resetEdit,
     flushPendingEdits,
     handleFieldBlur,
     handleFieldFocus,

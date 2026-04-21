@@ -230,6 +230,20 @@ export function buildEditingContextNodeIds(
   }
 
   const ids = new Set<string>([row.id])
+  const directChildren = siblingsByParent.get(row.id) ?? []
+  for (const child of directChildren) {
+    ids.add(child.id)
+  }
+
+  if (directChildren.length === 0) {
+    let ancestorId = row.parentId
+    while (ancestorId) {
+      ids.add(ancestorId)
+      const ancestor = rowsById.get(ancestorId)
+      ancestorId = ancestor?.parentId ?? null
+    }
+  }
+
   if (!row.parentId) {
     for (const sibling of siblingsByParent.get(null) ?? []) {
       ids.add(sibling.id)

@@ -19,6 +19,10 @@ import {
   deriveWorkspaceTreeProjection,
 } from "../state/workspace-tree-projection"
 import { useWorkspaceContext } from "../workspaces/use-workspace-context"
+import {
+  readWorkspaceViewMode,
+  writeWorkspaceViewMode,
+} from "../workspaces/workspace-session-state"
 import { WorkspaceSwitcher } from "../workspaces/workspace-switcher"
 import {
   useTableFrameConstants,
@@ -100,7 +104,9 @@ export function useWorkspaceClientComposition() {
   const [pendingFocusRowId, setPendingFocusRowId] = useState<string | null>(
     null,
   )
-  const [viewMode, setViewMode] = useState<WorkspaceViewMode>("table-only")
+  const [viewModeByWorkspaceId, setViewModeByWorkspaceId] = useState<
+    Record<string, WorkspaceViewMode>
+  >({})
   const [escapeCancellableRowId, setEscapeCancellableRowId] = useState<
     string | null
   >(null)
@@ -195,6 +201,56 @@ export function useWorkspaceClientComposition() {
     siblingsByParent: treeProjection.canonical.siblingsByParent,
     tableHeaderBottom: layout.tableHeaderBottom,
   })
+
+  useEffect(() => {
+    if (!currentWorkspaceId) {
+      return
+    }
+
+    const storedViewMode = readWorkspaceViewMode(currentWorkspaceId)
+    if (!storedViewMode) {
+      return
+    }
+
+    setViewModeByWorkspaceId((current) => {
+      if (current[currentWorkspaceId] === storedViewMode) {
+        return current
+      }
+
+      return {
+        ...current,
+        [currentWorkspaceId]: storedViewMode,
+      }
+    })
+  }, [currentWorkspaceId])
+
+  const viewMode = useMemo<WorkspaceViewMode>(() => {
+    if (!currentWorkspaceId) {
+      return "table-only"
+    }
+
+    return viewModeByWorkspaceId[currentWorkspaceId] ?? "table-only"
+  }, [currentWorkspaceId, viewModeByWorkspaceId])
+
+  const setViewMode = useCallback(
+    (nextViewMode: WorkspaceViewMode) => {
+      if (!currentWorkspaceId) {
+        return
+      }
+
+      setViewModeByWorkspaceId((current) => {
+        if (current[currentWorkspaceId] === nextViewMode) {
+          return current
+        }
+        return {
+          ...current,
+          [currentWorkspaceId]: nextViewMode,
+        }
+      })
+      writeWorkspaceViewMode(currentWorkspaceId, nextViewMode)
+    },
+    [currentWorkspaceId],
+  )
 
   useEffect(() => {
     if (viewMode !== "table-only" && viewMode !== "split") {
@@ -494,7 +550,9 @@ export function useWorkspaceClientComposition() {
             layout.registerTitleInputRef(rowId, node),
           onFocus: () => editing.handleFieldFocus(rowId),
           onBlur: (value) => {
-            editing.commitTextEdit(rowId, { title: value })
+            if (!editing.shouldSkipTitleCommitOnBlur(rowId)) {
+              editing.commitTextEdit(rowId, { title: value })
+            }
             editing.handleFieldBlur(rowId)
             editing.handleTitleBlur(rowId)
           },
@@ -609,8 +667,16 @@ export function useWorkspaceClientComposition() {
   const mindmapViewportController = useMindmapViewportController({
     nodes: mindmapDiagram.nodes,
     editingNodeIds: editingContextNodeIds,
+    autoFrameKey: editing.focusRevision,
     initialViewport: INITIAL_MINDMAP_VIEWPORT,
   })
+  const activateRowForEditing = useCallback(
+    (rowId: string) => {
+      editing.handleFieldFocus(rowId)
+      layout.focusTitleInput(rowId)
+    },
+    [editing.handleFieldFocus, layout.focusTitleInput],
+  )
 
   return {
     viewMode,
@@ -656,6 +722,7 @@ export function useWorkspaceClientComposition() {
       deleteRow: treeData.deleteRow,
       setViewMode,
       toggleRowCollapse,
+      activateRowForEditing,
       renderSwitcher,
     },
     workspaceRatingFieldConfigs: tableScoreHeaders,

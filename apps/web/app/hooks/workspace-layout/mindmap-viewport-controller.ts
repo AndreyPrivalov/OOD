@@ -26,6 +26,7 @@ type Size = {
 type UseMindmapViewportControllerOptions = {
   nodes: MindmapNodeLike[]
   editingNodeIds: readonly string[]
+  autoFrameKey?: number
   initialViewport: MindmapViewport
   minZoom?: number
   maxZoom?: number
@@ -37,6 +38,10 @@ const DEFAULT_NODE_HEIGHT = 22
 const DEFAULT_MIN_ZOOM = 0.4
 const DEFAULT_MAX_ZOOM = 2.2
 const DEFAULT_FRAME_PADDING_PX = 24
+const AUTO_FRAME_MIN_ZOOM = 0.6
+const AUTO_FRAME_MAX_ZOOM = 0.85
+const AUTO_FRAME_FIT_MARGIN_RATIO = 0.92
+const AUTO_FRAME_FOCUS_X_RATIO = 0.36
 const AUTO_FRAME_DURATION_MS = 240
 
 function clamp(value: number, min: number, max: number) {
@@ -49,6 +54,21 @@ function lerp(from: number, to: number, t: number) {
 
 function easeOutCubic(value: number) {
   return 1 - (1 - value) ** 3
+}
+
+function readFrameSizeFromElement(
+  frameElement: HTMLDivElement | null,
+): Size | null {
+  if (!frameElement) {
+    return null
+  }
+  const rect = frameElement.getBoundingClientRect()
+  const width = Math.round(rect.width)
+  const height = Math.round(rect.height)
+  if (width <= 0 || height <= 0) {
+    return null
+  }
+  return { width, height }
 }
 
 export function buildNodeRect(node: MindmapNodeLike): Rect {
@@ -110,11 +130,25 @@ function fitViewportAxis(options: {
   zoom: number
   padding: number
   value: number
+  centerWhenContentFits: boolean
 }) {
-  const { contentMax, contentMin, frameSize, padding, value, zoom } = options
+  const {
+    centerWhenContentFits,
+    contentMax,
+    contentMin,
+    frameSize,
+    padding,
+    value,
+    zoom,
+  } = options
   const contentSize = (contentMax - contentMin) * zoom
   if (contentSize <= frameSize - padding * 2) {
-    return (frameSize - contentSize) / 2 - contentMin * zoom
+    if (centerWhenContentFits) {
+      return (frameSize - contentSize) / 2 - contentMin * zoom
+    }
+    const lowerBound = padding - contentMin * zoom
+    const upperBound = frameSize - padding - contentMax * zoom
+    return clamp(value, lowerBound, upperBound)
   }
   const minValue = frameSize - padding - contentMax * zoom
   const maxValue = padding - contentMin * zoom
@@ -128,9 +162,17 @@ export function clampViewportToBounds(options: {
   minZoom: number
   maxZoom: number
   padding: number
+  centerWhenContentFits?: boolean
 }): MindmapViewport {
-  const { contentBounds, frameSize, maxZoom, minZoom, padding, viewport } =
-    options
+  const {
+    centerWhenContentFits = true,
+    contentBounds,
+    frameSize,
+    maxZoom,
+    minZoom,
+    padding,
+    viewport,
+  } = options
   const zoom = clamp(viewport.zoom, minZoom, maxZoom)
   if (!contentBounds || frameSize.width <= 0 || frameSize.height <= 0) {
     return { ...viewport, zoom }
@@ -143,6 +185,7 @@ export function clampViewportToBounds(options: {
       zoom,
       padding,
       value: viewport.x,
+      centerWhenContentFits,
     }),
     y: fitViewportAxis({
       contentMin: contentBounds.minY,
@@ -151,37 +194,17 @@ export function clampViewportToBounds(options: {
       zoom,
       padding,
       value: viewport.y,
+      centerWhenContentFits,
     }),
     zoom,
   }
-}
-
-function isContextFullyVisible(options: {
-  viewport: MindmapViewport
-  frameSize: Size
-  contextBounds: Rect
-  padding: number
-}) {
-  const { contextBounds, frameSize, padding, viewport } = options
-  if (frameSize.width <= 0 || frameSize.height <= 0) {
-    return true
-  }
-  const left = viewport.x + contextBounds.minX * viewport.zoom
-  const top = viewport.y + contextBounds.minY * viewport.zoom
-  const right = viewport.x + contextBounds.maxX * viewport.zoom
-  const bottom = viewport.y + contextBounds.maxY * viewport.zoom
-  return (
-    left >= padding &&
-    top >= padding &&
-    right <= frameSize.width - padding &&
-    bottom <= frameSize.height - padding
-  )
 }
 
 export function computeAutoFrameViewport(options: {
   viewport: MindmapViewport
   frameSize: Size
   contextBounds: Rect
+  focusBounds: Rect | null
   contentBounds: Rect | null
   minZoom: number
   maxZoom: number
@@ -191,6 +214,7 @@ export function computeAutoFrameViewport(options: {
     contentBounds,
     contextBounds,
     frameSize,
+    focusBounds,
     maxZoom,
     minZoom,
     padding,
@@ -202,17 +226,26 @@ export function computeAutoFrameViewport(options: {
 
   const contextWidth = Math.max(1, contextBounds.maxX - contextBounds.minX)
   const contextHeight = Math.max(1, contextBounds.maxY - contextBounds.minY)
+  const availableWidth = Math.max(1, frameSize.width - padding * 2)
+  const availableHeight = Math.max(1, frameSize.height - padding * 2)
   const fitZoom = Math.min(
-    (frameSize.width - padding * 2) / contextWidth,
-    (frameSize.height - padding * 2) / contextHeight,
+    availableWidth / contextWidth,
+    availableHeight / contextHeight,
   )
-  const targetZoom = clamp(Math.min(viewport.zoom, fitZoom), minZoom, maxZoom)
-  const centerX = (contextBounds.minX + contextBounds.maxX) / 2
-  const centerY = (contextBounds.minY + contextBounds.maxY) / 2
+  const adaptiveZoom = clamp(
+    fitZoom * AUTO_FRAME_FIT_MARGIN_RATIO,
+    AUTO_FRAME_MIN_ZOOM,
+    AUTO_FRAME_MAX_ZOOM,
+  )
+  const targetZoom = clamp(adaptiveZoom, minZoom, maxZoom)
+  const anchorBounds = focusBounds ?? contextBounds
+  const anchorCenterX = (anchorBounds.minX + anchorBounds.maxX) / 2
+  const anchorCenterY = (anchorBounds.minY + anchorBounds.maxY) / 2
   return clampViewportToBounds({
     viewport: {
-      x: frameSize.width / 2 - centerX * targetZoom,
-      y: frameSize.height / 2 - centerY * targetZoom,
+      x:
+        frameSize.width * AUTO_FRAME_FOCUS_X_RATIO - anchorCenterX * targetZoom,
+      y: frameSize.height / 2 - anchorCenterY * targetZoom,
       zoom: targetZoom,
     },
     frameSize,
@@ -220,6 +253,7 @@ export function computeAutoFrameViewport(options: {
     minZoom,
     maxZoom,
     padding,
+    centerWhenContentFits: false,
   })
 }
 
@@ -239,12 +273,14 @@ export function useMindmapViewportController(
 ) {
   const {
     editingNodeIds,
+    autoFrameKey,
     initialViewport,
     nodes,
     minZoom = DEFAULT_MIN_ZOOM,
     maxZoom = DEFAULT_MAX_ZOOM,
     framePaddingPx = DEFAULT_FRAME_PADDING_PX,
   } = options
+  const autoFrameSignal = autoFrameKey ?? 0
   const [viewport, setViewport] = useState<MindmapViewport>(
     () => initialViewport,
   )
@@ -261,6 +297,13 @@ export function useMindmapViewportController(
     () => buildContextBounds(nodeBoundsById, editingNodeIds),
     [nodeBoundsById, editingNodeIds],
   )
+  const focusNodeBounds = useMemo(() => {
+    const focusNodeId = editingNodeIds[0]
+    if (!focusNodeId) {
+      return null
+    }
+    return nodeBoundsById.get(focusNodeId) ?? null
+  }, [editingNodeIds, nodeBoundsById])
 
   const cancelAutoFrame = useCallback(() => {
     if (animationFrameIdRef.current === null || typeof window === "undefined") {
@@ -324,25 +367,30 @@ export function useMindmapViewportController(
   }, [clampViewport])
 
   useEffect(() => {
+    void autoFrameSignal
     if (!editingContextBounds) {
       return
     }
     setViewport((current) => {
+      const measuredFrameSize = readFrameSizeFromElement(
+        viewportFrameRef.current,
+      )
+      const effectiveFrameSize =
+        frameSize.width > 0 && frameSize.height > 0
+          ? frameSize
+          : (measuredFrameSize ?? frameSize)
       if (
-        isContextFullyVisible({
-          viewport: current,
-          frameSize,
-          contextBounds: editingContextBounds,
-          padding: framePaddingPx,
-        })
+        measuredFrameSize &&
+        (measuredFrameSize.width !== frameSize.width ||
+          measuredFrameSize.height !== frameSize.height)
       ) {
-        return current
+        setFrameSize(measuredFrameSize)
       }
-
       const target = computeAutoFrameViewport({
         viewport: current,
-        frameSize,
+        frameSize: effectiveFrameSize,
         contextBounds: editingContextBounds,
+        focusBounds: focusNodeBounds,
         contentBounds,
         minZoom,
         maxZoom,
@@ -387,10 +435,12 @@ export function useMindmapViewportController(
     cancelAutoFrame,
     contentBounds,
     editingContextBounds,
+    focusNodeBounds,
     framePaddingPx,
     frameSize,
     maxZoom,
     minZoom,
+    autoFrameSignal,
   ])
 
   useEffect(() => {
