@@ -1,10 +1,25 @@
 import {
   UpdateWorkItemInputSchema,
+  type WorkItemMetricValues,
   validateUpdateWorkItemInput,
 } from "@ood/domain"
 import { jsonData, jsonError, jsonInvalidPayload } from "../../../../lib/http"
 import { getRepository } from "../../../../lib/repository"
+import { getWorkspaceMetricRepository } from "../../../../lib/workspace-metric-repository"
 import { serializeWorkItem } from "../contracts"
+
+function sanitizeMetricValues(values: WorkItemMetricValues | undefined) {
+  if (!values) {
+    return {}
+  }
+  const next: WorkItemMetricValues = {}
+  for (const [metricId, value] of Object.entries(values)) {
+    if (value === "none" || value === "indirect" || value === "direct") {
+      next[metricId] = value
+    }
+  }
+  return next
+}
 
 export async function PATCH(
   request: Request,
@@ -20,7 +35,15 @@ export async function PATCH(
     const patch = validateUpdateWorkItemInput(parsed.data)
     const repository = getRepository()
     const updated = await repository.update(id, patch)
-    return jsonData(serializeWorkItem(updated))
+
+    const metricRepository = getWorkspaceMetricRepository()
+    const metricEntries = await metricRepository.listWorkItemMetricValues(id)
+    const metricValues = sanitizeMetricValues(
+      Object.fromEntries(
+        metricEntries.map((entry) => [entry.metricId, entry.value]),
+      ),
+    )
+    return jsonData(serializeWorkItem(updated, metricValues, metricValues))
   } catch (error) {
     return jsonError(error)
   }

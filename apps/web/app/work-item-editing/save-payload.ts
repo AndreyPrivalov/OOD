@@ -15,6 +15,27 @@ function isSameStringList(left: string[], right: string[]): boolean {
   return left.every((value, index) => value === right[index])
 }
 
+function buildMetricPatch(
+  currentValues: Record<string, "none" | "indirect" | "direct">,
+  nextValues: Record<string, "none" | "indirect" | "direct">,
+) {
+  const changed: Record<string, "none" | "indirect" | "direct"> = {}
+  const allKeys = new Set([
+    ...Object.keys(currentValues),
+    ...Object.keys(nextValues),
+  ])
+
+  for (const metricId of allKeys) {
+    const currentValue = currentValues[metricId] ?? "none"
+    const nextValue = nextValues[metricId] ?? "none"
+    if (currentValue !== nextValue) {
+      changed[metricId] = nextValue
+    }
+  }
+
+  return changed
+}
+
 export function buildPatchPayload(
   currentRow: EditableWorkItemRow,
   rowEdit: EditState,
@@ -37,6 +58,13 @@ export function buildPatchPayload(
   const isParentRow = currentRow.children.length > 0
   if (!isParentRow) {
     Object.assign(payload, buildRatingPayload(currentRow, rowEdit))
+    const metricPatch = buildMetricPatch(
+      currentRow.metricValues ?? {},
+      rowEdit.metricValues,
+    )
+    if (Object.keys(metricPatch).length > 0) {
+      payload.metricValues = metricPatch
+    }
   }
 
   const nextCurrentProblems = multilineToList(rowEdit.currentProblems)

@@ -80,7 +80,16 @@ describe("DELETE /api/workspaces/:id/settings/metrics/:metricId", () => {
       createdAt: new Date("2026-04-20T12:00:00.000Z"),
       updatedAt: new Date("2026-04-20T12:00:00.000Z"),
     })
-    metricRepository.deleteMetric.mockResolvedValueOnce(true)
+    metricRepository.deleteMetric.mockResolvedValueOnce({
+      metric: {
+        id: "m-1",
+        workspaceId: "ws-1",
+        shortName: "Impact",
+        description: null,
+      },
+      targetIndex: 0,
+      removedValues: [{ workItemId: "w-1", value: "direct" }],
+    })
     metricRepository.listMetrics.mockResolvedValueOnce([])
 
     const response = await DELETE(new Request("http://localhost"), {
@@ -91,5 +100,14 @@ describe("DELETE /api/workspaces/:id/settings/metrics/:metricId", () => {
     expect(response.status).toBe(200)
     expect(metricRepository.deleteMetric).toHaveBeenCalledWith("ws-1", "m-1")
     expect(payload.data.metrics).toEqual([])
+    expect(payload.data.deletedMetricSnapshot).toEqual({
+      metric: {
+        id: "m-1",
+        shortName: "Impact",
+        description: null,
+      },
+      targetIndex: 0,
+      removedValues: [{ workItemId: "w-1", value: "direct" }],
+    })
   })
 })

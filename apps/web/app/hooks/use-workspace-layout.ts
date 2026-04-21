@@ -29,7 +29,6 @@ export type TableColumnWidths = {
   object: string
   overcomplication: string
   importance: string
-  blocksMoney: string
   currentProblems: string
   solutionVariants: string
   removable: string
@@ -44,7 +43,6 @@ const STABLE_TABLE_COLUMN_WIDTHS: TableColumnWidths = {
   object: "260px",
   overcomplication: "15ch",
   importance: "15ch",
-  blocksMoney: "15ch",
   currentProblems: `${FIXED_MULTILINE_COLUMN_WIDTH_CH}ch`,
   solutionVariants: `${FIXED_MULTILINE_COLUMN_WIDTH_CH}ch`,
   removable: "15ch",
@@ -114,7 +112,6 @@ export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions) {
       object: `${clampColumnChars(maxObject, 16)}ch`,
       overcomplication: STABLE_TABLE_COLUMN_WIDTHS.overcomplication,
       importance: STABLE_TABLE_COLUMN_WIDTHS.importance,
-      blocksMoney: STABLE_TABLE_COLUMN_WIDTHS.blocksMoney,
       currentProblems: STABLE_TABLE_COLUMN_WIDTHS.currentProblems,
       solutionVariants: STABLE_TABLE_COLUMN_WIDTHS.solutionVariants,
       removable: STABLE_TABLE_COLUMN_WIDTHS.removable,
@@ -126,7 +123,6 @@ export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions) {
         current.object === next.object &&
         current.overcomplication === next.overcomplication &&
         current.importance === next.importance &&
-        current.blocksMoney === next.blocksMoney &&
         current.currentProblems === next.currentProblems &&
         current.solutionVariants === next.solutionVariants &&
         current.removable === next.removable
@@ -360,15 +356,22 @@ export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions) {
 
   const recalcViewportScrollbar = useCallback(() => {
     const listElement = listScrollRef.current
+    const viewportScrollbar = viewportScrollbarRef.current
     if (!listElement) {
       setViewportScrollbarWidth(0)
       setShowViewportScrollbar(false)
       return
     }
-    const scrollWidth = Math.ceil(listElement.scrollWidth)
-    const clientWidth = Math.ceil(listElement.clientWidth)
-    setViewportScrollbarWidth(scrollWidth)
-    setShowViewportScrollbar(scrollWidth > clientWidth + 1)
+    const listScrollWidth = Math.ceil(listElement.scrollWidth)
+    const listClientWidth = Math.ceil(listElement.clientWidth)
+    const viewportClientWidth = Math.ceil(
+      viewportScrollbar?.clientWidth ?? listClientWidth,
+    )
+    const listMaxScrollLeft = Math.max(0, listScrollWidth - listClientWidth)
+    const viewportSpacerWidth = listMaxScrollLeft + viewportClientWidth
+
+    setViewportScrollbarWidth(viewportSpacerWidth)
+    setShowViewportScrollbar(listMaxScrollLeft > 1)
   }, [])
 
   useEffect(() => {
@@ -378,6 +381,7 @@ export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions) {
   useEffect(() => {
     const listElement = listScrollRef.current
     const tableElement = tableRef.current
+    const wrapElement = tableWrapRef.current
     if (!listElement) {
       return
     }
@@ -387,18 +391,22 @@ export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions) {
         ? null
         : new ResizeObserver(() => {
             recalcViewportScrollbar()
+            scheduleOverlayRecalc()
           })
 
     observer?.observe(listElement)
     if (tableElement) {
       observer?.observe(tableElement)
     }
+    if (wrapElement) {
+      observer?.observe(wrapElement)
+    }
     window.addEventListener("resize", recalcViewportScrollbar)
     return () => {
       observer?.disconnect()
       window.removeEventListener("resize", recalcViewportScrollbar)
     }
-  }, [recalcViewportScrollbar])
+  }, [recalcViewportScrollbar, scheduleOverlayRecalc])
 
   useEffect(() => {
     const listElement = listScrollRef.current
@@ -407,12 +415,22 @@ export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions) {
       return
     }
 
+    const getMaxScrollLeft = (element: HTMLDivElement) =>
+      Math.max(0, element.scrollWidth - element.clientWidth)
+
     const syncFromList = () => {
       if (syncScrollRef.current) {
         return
       }
       syncScrollRef.current = true
-      viewportScrollbar.scrollLeft = listElement.scrollLeft
+      const listMax = getMaxScrollLeft(listElement)
+      const viewportMax = getMaxScrollLeft(viewportScrollbar)
+      if (listMax === 0 || viewportMax === 0) {
+        viewportScrollbar.scrollLeft = 0
+      } else {
+        viewportScrollbar.scrollLeft =
+          (listElement.scrollLeft / listMax) * viewportMax
+      }
       syncScrollRef.current = false
     }
 
@@ -421,7 +439,14 @@ export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions) {
         return
       }
       syncScrollRef.current = true
-      listElement.scrollLeft = viewportScrollbar.scrollLeft
+      const listMax = getMaxScrollLeft(listElement)
+      const viewportMax = getMaxScrollLeft(viewportScrollbar)
+      if (listMax === 0 || viewportMax === 0) {
+        listElement.scrollLeft = 0
+      } else {
+        listElement.scrollLeft =
+          (viewportScrollbar.scrollLeft / viewportMax) * listMax
+      }
       syncScrollRef.current = false
     }
 

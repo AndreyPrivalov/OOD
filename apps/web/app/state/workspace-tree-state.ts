@@ -11,12 +11,12 @@ export type WorkTreeNode = {
   siblingOrder: number
   overcomplication: number | null
   importance: number | null
-  blocksMoney: number | null
+  metricValues?: Record<string, "none" | "indirect" | "direct">
+  metricAggregates?: Record<string, "none" | "indirect" | "direct">
   currentProblems: string[]
   solutionVariants: string[]
   overcomplicationSum?: number
   importanceSum?: number
-  blocksMoneySum?: number
   children: WorkTreeNode[]
 }
 
@@ -80,6 +80,36 @@ function isStringArray(input: unknown): input is string[] {
   return Array.isArray(input) && input.every((item) => typeof item === "string")
 }
 
+function isMetricValue(
+  input: unknown,
+): input is "none" | "indirect" | "direct" {
+  return input === "none" || input === "indirect" || input === "direct"
+}
+
+function isMetricValueMap(
+  input: unknown,
+): input is Record<string, "none" | "indirect" | "direct"> {
+  if (!input || typeof input !== "object") {
+    return false
+  }
+  return Object.values(input).every(isMetricValue)
+}
+
+function resolveMetricAggregateValue(
+  values: Array<"none" | "indirect" | "direct">,
+) {
+  let nextValue: "none" | "indirect" | "direct" = "none"
+  for (const value of values) {
+    if (value === "direct") {
+      return "direct"
+    }
+    if (value === "indirect") {
+      nextValue = "indirect"
+    }
+  }
+  return nextValue
+}
+
 function isWorkTreeNode(input: unknown): input is WorkTreeNode {
   if (!input || typeof input !== "object") {
     return false
@@ -97,15 +127,15 @@ function isWorkTreeNode(input: unknown): input is WorkTreeNode {
     (typeof node.overcomplication === "number" ||
       node.overcomplication === null) &&
     (typeof node.importance === "number" || node.importance === null) &&
-    (typeof node.blocksMoney === "number" || node.blocksMoney === null) &&
+    (node.metricValues === undefined || isMetricValueMap(node.metricValues)) &&
+    (node.metricAggregates === undefined ||
+      isMetricValueMap(node.metricAggregates)) &&
     isStringArray(node.currentProblems) &&
     isStringArray(node.solutionVariants) &&
     (typeof node.overcomplicationSum === "number" ||
       node.overcomplicationSum === undefined) &&
     (typeof node.importanceSum === "number" ||
       node.importanceSum === undefined) &&
-    (typeof node.blocksMoneySum === "number" ||
-      node.blocksMoneySum === undefined) &&
     Array.isArray(node.children) &&
     node.children.every(isWorkTreeNode)
   )
@@ -118,7 +148,64 @@ export function normalizeTreeData(input: unknown): WorkTreeNode[] {
   if (!input.every(isWorkTreeNode)) {
     return []
   }
-  return input
+  return input.map(normalizeNodeMetrics)
+}
+
+function normalizeNodeMetrics(node: WorkTreeNode): WorkTreeNode {
+  const normalizedChildren = node.children.map(normalizeNodeMetrics)
+  return withDerivedMetricAggregates({
+    ...node,
+    metricValues: node.metricValues ?? {},
+    metricAggregates: node.metricAggregates ?? {},
+    children: normalizedChildren,
+  })
+}
+
+function withDerivedMetricAggregates(node: WorkTreeNode): WorkTreeNode {
+  if (node.children.length === 0) {
+    const ownMetricValues: WorkTreeNode["metricValues"] = {}
+    const ownMetricAggregates: WorkTreeNode["metricAggregates"] = {}
+    const metricIds = new Set<string>([
+      ...Object.keys(node.metricValues ?? {}),
+      ...Object.keys(node.metricAggregates ?? {}),
+    ])
+    for (const metricId of metricIds) {
+      const value = node.metricValues?.[metricId] ?? "none"
+      if (value !== "none") {
+        ownMetricValues[metricId] = value
+      }
+      ownMetricAggregates[metricId] = value
+    }
+    return {
+      ...node,
+      metricValues: ownMetricValues,
+      metricAggregates: ownMetricAggregates,
+    }
+  }
+
+  const metricIds = new Set<string>([
+    ...Object.keys(node.metricValues ?? {}),
+    ...Object.keys(node.metricAggregates ?? {}),
+  ])
+  for (const child of node.children) {
+    for (const metricId of Object.keys(child.metricAggregates ?? {})) {
+      metricIds.add(metricId)
+    }
+  }
+
+  const derivedMetricAggregates: WorkTreeNode["metricAggregates"] = {}
+  for (const metricId of metricIds) {
+    derivedMetricAggregates[metricId] = resolveMetricAggregateValue(
+      node.children.map(
+        (child) => child.metricAggregates?.[metricId] ?? "none",
+      ),
+    )
+  }
+
+  return {
+    ...node,
+    metricAggregates: derivedMetricAggregates,
+  }
 }
 
 export function patchTreeRow(
@@ -130,12 +217,16 @@ export function patchTreeRow(
   const nextNodes = nodes.map((node) => {
     if (node.id === rowId) {
       changed = true
-      return withDerivedRatingTotals({ ...node, ...patch })
+      return withDerivedMetricAggregates(
+        withDerivedRatingTotals({ ...node, ...patch }),
+      )
     }
     const nextChildren = patchTreeRow(node.children, rowId, patch)
     if (nextChildren !== node.children) {
       changed = true
-      return withDerivedRatingTotals({ ...node, children: nextChildren })
+      return withDerivedMetricAggregates(
+        withDerivedRatingTotals({ ...node, children: nextChildren }),
+      )
     }
     return node
   })
@@ -168,13 +259,11 @@ function getNodeRatingTotals(node: WorkTreeNode) {
 
   if (
     typeof node.overcomplicationSum === "number" &&
-    typeof node.importanceSum === "number" &&
-    typeof node.blocksMoneySum === "number"
+    typeof node.importanceSum === "number"
   ) {
     return {
       overcomplicationSum: node.overcomplicationSum,
       importanceSum: node.importanceSum,
-      blocksMoneySum: node.blocksMoneySum,
     }
   }
 
@@ -189,7 +278,6 @@ function leafRatingTotalsFromNode(node: WorkTreeNode) {
   return {
     overcomplicationSum: node.overcomplication ?? 0,
     importanceSum: node.importance ?? 0,
-    blocksMoneySum: node.blocksMoney ?? 0,
   }
 }
 
@@ -259,7 +347,14 @@ function makeOptimisticNode(input: Partial<WorkTreeNode>): WorkTreeNode | null {
     siblingOrder: input.siblingOrder ?? 0,
     overcomplication: input.overcomplication ?? null,
     importance: input.importance ?? null,
-    blocksMoney: input.blocksMoney ?? null,
+    metricValues:
+      input.metricValues && typeof input.metricValues === "object"
+        ? input.metricValues
+        : {},
+    metricAggregates:
+      input.metricAggregates && typeof input.metricAggregates === "object"
+        ? input.metricAggregates
+        : {},
     currentProblems: Array.isArray(input.currentProblems)
       ? input.currentProblems
       : [],
@@ -268,7 +363,6 @@ function makeOptimisticNode(input: Partial<WorkTreeNode>): WorkTreeNode | null {
       : [],
     overcomplicationSum: input.overcomplicationSum,
     importanceSum: input.importanceSum,
-    blocksMoneySum: input.blocksMoneySum,
     children: [],
   }
 }

@@ -31,7 +31,6 @@ function makeNode(
     siblingOrder,
     overcomplication: null,
     importance: null,
-    blocksMoney: null,
     currentProblems: [],
     solutionVariants: [],
     children,
@@ -108,6 +107,58 @@ describe("workspace-history", () => {
 
     clearWorkspaceHistory("ws")
     expect(loadWorkspaceHistory("ws")).toBeNull()
+  })
+
+  it("drops corrupted session history with local draft ids", () => {
+    const storage = new Map<string, string>()
+    Object.assign(globalThis, {
+      window: {
+        sessionStorage: {
+          getItem: (key: string) => storage.get(key) ?? null,
+          setItem: (key: string, value: string) => {
+            storage.set(key, value)
+          },
+          removeItem: (key: string) => {
+            storage.delete(key)
+          },
+        },
+      },
+    })
+
+    saveWorkspaceHistory(
+      "ws",
+      makeEmptyHistory([makeNode("local-draft:1", null, 0)]),
+    )
+
+    expect(loadWorkspaceHistory("ws")).toBeNull()
+    expect(storage.has("ood:workspace-history:v1:ws")).toBe(false)
+  })
+
+  it("keeps session history isolated per workspace key", () => {
+    const storage = new Map<string, string>()
+    Object.assign(globalThis, {
+      window: {
+        sessionStorage: {
+          getItem: (key: string) => storage.get(key) ?? null,
+          setItem: (key: string, value: string) => {
+            storage.set(key, value)
+          },
+          removeItem: (key: string) => {
+            storage.delete(key)
+          },
+        },
+      },
+    })
+
+    const first = makeEmptyHistory([makeNode("root-a", null, 0)])
+    const second = makeEmptyHistory([makeNode("root-b", null, 0)])
+
+    saveWorkspaceHistory("ws-a", first)
+    saveWorkspaceHistory("ws-b", second)
+    clearWorkspaceHistory("ws-a")
+
+    expect(loadWorkspaceHistory("ws-a")).toBeNull()
+    expect(loadWorkspaceHistory("ws-b")).toEqual(second)
   })
 
   it("remaps history ids after restore idMap", () => {

@@ -11,7 +11,6 @@ export interface CreateWorkItemInput {
   siblingOrder?: number
   overcomplication?: Rating | null
   importance?: Rating | null
-  blocksMoney?: Rating | null
   currentProblems?: string[]
   solutionVariants?: string[]
 }
@@ -36,7 +35,7 @@ export interface UpdateWorkItemInput {
   possiblyRemovable?: boolean
   overcomplication?: Rating | null
   importance?: Rating | null
-  blocksMoney?: Rating | null
+  metricValues?: WorkItemMetricValues
   currentProblems?: string[]
   solutionVariants?: string[]
 }
@@ -67,7 +66,6 @@ export interface RestoreWorkItemSnapshot {
   siblingOrder: number
   overcomplication?: Rating | null
   importance?: Rating | null
-  blocksMoney?: Rating | null
   metricValues?: WorkItemMetricValues
   currentProblems: string[]
   solutionVariants: string[]

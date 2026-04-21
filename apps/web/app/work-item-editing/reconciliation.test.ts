@@ -13,7 +13,6 @@ describe("buildRowPatchFromServer", () => {
       object: null,
       possiblyRemovable: true,
       overcomplication: 4,
-      blocksMoney: null,
       currentProblems: ["a", 1, "b"] as unknown as string[],
       solutionVariants: ["x", false, "y"] as unknown as string[],
     })
@@ -24,9 +23,20 @@ describe("buildRowPatchFromServer", () => {
       object: null,
       possiblyRemovable: true,
       overcomplication: 4,
-      blocksMoney: null,
       currentProblems: ["a", "b"],
       solutionVariants: ["x", "y"],
+    })
+  })
+
+  it("keeps canonical metric maps from server payload", () => {
+    const patch = buildRowPatchFromServer({
+      metricValues: { "m-1": "direct", "m-2": "indirect" },
+      metricAggregates: { "m-1": "direct", "m-2": "none" },
+    })
+
+    expect(patch).toEqual({
+      metricValues: { "m-1": "direct", "m-2": "indirect" },
+      metricAggregates: { "m-1": "direct", "m-2": "none" },
     })
   })
 })
@@ -70,5 +80,19 @@ describe("shouldApplyConfirmedTreePatch", () => {
     expect(shouldApplyConfirmedTreePatch(patch, { title: "Updated" })).toBe(
       false,
     )
+  })
+
+  it("applies echoed metric patches so ancestor projection stays in sync", () => {
+    const patch = buildRowPatchFromServer({
+      metricValues: { "m-1": "direct" },
+      metricAggregates: { "m-1": "direct" },
+    })
+
+    expect(
+      shouldApplyConfirmedTreePatch(patch, {
+        metricValues: { "m-1": "direct" },
+        metricAggregates: { "m-1": "direct" },
+      }),
+    ).toBe(true)
   })
 })

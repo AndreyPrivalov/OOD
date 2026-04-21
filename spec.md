@@ -52,6 +52,7 @@ The cleaned core must include:
 
 - multiple shared workspaces;
 - one work tree per workspace;
+- one workspace view that can show the work tree as table-only or as table plus mindmap;
 - creation of root and child work items;
 - inline editing of core fields;
 - fixed ratings on work items;
@@ -72,8 +73,8 @@ This phase must explicitly exclude:
 - Google Sheets import;
 - JSON export;
 - CSV export;
-- audit history;
-- archive and restore;
+- durable audit history;
+- standalone archive/restore flows that are not part of session-scoped undo/redo;
 - advanced drag-and-drop behaviors beyond the basic supported moves.
 
 ## 6. Core Domain Model
@@ -132,6 +133,9 @@ Required or supported fields:
 - each workspace owns its own metric catalog;
 - different workspaces may have different metric sets, including zero metrics;
 - workspace rename, workspace metric management, and workspace deletion live in one workspace settings popup;
+- `GET /api/workspaces/[id]/settings` and all successful settings writes return one canonical `workspace settings` shape with `workspace` and `metrics`;
+- workspace rename is part of the workspace settings contract and must not introduce a second lighter response shape for the same popup flow;
+- clients that render or mutate workspace settings must treat the settings shape as the only canonical source for workspace name and metric catalog state;
 - deleting a workspace from the settings popup deletes its full tree and metric catalog.
 
 ### Tree Rules
@@ -149,6 +153,8 @@ Required or supported fields:
 - `title` cannot be empty as a saved value;
 - `object` may be temporarily empty during creation/editing flow;
 - `currentProblems` and `solutionVariants` are ordered text lists;
+- `PATCH /api/work-items/[id]` remains the canonical row-scoped write contract for row business fields and `metricValues`;
+- if one row patch includes both row fields and `metricValues`, the server must treat it as one transactional application use case and must not commit only a subset of that requested change;
 - editing fields must not implicitly change tree structure.
 
 ### Rating Rules
@@ -195,6 +201,13 @@ Supported structural interactions:
 - reorder among siblings;
 - move under another valid parent.
 
+Supported workspace visualization interactions:
+
+- a header-level toggle can switch the workspace view between `split` and `table-only`;
+- in `split`, the table remains the canonical editing surface and the second pane renders a read-only mindmap of the same workspace tree;
+- the mindmap supports pan and zoom;
+- the mindmap never becomes a second editing surface for work-item fields or structure.
+
 Not supported in the cleaned core:
 
 - broad free-form drag heuristics;
@@ -220,6 +233,8 @@ Workspace metric configuration must not be edited inline in the tree header. Met
 
 In the first version, leaf metric editing in the tree uses a dropdown control with the three canonical states. Parent rows remain read-only for metric columns.
 
+When a work item enters inline edit mode, the client must keep the edited item and its nearby structural context visible in the mindmap pane. At minimum, the visible mindmap frame must include the edited node, its parent if present, and that parent's currently visible children. For a root item without parent, the visible frame must include the root and its currently visible root-level siblings.
+
 ### Session History
 
 The cleaned core must support session-scoped undo and redo for canonical tree data actions.
@@ -228,6 +243,8 @@ The cleaned core must support session-scoped undo and redo for canonical tree da
 - `cmd/ctrl + shift + z` triggers redo for the active workspace;
 - history is stored separately per workspace;
 - history includes only core data actions: `create`, inline field edits, rating edits, metric value edits, metric catalog edits, `move`, `delete`;
+- internal restore operations for deleted branches and deleted metrics are in scope only as supporting mechanics of canonical undo/redo;
+- these restore operations do not expand cleaned-core scope to durable audit history, trash bins, or standalone archive/restore product flows;
 - history does not include purely visual client state such as collapse state, scroll position, selection, or measured layout values;
 - refresh must preserve `past`, `present`, and `future` for the active browser tab via `sessionStorage`;
 - closing the tab or window ends the session and naturally drops the history;
@@ -251,6 +268,13 @@ The target shape is:
 - workspace settings composition separated from workspace switcher rendering.
 - workspace metric catalog and metric value storage modeled as reusable domain concepts rather than as ad hoc dynamic table props.
 - tree-derived metric aggregates treated as a first-class client projection, recomputed locally after accepted metric value edits instead of relying on full refresh.
+- workspace tree data must feed both table rendering and mindmap rendering from one canonical client projection rather than from parallel feature-specific tree models.
+- mindmap viewport state (`pan`, `zoom`, focus framing) is visual client state and must stay separate from canonical tree data, edit drafts, and session history data actions.
+- tree data loading and reconcile logic must own fetch, refresh, canonical normalization, and server-truth reconciliation, but must not own inline edit drafts;
+- optimistic structural actions must be isolated from row edit/save flows and own optimistic create/move/delete application plus rollback to the last confirmed tree;
+- the history engine must own only history recording, `sessionStorage` persistence, shortcut routing inputs, and replay/remap rules; it must not become a general tree-fetch layer;
+- metric catalog actions must stay scoped to workspace settings CRUD/restore and canonical settings responses rather than leaking into row-edit orchestration;
+- edit/save orchestration must own row drafts, commit boundaries, payload building, stale-response protection, and recoverable error handling for row-scoped saves.
 
 ### Package Structure
 
@@ -292,6 +316,13 @@ Undo and redo for branch deletion and branch recreation require one canonical re
 - restore responses must return an `idMap`, even if ids are preserved as-is;
 - clients must remap queued history references using the returned `idMap`;
 - if session history restored from storage conflicts with the fetched server tree, the client must invalidate that workspace history, refresh from the server, and avoid partial replay.
+
+### Testing Strategy
+
+- pure tree transforms, history transforms, selector derivations, and payload builders should be tested through shared pure helpers with thin doubles where possible;
+- persistence semantics that depend on transactions, sibling compaction, metric deletion, restore, or cross-table consistency must be tested primarily as Postgres integration tests;
+- large product-parity in-memory repository adapters are a temporary migration aid only and must not remain the default way to validate persistence behavior;
+- new tests must not deepen coupling to a monolithic in-memory adapter when a thinner double or a repository/application integration test can cover the behavior more faithfully.
 
 ### Approved Refactoring Goals
 
@@ -347,6 +378,7 @@ The specification must explicitly reject or handle these cases:
 - saving a metric with an empty `shortName`;
 - partially deleting a metric definition while leaving orphaned metric values behind;
 - restoring metric deletion via undo without restoring the removed item values;
+- partially applying a row-scoped patch that saves row fields but loses `metricValues`, or vice versa;
 - allowing parent metric cells to behave like editable leaf metric cells in the primary tree view;
 - allowing parent ratings to behave like editable leaf ratings in the primary tree view;
 - serving multiple conflicting API field formats as a long-term contract;

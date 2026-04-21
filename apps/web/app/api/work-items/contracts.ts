@@ -1,4 +1,56 @@
-import type { WorkItem, WorkTreeReadNode } from "@ood/domain"
+import type {
+  WorkItem,
+  WorkItemMetricValues,
+  WorkTreeReadNode,
+  WorkspaceMetricValue,
+} from "@ood/domain"
+
+const metricPriority: Record<WorkspaceMetricValue, number> = {
+  none: 0,
+  indirect: 1,
+  direct: 2,
+}
+
+function sanitizeMetricValues(
+  values: WorkItemMetricValues | undefined,
+): WorkItemMetricValues {
+  if (!values) {
+    return {}
+  }
+  const next: WorkItemMetricValues = {}
+  for (const [metricId, value] of Object.entries(values)) {
+    if (value === "none" || value === "indirect" || value === "direct") {
+      next[metricId] = value
+    }
+  }
+  return next
+}
+
+function toExplicitAggregateMap(
+  values: WorkItemMetricValues,
+  metricIds: readonly string[],
+): WorkItemMetricValues {
+  const next: WorkItemMetricValues = {}
+  for (const metricId of metricIds) {
+    next[metricId] = values[metricId] ?? "none"
+  }
+  return next
+}
+
+function aggregateMetricValue(
+  values: WorkspaceMetricValue[],
+): WorkspaceMetricValue {
+  let best: WorkspaceMetricValue = "none"
+  for (const value of values) {
+    if (metricPriority[value] > metricPriority[best]) {
+      best = value
+    }
+    if (best === "direct") {
+      return best
+    }
+  }
+  return best
+}
 
 export type SerializedWorkItem = {
   id: string
@@ -10,7 +62,8 @@ export type SerializedWorkItem = {
   siblingOrder: number
   overcomplication: number | null
   importance: number | null
-  blocksMoney: number | null
+  metricValues: WorkItemMetricValues
+  metricAggregates: WorkItemMetricValues
   currentProblems: string[]
   solutionVariants: string[]
   createdAt?: Date
@@ -20,7 +73,6 @@ export type SerializedWorkItem = {
 export type SerializedWorkTreeNode = SerializedWorkItem & {
   overcomplicationSum: number
   importanceSum: number
-  blocksMoneySum: number
   children: SerializedWorkTreeNode[]
 }
 
@@ -39,7 +91,6 @@ type WorkItemContractInput = Pick<
   | "siblingOrder"
   | "overcomplication"
   | "importance"
-  | "blocksMoney"
   | "currentProblems"
   | "solutionVariants"
   | "createdAt"
@@ -57,20 +108,22 @@ type WorkTreeContractInput = Pick<
   | "siblingOrder"
   | "overcomplication"
   | "importance"
-  | "blocksMoney"
   | "currentProblems"
   | "solutionVariants"
   | "createdAt"
   | "updatedAt"
   | "overcomplicationSum"
   | "importanceSum"
-  | "blocksMoneySum"
   | "children"
 >
 
 export function serializeWorkItem(
   item: WorkItemContractInput,
+  metricValues?: WorkItemMetricValues,
+  metricAggregates?: WorkItemMetricValues,
 ): SerializedWorkItem {
+  const sanitizedMetricValues = sanitizeMetricValues(metricValues)
+  const sanitizedMetricAggregates = sanitizeMetricValues(metricAggregates)
   return {
     id: item.id,
     workspaceId: item.workspaceId,
@@ -81,7 +134,8 @@ export function serializeWorkItem(
     siblingOrder: item.siblingOrder,
     overcomplication: item.overcomplication,
     importance: item.importance,
-    blocksMoney: item.blocksMoney,
+    metricValues: sanitizedMetricValues,
+    metricAggregates: sanitizedMetricAggregates,
     currentProblems: item.currentProblems,
     solutionVariants: item.solutionVariants,
     createdAt: item.createdAt,
@@ -91,20 +145,53 @@ export function serializeWorkItem(
 
 export function serializeWorkTreeNode(
   item: WorkTreeContractInput,
+  options?: {
+    metricIds?: readonly string[]
+    metricValuesByItemId?: ReadonlyMap<string, WorkItemMetricValues>
+  },
 ): SerializedWorkTreeNode {
+  const metricIds = options?.metricIds ?? []
+  const ownValues = sanitizeMetricValues(
+    options?.metricValuesByItemId?.get(item.id) ?? {},
+  )
+
+  const childNodes = item.children.map((child) =>
+    serializeWorkTreeNode(child, options),
+  )
+
+  const metricAggregates =
+    childNodes.length === 0
+      ? toExplicitAggregateMap(ownValues, metricIds)
+      : toExplicitAggregateMap(
+          Object.fromEntries(
+            metricIds.map((metricId) => {
+              const value = aggregateMetricValue(
+                childNodes.map(
+                  (childNode) => childNode.metricAggregates[metricId] ?? "none",
+                ),
+              )
+              return [metricId, value]
+            }),
+          ) as WorkItemMetricValues,
+          metricIds,
+        )
+
   return {
-    ...serializeWorkItem(item),
+    ...serializeWorkItem(item, ownValues, metricAggregates),
     overcomplicationSum: item.overcomplicationSum,
     importanceSum: item.importanceSum,
-    blocksMoneySum: item.blocksMoneySum,
-    children: item.children.map(serializeWorkTreeNode),
+    children: childNodes,
   }
 }
 
 export function serializeWorkTree(
   tree: ReadonlyArray<WorkTreeContractInput>,
+  options?: {
+    metricIds?: readonly string[]
+    metricValuesByItemId?: ReadonlyMap<string, WorkItemMetricValues>
+  },
 ): SerializedWorkTreeNode[] {
-  return tree.map(serializeWorkTreeNode)
+  return tree.map((item) => serializeWorkTreeNode(item, options))
 }
 
 export function serializeRestoreWorkTreeNode(

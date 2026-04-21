@@ -12,5 +12,7 @@
 - `title` не может сохраняться пустым;
 - `object` может быть временно пустым в процессе создания или редактирования;
 - `currentProblems` и `solutionVariants` редактируются как списки строк;
+- `PATCH /api/work-items/[id]` остаётся каноническим row-scoped write contract для полей строки и `metricValues`;
+- если один row patch содержит и поля строки, и `metricValues`, сервер обязан применить их как один transactional use case и не фиксировать частичный результат;
 - если `createWorkItem` для draft успешно завершился, но последующий `patchWorkItem` вернул ошибку, клиент обязан remap'нуть локальный draft id на server id и показать ошибку без повторного `create`;
 - неудачное сохранение должно оставлять состояние recoverable и понятным пользователю.

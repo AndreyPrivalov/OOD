@@ -31,7 +31,6 @@ describe("WorkspaceTreeTable", () => {
           children: [],
           overcomplication: 2,
           importance: 4,
-          blocksMoney: 1,
         },
       ],
       collapsedRowIds: new Set<string>(),
@@ -72,7 +71,8 @@ describe("WorkspaceTreeTable", () => {
             <>
               <td className="score-col">R1</td>
               <td className="score-col">R2</td>
-              <td className="score-col">R3</td>
+              <td className="score-col">M1</td>
+              <td className="score-col">M2</td>
             </>
           ),
           renderSignature: "sig",
@@ -86,7 +86,6 @@ describe("WorkspaceTreeTable", () => {
         object: "180px",
         overcomplication: "120px",
         importance: "120px",
-        blocksMoney: "160px",
         currentProblems: "220px",
         solutionVariants: "220px",
         removable: "140px",
@@ -103,9 +102,14 @@ describe("WorkspaceTreeTable", () => {
           columnClassName: "importance-col",
         },
         {
-          key: "blocksMoney",
-          headerLabel: "Не доплачивает",
-          columnClassName: "blocks-money-col",
+          key: "metric:impact",
+          headerLabel: "Impact",
+          columnClassName: "workspace-metric-col",
+        },
+        {
+          key: "metric:risk",
+          headerLabel: "Risk",
+          columnClassName: "workspace-metric-col",
         },
       ],
       rowTreeIndentPx: 24,
@@ -146,6 +150,8 @@ describe("WorkspaceTreeTable", () => {
 
     expect(text).toContain("Работа")
     expect(text).toContain("R1")
+    expect(text).toContain("Impact")
+    expect(text).not.toContain("Не доплачивает")
   })
 
   it("changes row render signature when parent aggregate sums change", () => {
@@ -157,10 +163,8 @@ describe("WorkspaceTreeTable", () => {
       children: [{ id: "leaf" }],
       overcomplication: null,
       importance: null,
-      blocksMoney: null,
       overcomplicationSum: 2,
       importanceSum: 1,
-      blocksMoneySum: 0,
     }
 
     const before = buildRowRenderSignature(base)

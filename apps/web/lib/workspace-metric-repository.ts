@@ -20,8 +20,10 @@ function isWorkspaceMetricRepository(
     typeof value.createMetric === "function" &&
     typeof value.updateMetric === "function" &&
     typeof value.deleteMetric === "function" &&
+    typeof value.restoreDeletedMetric === "function" &&
     typeof value.setWorkItemMetricValue === "function" &&
-    typeof value.listWorkItemMetricValues === "function"
+    typeof value.listWorkItemMetricValues === "function" &&
+    typeof value.listWorkItemMetricValuesBatch === "function"
   )
 }
 

@@ -16,6 +16,7 @@ import type {
   EditableWorkItemRow,
   RowEditMeta,
   RowEditPatch,
+  WorkspaceMetricValue,
 } from "./types"
 
 type UseWorkItemEditingOptions<Row extends EditableWorkItemRow> = {
@@ -56,6 +57,41 @@ export function buildOptimisticRatingPatch<Row extends EditableWorkItemRow>(
   }
 
   return Object.keys(optimisticPatch).length > 0 ? optimisticPatch : null
+}
+
+export function buildOptimisticMetricPatch<Row extends EditableWorkItemRow>(
+  row: Row | undefined,
+  patch: RowEditPatch,
+): EditableWorkItemPatch | null {
+  if (!row || row.children.length > 0 || !patch.metricValues) {
+    return null
+  }
+
+  let hasChange = false
+  const currentMetricValues = row.metricValues ?? {}
+  const nextMetricValues: Record<string, WorkspaceMetricValue> = {
+    ...currentMetricValues,
+  }
+  for (const [metricId, value] of Object.entries(patch.metricValues)) {
+    const currentValue = currentMetricValues[metricId] ?? "none"
+    if (currentValue === value) {
+      continue
+    }
+    hasChange = true
+    if (value === "none") {
+      delete nextMetricValues[metricId]
+      continue
+    }
+    nextMetricValues[metricId] = value
+  }
+
+  if (!hasChange) {
+    return null
+  }
+
+  return {
+    metricValues: nextMetricValues,
+  }
 }
 
 function toNullableRating(value: string | undefined): number | null {
@@ -238,11 +274,15 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
           meta.hasUnackedChanges = false
         }
 
-        const nextRowSnapshot = {
-          ...currentRow,
-          ...updated,
-          id: activeRowId,
-        } as Row
+        const nextRowSnapshot = buildNextRowSnapshot(
+          currentRow,
+          updated,
+          nextRowId,
+        )
+
+        if (nextRowId !== activeRowId) {
+          patchRow(activeRowId, { id: nextRowId })
+        }
 
         if (!ackResult.stale && ackResult.shouldApply && updated) {
           const patch = buildRowPatchFromServer(updated)
@@ -256,7 +296,12 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
           activeRowId = nextRowId
         }
 
-        if (!ackResult.stale && ackResult.shouldApply && onPersistedChange) {
+        if (
+          !ackResult.stale &&
+          ackResult.shouldApply &&
+          updated &&
+          onPersistedChange
+        ) {
           onPersistedChange({
             kind: activeRowId === id ? "patch" : "create",
             before: currentRow,
@@ -367,6 +412,10 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
         rowsByIdRef.current.get(id),
         patch,
       )
+      const optimisticMetricPatch = buildOptimisticMetricPatch(
+        rowsByIdRef.current.get(id),
+        patch,
+      )
       let nextEditToPersist: EditState | null = null
       setEdits((current) => {
         const fallbackRow = rowsByIdRef.current.get(id)
@@ -394,6 +443,9 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
       }
       if (optimisticRatingPatch) {
         patchRow(id, optimisticRatingPatch)
+      }
+      if (optimisticMetricPatch) {
+        patchRow(id, optimisticMetricPatch)
       }
       if (shouldRecalcColumnWidths) {
         scheduleTextColumnWidthRecalc()
@@ -504,4 +556,16 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
     handleFieldFocus,
     updateEdit,
   }
+}
+
+export function buildNextRowSnapshot<Row extends EditableWorkItemRow>(
+  currentRow: Row,
+  updated: Partial<Row> | null,
+  nextRowId: string,
+): Row {
+  return {
+    ...currentRow,
+    ...(updated ?? {}),
+    id: nextRowId,
+  } as Row
 }

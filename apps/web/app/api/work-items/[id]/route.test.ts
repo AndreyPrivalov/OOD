@@ -9,8 +9,16 @@ const repository = {
   deleteCascade: vi.fn(),
 }
 
+const workspaceMetricRepository = {
+  setWorkItemMetricValue: vi.fn(),
+  listWorkItemMetricValues: vi.fn(),
+}
+
 vi.mock("../../../../lib/repository", () => ({
   getRepository: () => repository,
+}))
+vi.mock("../../../../lib/workspace-metric-repository", () => ({
+  getWorkspaceMetricRepository: () => workspaceMetricRepository,
 }))
 
 import { DELETE, PATCH } from "./route"
@@ -18,6 +26,7 @@ import { DELETE, PATCH } from "./route"
 describe("PATCH /api/work-items/[id] contract", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    workspaceMetricRepository.listWorkItemMetricValues.mockResolvedValue([])
   })
 
   it("returns domain error when attempting to update ratings of parent node", async () => {
@@ -57,7 +66,6 @@ describe("PATCH /api/work-items/[id] contract", () => {
       siblingOrder: 0,
       overcomplication: null,
       importance: null,
-      blocksMoney: null,
       currentProblems: [],
       solutionVariants: [],
     })
@@ -91,7 +99,6 @@ describe("PATCH /api/work-items/[id] contract", () => {
       siblingOrder: 0,
       overcomplication: null,
       importance: null,
-      blocksMoney: null,
       currentProblems: ["p1", "p2"],
       solutionVariants: ["s1"],
     })
@@ -145,6 +152,56 @@ describe("PATCH /api/work-items/[id] contract", () => {
         id: "item-3",
         mode: "cascade",
       },
+    })
+  })
+
+  it("passes metric enum patch through canonical repository update", async () => {
+    repository.update.mockResolvedValueOnce({
+      id: "item-4",
+      workspaceId: "ws",
+      title: "Item",
+      object: null,
+      possiblyRemovable: false,
+      parentId: null,
+      siblingOrder: 0,
+      overcomplication: null,
+      importance: null,
+      currentProblems: [],
+      solutionVariants: [],
+    })
+    workspaceMetricRepository.listWorkItemMetricValues.mockResolvedValueOnce([
+      {
+        workItemId: "item-4",
+        metricId: "m-1",
+        value: "direct",
+      },
+    ])
+
+    const response = await PATCH(
+      new Request("http://localhost/api/work-items/item-4", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          metricValues: { "m-1": "direct" },
+        }),
+      }),
+      { params: Promise.resolve({ id: "item-4" }) },
+    )
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(repository.update).toHaveBeenCalledWith(
+      "item-4",
+      expect.objectContaining({
+        metricValues: { "m-1": "direct" },
+      }),
+    )
+    expect(
+      workspaceMetricRepository.setWorkItemMetricValue,
+    ).not.toHaveBeenCalled()
+    expect(payload.data).toMatchObject({
+      metricValues: { "m-1": "direct" },
+      metricAggregates: { "m-1": "direct" },
     })
   })
 })

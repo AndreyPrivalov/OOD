@@ -18,5 +18,8 @@
 - rename workspace выполняется в popup настроек, а не через inline-редактирование в ряду переключателя;
 - create нового workspace использует тот же inline-механизм, вызываемый кнопкой `+` в конце ряда;
 - popup настроек содержит rename workspace, add/edit/delete метрик и delete workspace;
+- `GET /api/workspaces/[id]/settings` возвращает канонический settings payload вида `{ workspace, metrics }`;
+- успешные `PATCH /api/workspaces/[id]/settings` и metric settings endpoints возвращают тот же канонический settings payload, а не отдельные урезанные rename/update shapes;
+- клиент workspace settings обязан работать только через settings shape с метриками и не должен поддерживать параллельный contract только для rename;
 - delete workspace требует подтверждение пользователя в popup перед удалением;
 - удаление default workspace запрещено на уровне API.

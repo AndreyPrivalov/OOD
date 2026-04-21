@@ -2,6 +2,8 @@ import { DomainErrorCode } from "@ood/domain"
 import { beforeEach, describe, expect, it } from "vitest"
 import {
   InMemoryWorkItemRepository,
+  InMemoryWorkspaceMetricRepository,
+  InMemoryWorkspaceRepository,
   __resetInMemoryStoreForTests,
 } from "./testing"
 
@@ -32,7 +34,6 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
       title: "root",
       overcomplication: 5,
       importance: 5,
-      blocksMoney: 5,
     })
     const parent = await repo.create({
       workspaceId,
@@ -40,7 +41,6 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
       title: "parent",
       overcomplication: 4,
       importance: 4,
-      blocksMoney: 4,
     })
     await repo.create({
       workspaceId,
@@ -48,7 +48,6 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
       title: "leaf-a",
       overcomplication: 2,
       importance: 3,
-      blocksMoney: 1,
     })
     const leafB = await repo.create({
       workspaceId,
@@ -56,7 +55,6 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
       title: "leaf-b",
       overcomplication: null,
       importance: 4,
-      blocksMoney: null,
     })
 
     const tree = await repo.listTree(workspaceId)
@@ -66,14 +64,11 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
 
     expect(parentNode?.overcomplicationSum).toBe(2)
     expect(parentNode?.importanceSum).toBe(7)
-    expect(parentNode?.blocksMoneySum).toBe(1)
     expect(rootNode?.overcomplicationSum).toBe(2)
     expect(rootNode?.importanceSum).toBe(7)
-    expect(rootNode?.blocksMoneySum).toBe(1)
 
     expect(leafBNode?.overcomplicationSum).toBe(0)
     expect(leafBNode?.importanceSum).toBe(4)
-    expect(leafBNode?.blocksMoneySum).toBe(0)
   })
 
   it("recalculates sums after moving a branch", async () => {
@@ -95,7 +90,6 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
       title: "leaf-a",
       overcomplication: 2,
       importance: 1,
-      blocksMoney: 3,
     })
     await repo.create({
       workspaceId,
@@ -103,7 +97,6 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
       title: "leaf-b",
       overcomplication: 1,
       importance: 2,
-      blocksMoney: 0,
     })
 
     await repo.move(leafA.id, { targetParentId: parentB.id, targetIndex: 0 })
@@ -114,15 +107,12 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
 
     expect(aNode?.overcomplicationSum).toBe(0)
     expect(aNode?.importanceSum).toBe(0)
-    expect(aNode?.blocksMoneySum).toBe(0)
 
     expect(bNode?.overcomplicationSum).toBe(3)
     expect(bNode?.importanceSum).toBe(3)
-    expect(bNode?.blocksMoneySum).toBe(3)
 
     expect(rootNode?.overcomplicationSum).toBe(3)
     expect(rootNode?.importanceSum).toBe(3)
-    expect(rootNode?.blocksMoneySum).toBe(3)
   })
 
   it("recalculates sums after deleting a branch", async () => {
@@ -144,7 +134,6 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
       title: "keep-leaf",
       overcomplication: 2,
       importance: 2,
-      blocksMoney: 2,
     })
     await repo.create({
       workspaceId,
@@ -152,7 +141,6 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
       title: "delete-leaf",
       overcomplication: 4,
       importance: 4,
-      blocksMoney: 4,
     })
 
     await repo.deleteCascade(deleteParent.id)
@@ -163,7 +151,6 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
     expect(removedNode).toBeUndefined()
     expect(rootNode?.overcomplicationSum).toBe(2)
     expect(rootNode?.importanceSum).toBe(2)
-    expect(rootNode?.blocksMoneySum).toBe(2)
   })
 
   it("rejects rating updates for parent nodes", async () => {
@@ -241,5 +228,50 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
     })
     expect(restoredTree.map((node) => node.id)).toEqual([keep.id, deleted.id])
     expect(findNode(restoredTree, deleted.id)?.children).toHaveLength(1)
+  })
+
+  it("does not partially apply row fields when metric patch contains unknown metric", async () => {
+    const workspaceRepo = new InMemoryWorkspaceRepository()
+    const metricRepo = new InMemoryWorkspaceMetricRepository()
+    const repo = new InMemoryWorkItemRepository()
+    const workspace = await workspaceRepo.create({ name: "Alpha" })
+    const item = await repo.create({
+      workspaceId: workspace.id,
+      title: "before",
+    })
+    const metric = await metricRepo.createMetric({
+      workspaceId: workspace.id,
+      shortName: "Risk",
+    })
+    await metricRepo.setWorkItemMetricValue({
+      workItemId: item.id,
+      metricId: metric.id,
+      value: "indirect",
+    })
+
+    await expect(
+      repo.update(item.id, {
+        title: "after",
+        metricValues: {
+          [metric.id]: "none",
+          "missing-metric": "direct",
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: DomainErrorCode.INVALID_MOVE_TARGET,
+    })
+
+    const tree = await repo.listTree(workspace.id)
+    const sameItem = findNode(tree, item.id)
+    const metricValues = await metricRepo.listWorkItemMetricValues(item.id)
+
+    expect(sameItem?.title).toBe("before")
+    expect(metricValues).toEqual([
+      {
+        workItemId: item.id,
+        metricId: metric.id,
+        value: "indirect",
+      },
+    ])
   })
 })

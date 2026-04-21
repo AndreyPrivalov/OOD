@@ -3,6 +3,7 @@ import { isValidElement } from "react"
 import { describe, expect, it } from "vitest"
 import { WorkspaceControlPanel } from "./workspace-control-panel"
 import { WorkspaceTitlePanel } from "./workspace-title-panel"
+import { WorkspaceViewLayout } from "./workspace-view-layout"
 
 function collectText(node: ReactNode): string[] {
   if (typeof node === "string" || typeof node === "number") {
@@ -15,6 +16,32 @@ function collectText(node: ReactNode): string[] {
     return []
   }
   return collectText(node.props.children)
+}
+
+function collectButtons(node: ReactNode): Array<{
+  text: string
+  onClick: (() => void) | undefined
+  ariaPressed: boolean | undefined
+}> {
+  if (Array.isArray(node)) {
+    return node.flatMap((entry) => collectButtons(entry))
+  }
+  if (!isValidElement(node)) {
+    return []
+  }
+
+  const own =
+    node.type === "button"
+      ? [
+          {
+            text: collectText(node.props.children).join(" "),
+            onClick: node.props.onClick as (() => void) | undefined,
+            ariaPressed: node.props["aria-pressed"] as boolean | undefined,
+          },
+        ]
+      : []
+
+  return [...own, ...collectButtons(node.props.children)]
 }
 
 describe("workspace panels", () => {
@@ -39,10 +66,62 @@ describe("workspace panels", () => {
     const rendered = WorkspaceTitlePanel({
       title: "Продуктовая область",
       errorText: "Ошибка загрузки дерева",
+      viewMode: "split",
+      onViewModeChange: () => {},
     })
     const text = collectText(rendered).join(" ")
 
     expect(text).toContain("Продуктовая область")
     expect(text).toContain("Ошибка загрузки дерева")
+    expect(text).toContain("Table-only")
+    expect(text).toContain("Split")
+  })
+
+  it("marks active mode and calls mode switch handlers", () => {
+    const modeChanges: string[] = []
+    const rendered = WorkspaceTitlePanel({
+      title: "Продуктовая область",
+      viewMode: "table-only",
+      onViewModeChange: (mode) => {
+        modeChanges.push(mode)
+      },
+    })
+    const buttons = collectButtons(rendered)
+    const tableButton = buttons.find((button) =>
+      button.text.includes("Table-only"),
+    )
+    const splitButton = buttons.find((button) => button.text.includes("Split"))
+
+    expect(tableButton?.ariaPressed).toBe(true)
+    expect(splitButton?.ariaPressed).toBe(false)
+
+    splitButton?.onClick?.()
+    tableButton?.onClick?.()
+
+    expect(modeChanges).toEqual(["split", "table-only"])
+  })
+
+  it("renders secondary pane only in split mode", () => {
+    const rendered = WorkspaceViewLayout({
+      viewMode: "split",
+      primary: <div>Table</div>,
+      secondary: <div>Mindmap</div>,
+    })
+    const text = collectText(rendered).join(" ")
+
+    expect(text).toContain("Table")
+    expect(text).toContain("Mindmap")
+  })
+
+  it("keeps only the primary pane in table-only mode", () => {
+    const rendered = WorkspaceViewLayout({
+      viewMode: "table-only",
+      primary: <div>Table</div>,
+      secondary: <div>Mindmap</div>,
+    })
+    const text = collectText(rendered).join(" ")
+
+    expect(text).toContain("Table")
+    expect(text).not.toContain("Mindmap")
   })
 })

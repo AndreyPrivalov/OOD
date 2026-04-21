@@ -33,7 +33,6 @@ export function WorkTreeTable(props: WorkTreeTableProps) {
         <span>{labels.object}</span>
         <span>{labels.overcomplication}</span>
         <span>{labels.importance}</span>
-        <span>{labels.blocksMoney}</span>
       </header>
       {props.rows.map((row) => (
         <article key={row.id} style={rowGridStyle}>
@@ -48,9 +47,6 @@ export function WorkTreeTable(props: WorkTreeTableProps) {
           <span>
             {(props.renderRating ?? defaultRenderRating)(row.importance)}
           </span>
-          <span>
-            {(props.renderRating ?? defaultRenderRating)(row.blocksMoney)}
-          </span>
         </article>
       ))}
     </div>
@@ -59,7 +55,7 @@ export function WorkTreeTable(props: WorkTreeTableProps) {
 
 const headerGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "2fr 2fr 120px 120px 120px",
+  gridTemplateColumns: "2fr 2fr 120px 120px",
   fontWeight: 700,
   borderBottom: "1px solid var(--line)",
   paddingBottom: "6px",
@@ -67,7 +63,7 @@ const headerGridStyle: CSSProperties = {
 
 const rowGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "2fr 2fr 120px 120px 120px",
+  gridTemplateColumns: "2fr 2fr 120px 120px",
   alignItems: "center",
   gap: "8px",
   borderBottom: "1px solid var(--line)",

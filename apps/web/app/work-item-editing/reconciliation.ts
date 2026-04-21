@@ -8,7 +8,6 @@ import type { EditableWorkItemPatch, EditableWorkItemRow } from "./types"
 const RATING_PATCH_KEYS = [
   "overcomplication",
   "importance",
-  "blocksMoney",
 ] satisfies RatingFieldKey[]
 
 export function buildRowPatchFromServer(
@@ -26,6 +25,14 @@ export function buildRowPatchFromServer(
   }
   if (typeof updated.possiblyRemovable === "boolean") {
     patch.possiblyRemovable = updated.possiblyRemovable
+  }
+  const metricValues = sanitizeMetricMap(updated.metricValues)
+  if (metricValues) {
+    patch.metricValues = metricValues
+  }
+  const metricAggregates = sanitizeMetricMap(updated.metricAggregates)
+  if (metricAggregates) {
+    patch.metricAggregates = metricAggregates
   }
   Object.assign(
     patch,
@@ -54,6 +61,22 @@ function isSamePrimitiveOrList(left: unknown, right: unknown): boolean {
   return left === right
 }
 
+function sanitizeMetricMap(
+  input: unknown,
+): Record<string, "none" | "indirect" | "direct"> | null {
+  if (!input || typeof input !== "object") {
+    return null
+  }
+
+  const next: Record<string, "none" | "indirect" | "direct"> = {}
+  for (const [metricId, value] of Object.entries(input)) {
+    if (value === "none" || value === "indirect" || value === "direct") {
+      next[metricId] = value
+    }
+  }
+  return next
+}
+
 export function isServerPatchEchoingPayload(
   patch: EditableWorkItemPatch,
   payload: Record<string, unknown>,
@@ -79,5 +102,9 @@ export function shouldApplyConfirmedTreePatch(
     return true
   }
 
-  return RATING_PATCH_KEYS.some((key) => key in patch)
+  return (
+    RATING_PATCH_KEYS.some((key) => key in patch) ||
+    "metricValues" in patch ||
+    "metricAggregates" in patch
+  )
 }

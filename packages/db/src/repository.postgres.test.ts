@@ -69,7 +69,6 @@ function row(partial: Record<string, unknown>) {
     siblingOrder: 0,
     overcomplication: null,
     importance: null,
-    blocksMoney: null,
     currentProblems: [],
     solutionVariants: [],
     createdAt: new Date(),
@@ -102,6 +101,29 @@ describe("PostgresWorkItemRepository", () => {
     expect(state.updateCalls).toBe(0)
   })
 
+  it("rejects mixed row+metric patch before row update when metric is outside workspace", async () => {
+    const state: DbStubState = {
+      selectQueue: [[row({ id: "item-1", workspaceId: "ws" })], []],
+      executeCalls: 0,
+      updateCalls: 0,
+    }
+    const repo = new PostgresWorkItemRepository(
+      createDbStub(state) as unknown as ConstructorParameters<
+        typeof PostgresWorkItemRepository
+      >[0],
+    )
+
+    await expect(
+      repo.update("item-1", {
+        title: "next",
+        metricValues: { "foreign-metric": "direct" },
+      }),
+    ).rejects.toMatchObject({
+      code: DomainErrorCode.INVALID_MOVE_TARGET,
+    })
+    expect(state.updateCalls).toBe(0)
+  })
+
   it("listTree returns mandatory top-level score sums for every node", async () => {
     const state: DbStubState = {
       selectQueue: [
@@ -113,7 +135,6 @@ describe("PostgresWorkItemRepository", () => {
             siblingOrder: 0,
             overcomplication: 5,
             importance: 5,
-            blocksMoney: 5,
           }),
           row({
             id: "leaf",
@@ -121,7 +142,6 @@ describe("PostgresWorkItemRepository", () => {
             siblingOrder: 0,
             overcomplication: 2,
             importance: null,
-            blocksMoney: 1,
           }),
         ],
       ],
@@ -141,12 +161,10 @@ describe("PostgresWorkItemRepository", () => {
     expect(root).toMatchObject({
       overcomplicationSum: 2,
       importanceSum: 0,
-      blocksMoneySum: 0,
     })
     expect(leaf).toMatchObject({
       overcomplicationSum: 2,
       importanceSum: 0,
-      blocksMoneySum: 0,
     })
   })
 
@@ -202,7 +220,6 @@ describe("PostgresWorkItemRepository", () => {
         siblingOrder: 0,
         overcomplication: null,
         importance: null,
-        blocksMoney: null,
         currentProblems: [],
         solutionVariants: [],
         children: [
@@ -216,7 +233,6 @@ describe("PostgresWorkItemRepository", () => {
             siblingOrder: 0,
             overcomplication: null,
             importance: null,
-            blocksMoney: null,
             currentProblems: [],
             solutionVariants: [],
             children: [],

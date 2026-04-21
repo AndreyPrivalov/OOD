@@ -44,7 +44,6 @@ describe("POST /api/work-items/restore contract", () => {
             siblingOrder: 0,
             overcomplication: null,
             importance: null,
-            blocksMoney: null,
             currentProblems: [],
             solutionVariants: [],
             children: [
@@ -58,7 +57,6 @@ describe("POST /api/work-items/restore contract", () => {
                 siblingOrder: 0,
                 overcomplication: 2,
                 importance: null,
-                blocksMoney: null,
                 currentProblems: [],
                 solutionVariants: [],
                 children: [],

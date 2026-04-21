@@ -1,8 +1,8 @@
 "use client"
 
-import { WorkspaceRatingCell, workspaceRatingFieldConfigs } from "@ood/ui"
+import { WorkspaceRatingCell, type WorkspaceRatingFieldConfig } from "@ood/ui"
 import type { Dispatch, KeyboardEvent, SetStateAction } from "react"
-import { useCallback, useEffect, useMemo, useRef } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   type FlatRow,
   type WorkTreeNode,
@@ -13,6 +13,7 @@ import {
   buildEditState,
   useWorkItemEditing,
 } from "../../work-item-editing"
+import type { WorkspaceMetricSummary } from "../../workspaces/types"
 
 export type UseWorkspaceEditingStateCompositionResult = {
   getEditForRow: (row: FlatRow) => EditState
@@ -65,12 +66,54 @@ type UseWorkspaceEditingCompositionOptions = {
   setTree: Dispatch<SetStateAction<WorkTreeNode[]>>
   syncEditsRef: (edits: Record<string, EditState>) => void
   toErrorText: (error: unknown) => string
+  workspaceMetrics: WorkspaceMetricSummary[]
   onDiscardPendingSaveReady: (handler: (id: string) => void) => void
   onPersistedChange?: (
     change:
       | { kind: "patch"; before: FlatRow; after: FlatRow }
       | { kind: "create"; before: FlatRow; after: FlatRow },
   ) => void
+}
+
+const baseRatingFields: WorkspaceRatingFieldConfig[] = [
+  {
+    key: "overcomplication",
+    buttonLabel: "Сложно",
+    columnClassName: "overcomplication-col",
+    controlAriaLabel: "Сложно от 1 до 5",
+    headerLabel: "Сложно",
+  },
+  {
+    key: "importance",
+    buttonLabel: "Важно",
+    columnClassName: "importance-col",
+    controlAriaLabel: "Важно от 1 до 5",
+    headerLabel: "Важно",
+  },
+]
+
+type WorkspaceMetricValue = "none" | "indirect" | "direct"
+
+function getMetricValueLabel(value: WorkspaceMetricValue): string {
+  if (value === "direct") {
+    return "Напрямую"
+  }
+  if (value === "indirect") {
+    return "Косвенно"
+  }
+  return ""
+}
+
+function getMetricValueForRow(
+  row: FlatRow,
+  metricId: string,
+  isParentRow: boolean,
+): WorkspaceMetricValue {
+  if (isParentRow) {
+    return row.metricAggregates?.[metricId] ?? "none"
+  }
+
+  return row.metricValues?.[metricId] ?? "none"
 }
 
 export function useWorkspaceEditingComposition(
@@ -92,11 +135,15 @@ export function useWorkspaceEditingComposition(
     setTree,
     syncEditsRef,
     toErrorText,
+    workspaceMetrics,
     onDiscardPendingSaveReady,
     onPersistedChange,
   } = options
   const patchLatenciesRef = useRef<number[]>([])
   const inputToPaintRef = useRef<number[]>([])
+  const [activeEditingRowId, setActiveEditingRowId] = useState<string | null>(
+    null,
+  )
 
   const {
     edits,
@@ -104,8 +151,8 @@ export function useWorkspaceEditingComposition(
     commitTextEdit,
     discardPendingSave,
     flushPendingEdits,
-    handleFieldBlur,
-    handleFieldFocus,
+    handleFieldBlur: handleFieldBlurBase,
+    handleFieldFocus: handleFieldFocusBase,
   } = useWorkItemEditing({
     isDev,
     rows,
@@ -145,9 +192,34 @@ export function useWorkspaceEditingComposition(
       return
     }
     if (focusTitleInput(pendingFocusRowId)) {
+      setActiveEditingRowId(pendingFocusRowId)
       setPendingFocusRowId(null)
     }
   }, [focusTitleInput, pendingFocusRowId, setPendingFocusRowId])
+
+  useEffect(() => {
+    if (!activeEditingRowId) {
+      return
+    }
+    if (!rowsById.has(activeEditingRowId)) {
+      setActiveEditingRowId(null)
+    }
+  }, [activeEditingRowId, rowsById])
+
+  const handleFieldFocus = useCallback(
+    (rowId: string) => {
+      handleFieldFocusBase(rowId)
+      setActiveEditingRowId((current) => (current === rowId ? current : rowId))
+    },
+    [handleFieldFocusBase],
+  )
+
+  const handleFieldBlur = useCallback(
+    (rowId: string) => {
+      handleFieldBlurBase(rowId)
+    },
+    [handleFieldBlurBase],
+  )
 
   const handleTitleBlur = useCallback(
     (rowId: string) => {
@@ -211,33 +283,63 @@ export function useWorkspaceEditingComposition(
       row: FlatRow
     }) => (
       <>
-        <WorkspaceRatingCell
-          field={workspaceRatingFieldConfigs[0]}
-          row={row}
-          editState={edit}
-          isParentRow={isParentRow}
-          onChange={(value) => onCommitEdit({ overcomplication: value })}
-        />
-        <WorkspaceRatingCell
-          field={workspaceRatingFieldConfigs[1]}
-          row={row}
-          editState={edit}
-          isParentRow={isParentRow}
-          onChange={(value) => onCommitEdit({ importance: value })}
-        />
-        <WorkspaceRatingCell
-          field={workspaceRatingFieldConfigs[2]}
-          row={row}
-          editState={edit}
-          isParentRow={isParentRow}
-          onChange={(value) => onCommitEdit({ blocksMoney: value })}
-        />
+        {baseRatingFields.map((field) => (
+          <WorkspaceRatingCell
+            key={field.key}
+            field={field}
+            row={row}
+            editState={edit}
+            isParentRow={isParentRow}
+            onChange={(value) => onCommitEdit({ [field.key]: value })}
+          />
+        ))}
+        {workspaceMetrics.map((metric) => (
+          <td className="score-col workspace-metric-col" key={metric.id}>
+            {isParentRow ? (
+              <span className="score-summary">
+                {getMetricValueLabel(
+                  getMetricValueForRow(row, metric.id, true),
+                )}
+              </span>
+            ) : (
+              <span className="metric-select-wrap">
+                <select
+                  className="metric-select"
+                  value={edit.metricValues[metric.id] ?? "none"}
+                  onFocus={() => handleFieldFocus(row.id)}
+                  onBlur={() => handleFieldBlur(row.id)}
+                  onChange={(event) =>
+                    onCommitEdit({
+                      metricValues: {
+                        ...edit.metricValues,
+                        [metric.id]: event.currentTarget.value as
+                          | "none"
+                          | "indirect"
+                          | "direct",
+                      },
+                    })
+                  }
+                  aria-label={`${metric.shortName} значение`}
+                >
+                  <option value="none" />
+                  <option value="indirect">Косвенно</option>
+                  <option value="direct">Напрямую</option>
+                </select>
+                <i
+                  className="ri-arrow-down-s-line metric-select-icon"
+                  aria-hidden
+                />
+              </span>
+            )}
+          </td>
+        ))}
       </>
     ),
-    [],
+    [handleFieldBlur, handleFieldFocus, workspaceMetrics],
   )
 
   return {
+    activeEditingRowId,
     rowEdits,
     commitEdit,
     commitTextEdit,

@@ -1,5 +1,7 @@
 import type { WorkspaceRatingEditValues } from "../workspace-ratings"
 
+export type WorkspaceMetricValue = "none" | "indirect" | "direct"
+
 export type EditableWorkItemRow = {
   id: string
   title: string
@@ -7,7 +9,8 @@ export type EditableWorkItemRow = {
   possiblyRemovable: boolean
   overcomplication: number | null
   importance: number | null
-  blocksMoney: number | null
+  metricValues?: Record<string, WorkspaceMetricValue>
+  metricAggregates?: Record<string, WorkspaceMetricValue>
   currentProblems: string[]
   solutionVariants: string[]
   children: Array<{ id: string }>
@@ -21,6 +24,7 @@ export type EditState = {
   title: string
   object: string
   possiblyRemovable: boolean
+  metricValues: Record<string, WorkspaceMetricValue>
   currentProblems: string
   solutionVariants: string
 } & WorkspaceRatingEditValues
@@ -31,7 +35,7 @@ export type RowEditPatch = {
   possiblyRemovable?: boolean
   overcomplication?: string
   importance?: string
-  blocksMoney?: string
+  metricValues?: Record<string, WorkspaceMetricValue>
   currentProblems?: string
   solutionVariants?: string
 }
