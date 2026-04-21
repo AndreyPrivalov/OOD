@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { WorkspaceMetricSummary, WorkspaceSummary } from "./types"
+import {
+  readActiveWorkspaceId,
+  writeActiveWorkspaceId,
+  writeWorkspaceViewMode,
+} from "./workspace-session-state"
 import { parseWorkspaceSettings } from "./workspace-settings"
 
 type WorkspaceBaseSummary = Omit<WorkspaceSummary, "metrics">
@@ -63,10 +68,14 @@ export function useWorkspaceContext() {
   const [isRenamingWorkspaceId, setIsRenamingWorkspaceId] = useState<
     string | null
   >(null)
-  const currentWorkspaceIdRef = useRef<string | null>(null)
+  const currentWorkspaceIdRef = useRef<string | null>(currentWorkspaceId)
 
   useEffect(() => {
     currentWorkspaceIdRef.current = currentWorkspaceId
+  }, [currentWorkspaceId])
+
+  useEffect(() => {
+    writeActiveWorkspaceId(currentWorkspaceId)
   }, [currentWorkspaceId])
 
   const loadWorkspaceMetrics = useCallback(async (workspaceId: string) => {
@@ -110,13 +119,17 @@ export function useWorkspaceContext() {
             )
         : []
 
+      const storedWorkspaceId = readActiveWorkspaceId()
       const nextCurrentWorkspaceId =
-        currentWorkspaceIdRef.current &&
-        nextWorkspaces.some(
-          (workspace) => workspace.id === currentWorkspaceIdRef.current,
-        )
-          ? currentWorkspaceIdRef.current
-          : (nextWorkspaces[0]?.id ?? null)
+        storedWorkspaceId &&
+        nextWorkspaces.some((workspace) => workspace.id === storedWorkspaceId)
+          ? storedWorkspaceId
+          : currentWorkspaceIdRef.current &&
+              nextWorkspaces.some(
+                (workspace) => workspace.id === currentWorkspaceIdRef.current,
+              )
+            ? currentWorkspaceIdRef.current
+            : (nextWorkspaces[0]?.id ?? null)
 
       const currentWorkspaceMetrics =
         nextCurrentWorkspaceId === null
@@ -135,6 +148,7 @@ export function useWorkspaceContext() {
         return next
       })
       setCurrentWorkspaceId(nextCurrentWorkspaceId)
+      writeActiveWorkspaceId(nextCurrentWorkspaceId)
       setErrorText("")
     } catch (error) {
       setErrorText(
@@ -158,6 +172,7 @@ export function useWorkspaceContext() {
       }
 
       setCurrentWorkspaceId(workspaceId)
+      writeActiveWorkspaceId(workspaceId)
       setErrorText("")
     },
     [workspaceBases],
@@ -189,6 +204,7 @@ export function useWorkspaceContext() {
         [created.id]: [],
       }))
       setCurrentWorkspaceId(created.id)
+      writeActiveWorkspaceId(created.id)
       setErrorText("")
       return created
     } catch (error) {
@@ -252,48 +268,59 @@ export function useWorkspaceContext() {
     [],
   )
 
-  const deleteWorkspace = useCallback(async (workspaceId: string) => {
-    setIsDeletingWorkspaceId(workspaceId)
+  const deleteWorkspace = useCallback(
+    async (workspaceId: string) => {
+      setIsDeletingWorkspaceId(workspaceId)
 
-    try {
-      const response = await fetch(
-        `/api/workspaces/${encodeURIComponent(workspaceId)}`,
-        {
-          method: "DELETE",
-        },
-      )
-      const json = await response.json()
+      try {
+        const response = await fetch(
+          `/api/workspaces/${encodeURIComponent(workspaceId)}`,
+          {
+            method: "DELETE",
+          },
+        )
+        const json = await response.json()
 
-      if (!response.ok) {
-        throw new Error(mapErrorMessage(json))
+        if (!response.ok) {
+          throw new Error(mapErrorMessage(json))
+        }
+
+        writeWorkspaceViewMode(workspaceId, null)
+        const nextActiveWorkspaceId =
+          currentWorkspaceIdRef.current === workspaceId
+            ? null
+            : currentWorkspaceIdRef.current
+        setWorkspaceBases((current) => {
+          const next = current.filter(
+            (workspace) => workspace.id !== workspaceId,
+          )
+          setMetricsByWorkspaceId((metricsCurrent) => {
+            const { [workspaceId]: _removed, ...rest } = metricsCurrent
+            return rest
+          })
+          return next
+        })
+        if (nextActiveWorkspaceId === null) {
+          const fallbackWorkspaceId =
+            workspaceBases.find((workspace) => workspace.id !== workspaceId)
+              ?.id ?? null
+          setCurrentWorkspaceId(fallbackWorkspaceId)
+          writeActiveWorkspaceId(fallbackWorkspaceId)
+        }
+        setErrorText("")
+      } catch (error) {
+        setErrorText(
+          error instanceof Error
+            ? error.message
+            : "Не удалось удалить рабочее пространство.",
+        )
+        throw error
+      } finally {
+        setIsDeletingWorkspaceId(null)
       }
-
-      setWorkspaceBases((current) => {
-        const next = current.filter((workspace) => workspace.id !== workspaceId)
-        setMetricsByWorkspaceId((metricsCurrent) => {
-          const { [workspaceId]: _removed, ...rest } = metricsCurrent
-          return rest
-        })
-        setCurrentWorkspaceId((active) => {
-          if (active !== workspaceId) {
-            return active
-          }
-          return next[0]?.id ?? null
-        })
-        return next
-      })
-      setErrorText("")
-    } catch (error) {
-      setErrorText(
-        error instanceof Error
-          ? error.message
-          : "Не удалось удалить рабочее пространство.",
-      )
-      throw error
-    } finally {
-      setIsDeletingWorkspaceId(null)
-    }
-  }, [])
+    },
+    [workspaceBases],
+  )
 
   const updateWorkspaceMetrics = useCallback(
     (workspaceId: string, metrics: WorkspaceMetricSummary[]) => {

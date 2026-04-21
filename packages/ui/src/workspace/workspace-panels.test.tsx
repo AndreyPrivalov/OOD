@@ -18,13 +18,15 @@ function collectText(node: ReactNode): string[] {
   return collectText(node.props.children)
 }
 
-function collectButtons(node: ReactNode): Array<{
-  text: string
+function collectSwitches(node: ReactNode): Array<{
+  ariaLabel: string | undefined
+  className: string | undefined
+  pressed: boolean | undefined
+  title: string | undefined
   onClick: (() => void) | undefined
-  ariaPressed: boolean | undefined
 }> {
   if (Array.isArray(node)) {
-    return node.flatMap((entry) => collectButtons(entry))
+    return node.flatMap((entry) => collectSwitches(entry))
   }
   if (!isValidElement(node)) {
     return []
@@ -34,14 +36,32 @@ function collectButtons(node: ReactNode): Array<{
     node.type === "button"
       ? [
           {
-            text: collectText(node.props.children).join(" "),
+            ariaLabel: node.props["aria-label"] as string | undefined,
+            className: node.props.className as string | undefined,
+            pressed: node.props["aria-pressed"] as boolean | undefined,
+            title: node.props.title as string | undefined,
             onClick: node.props.onClick as (() => void) | undefined,
-            ariaPressed: node.props["aria-pressed"] as boolean | undefined,
           },
         ]
       : []
 
-  return [...own, ...collectButtons(node.props.children)]
+  return [...own, ...collectSwitches(node.props.children)]
+}
+
+function collectIcons(node: ReactNode): string[] {
+  if (Array.isArray(node)) {
+    return node.flatMap((entry) => collectIcons(entry))
+  }
+  if (!isValidElement(node)) {
+    return []
+  }
+
+  const own =
+    node.type === "svg"
+      ? [(node.props.className as string | undefined) ?? ""]
+      : []
+
+  return [...own, ...collectIcons(node.props.children)]
 }
 
 describe("workspace panels", () => {
@@ -73,11 +93,10 @@ describe("workspace panels", () => {
 
     expect(text).toContain("Продуктовая область")
     expect(text).toContain("Ошибка загрузки дерева")
-    expect(text).toContain("Table-only")
-    expect(text).toContain("Split")
+    expect(text).not.toContain("Показать дерево")
   })
 
-  it("marks active mode and calls mode switch handlers", () => {
+  it("marks active mode and calls switch handler", () => {
     const modeChanges: string[] = []
     const rendered = WorkspaceTitlePanel({
       title: "Продуктовая область",
@@ -86,19 +105,33 @@ describe("workspace panels", () => {
         modeChanges.push(mode)
       },
     })
-    const buttons = collectButtons(rendered)
-    const tableButton = buttons.find((button) =>
-      button.text.includes("Table-only"),
+    const switches = collectSwitches(rendered)
+    const treeSwitch = switches.find(
+      (switcher) => switcher.ariaLabel === "Показать дерево",
     )
-    const splitButton = buttons.find((button) => button.text.includes("Split"))
+    const iconClasses = collectIcons(rendered)
 
-    expect(tableButton?.ariaPressed).toBe(true)
-    expect(splitButton?.ariaPressed).toBe(false)
+    expect(treeSwitch?.pressed).toBe(false)
+    expect(treeSwitch?.className).toContain("workspace-view-toggle")
+    expect(treeSwitch?.className).not.toContain("is-active")
+    expect(treeSwitch?.title).toBe("OOD")
+    expect(iconClasses).toEqual([""])
 
-    splitButton?.onClick?.()
-    tableButton?.onClick?.()
+    treeSwitch?.onClick?.()
 
-    expect(modeChanges).toEqual(["split", "table-only"])
+    const activeRendered = WorkspaceTitlePanel({
+      title: "Продуктовая область",
+      viewMode: "split",
+      onViewModeChange: () => {},
+    })
+    const activeSwitch = collectSwitches(activeRendered).find(
+      (switcher) => switcher.ariaLabel === "Скрыть дерево",
+    )
+
+    expect(activeSwitch?.pressed).toBe(true)
+    expect(activeSwitch?.className).toContain("is-active")
+
+    expect(modeChanges).toEqual(["split"])
   })
 
   it("renders secondary pane only in split mode", () => {

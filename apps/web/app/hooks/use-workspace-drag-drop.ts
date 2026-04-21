@@ -41,6 +41,34 @@ type UseWorkspaceDragDropOptions = {
   ) => Promise<void>
 }
 
+export async function commitWorkspaceDrop(options: {
+  activeId: string
+  intent: DropIntent | null
+  moveRow: (
+    id: string,
+    targetParentId: string | null,
+    targetIndex: number,
+  ) => Promise<void>
+  rowsById: Map<string, FlatRow>
+}) {
+  const { activeId, intent, moveRow, rowsById } = options
+  if (!intent) return
+  if (intent.type === "nest") {
+    if (intent.targetId === activeId) return
+    const parentNode = rowsById.get(intent.targetId)
+    if (!parentNode) return
+    await moveRow(activeId, intent.targetId, 0)
+    return
+  }
+  if (intent.type === "between") {
+    await moveRow(activeId, intent.parentId, intent.targetIndex)
+    return
+  }
+  if (intent.type === "root-start") {
+    await moveRow(activeId, null, 0)
+  }
+}
+
 export function useWorkspaceDragDrop(options: UseWorkspaceDragDropOptions) {
   const { moveRow, rowsById, scheduleOverlayRecalc, siblingsByParent } = options
   const [dragState, setDragState] = useState<PointerDragState | null>(null)
@@ -57,24 +85,12 @@ export function useWorkspaceDragDrop(options: UseWorkspaceDragDropOptions) {
 
   const commitDrop = useCallback(
     async (activeId: string, intent: DropIntent | null) => {
-      if (!intent) return
-      if (intent.type === "nest") {
-        if (intent.targetId === activeId) return
-        const parentNode = rowsById.get(intent.targetId)
-        if (!parentNode) return
-        const targetIndex = parentNode.children.filter(
-          (child) => child.id !== activeId,
-        ).length
-        await moveRow(activeId, intent.targetId, targetIndex)
-        return
-      }
-      if (intent.type === "between") {
-        await moveRow(activeId, intent.parentId, intent.targetIndex)
-        return
-      }
-      if (intent.type === "root-start") {
-        await moveRow(activeId, null, 0)
-      }
+      await commitWorkspaceDrop({
+        activeId,
+        intent,
+        moveRow,
+        rowsById,
+      })
     },
     [moveRow, rowsById],
   )

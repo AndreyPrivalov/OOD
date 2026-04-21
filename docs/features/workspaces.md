@@ -23,3 +23,4 @@
 - клиент workspace settings обязан работать только через settings shape с метриками и не должен поддерживать параллельный contract только для rename;
 - delete workspace требует подтверждение пользователя в popup перед удалением;
 - удаление default workspace запрещено на уровне API.
+- в рамках одной browser tab session клиент помнит active workspace через `sessionStorage` и после refresh восстанавливает его, если workspace всё ещё существует.

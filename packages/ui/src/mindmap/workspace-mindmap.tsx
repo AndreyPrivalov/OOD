@@ -7,7 +7,6 @@ import {
   useRef,
   useState,
 } from "react"
-import { buildMindmapNodeClassName } from "./model"
 import type {
   MindmapEdge,
   MindmapNode,
@@ -15,11 +14,15 @@ import type {
   MindmapViewportChangeMeta,
 } from "./types"
 
-const DEFAULT_NODE_WIDTH = 220
-const DEFAULT_NODE_HEIGHT = 44
+const DEFAULT_NODE_WIDTH = 96
+const DEFAULT_NODE_HEIGHT = 22
 const DEFAULT_MIN_ZOOM = 0.4
 const DEFAULT_MAX_ZOOM = 2.2
 const DEFAULT_ZOOM_STEP = 0.12
+const EDGE_BRANCH_GAP = 28
+const EDGE_BEND_RADIUS = 16
+const NODE_TEXT_LEFT_PADDING = 10
+const NODE_TEXT_CONNECTION_GAP = 6
 
 type WorkspaceMindmapProps = {
   nodes: MindmapNode[]
@@ -46,12 +49,16 @@ function clamp(value: number, min: number, max: number): number {
 
 export function WorkspaceMindmap(props: WorkspaceMindmapProps) {
   const [isPanning, setIsPanning] = useState(false)
+  const [labelWidthById, setLabelWidthById] = useState<Map<string, number>>(
+    () => new Map(),
+  )
   const dragRef = useRef<{
     pointerId: number
     clientX: number
     clientY: number
   } | null>(null)
   const internalFrameRef = useRef<HTMLDivElement | null>(null)
+  const textRefById = useRef(new Map<string, SVGTextElement>())
 
   const nodesById = useMemo(() => {
     const map = new Map<string, MindmapNode>()
@@ -69,6 +76,56 @@ export function WorkspaceMindmap(props: WorkspaceMindmapProps) {
     () => new Set(props.editingNodeIds ?? []),
     [props.editingNodeIds],
   )
+  const childNodesByParentId = useMemo(() => {
+    const map = new Map<string, MindmapNode[]>()
+    for (const edge of props.edges) {
+      const parent = nodesById.get(edge.fromId)
+      const child = nodesById.get(edge.toId)
+      if (!parent || !child) {
+        continue
+      }
+      const bucket = map.get(parent.id)
+      if (bucket) {
+        bucket.push(child)
+        continue
+      }
+      map.set(parent.id, [child])
+    }
+    for (const children of map.values()) {
+      children.sort((left, right) => {
+        const leftCenterY = left.y + (left.height ?? DEFAULT_NODE_HEIGHT) / 2
+        const rightCenterY = right.y + (right.height ?? DEFAULT_NODE_HEIGHT) / 2
+        return leftCenterY - rightCenterY
+      })
+    }
+    return map
+  }, [nodesById, props.edges])
+
+  useEffect(() => {
+    const next = new Map<string, number>()
+    for (const [id, node] of textRefById.current.entries()) {
+      const width = node.getComputedTextLength()
+      if (Number.isFinite(width) && width > 0) {
+        next.set(id, width)
+      }
+    }
+    setLabelWidthById((previous) => {
+      if (previous.size === next.size) {
+        let isSame = true
+        for (const [id, width] of next.entries()) {
+          const prevWidth = previous.get(id)
+          if (prevWidth === undefined || Math.abs(prevWidth - width) > 0.5) {
+            isSame = false
+            break
+          }
+        }
+        if (isSame) {
+          return previous
+        }
+      }
+      return next
+    })
+  })
 
   const minZoom = props.minZoom ?? DEFAULT_MIN_ZOOM
   const maxZoom = props.maxZoom ?? DEFAULT_MAX_ZOOM
@@ -203,59 +260,96 @@ export function WorkspaceMindmap(props: WorkspaceMindmapProps) {
         <title>{props.ariaLabel ?? "Mindmap рабочей структуры"}</title>
         <g transform={`translate(${props.viewport.x} ${props.viewport.y})`}>
           <g transform={`scale(${props.viewport.zoom})`}>
-            {props.edges.map((edge, index) => {
-              const fromNode = nodesById.get(edge.fromId)
-              const toNode = nodesById.get(edge.toId)
-              if (!fromNode || !toNode) {
-                return null
-              }
-              const fromWidth = fromNode.width ?? DEFAULT_NODE_WIDTH
-              const fromHeight = fromNode.height ?? DEFAULT_NODE_HEIGHT
-              const toHeight = toNode.height ?? DEFAULT_NODE_HEIGHT
-              const x1 = fromNode.x + fromWidth
-              const y1 = fromNode.y + fromHeight / 2
-              const x2 = toNode.x
-              const y2 = toNode.y + toHeight / 2
+            {[...childNodesByParentId.entries()].map(
+              ([parentId, childNodes]) => {
+                const parentNode = nodesById.get(parentId)
+                if (!parentNode || childNodes.length === 0) {
+                  return null
+                }
+                const parentHeight = parentNode.height ?? DEFAULT_NODE_HEIGHT
+                const fallbackWidth =
+                  (parentNode.width ?? DEFAULT_NODE_WIDTH) -
+                  NODE_TEXT_LEFT_PADDING
+                const textWidth =
+                  labelWidthById.get(parentId) ?? Math.max(0, fallbackWidth)
+                const parentX =
+                  parentNode.x +
+                  NODE_TEXT_LEFT_PADDING +
+                  textWidth +
+                  NODE_TEXT_CONNECTION_GAP
+                const parentY = parentNode.y + parentHeight / 2
+                const minChildX = Math.min(...childNodes.map((node) => node.x))
+                const branchGap = Math.max(
+                  8,
+                  Math.min(EDGE_BRANCH_GAP, minChildX - parentX - 12),
+                )
+                const splitX = parentX + branchGap
 
-              return (
-                <line
-                  key={edge.id ?? `${edge.fromId}-${edge.toId}-${index}`}
-                  className="workspace-mindmap-edge"
-                  x1={x1}
-                  y1={y1}
-                  x2={x2}
-                  y2={y2}
-                  style={edgeStyle}
-                />
-              )
-            })}
+                return (
+                  <g key={parentId}>
+                    <path
+                      className="workspace-mindmap-edge"
+                      d={`M ${parentX} ${parentY} H ${splitX}`}
+                      style={edgeStyle}
+                    />
+                    {childNodes.map((childNode) => {
+                      const childCenterY =
+                        childNode.y +
+                        (childNode.height ?? DEFAULT_NODE_HEIGHT) / 2
+                      const hasAlignedCenter =
+                        Math.abs(childCenterY - parentY) <= 0.5
+                      const maxRadius = Math.max(
+                        0,
+                        Math.min(
+                          EDGE_BEND_RADIUS,
+                          Math.abs(childCenterY - parentY),
+                          (childNode.x - splitX) / 2,
+                        ),
+                      )
+                      const edgePath = hasAlignedCenter
+                        ? `M ${splitX} ${parentY} H ${childNode.x}`
+                        : [
+                            `M ${splitX} ${parentY}`,
+                            `V ${childCenterY > parentY ? childCenterY - maxRadius : childCenterY + maxRadius}`,
+                            `Q ${splitX} ${childCenterY} ${splitX + maxRadius} ${childCenterY}`,
+                            `H ${childNode.x}`,
+                          ].join(" ")
+
+                      return (
+                        <path
+                          key={`${parentId}__${childNode.id}`}
+                          className="workspace-mindmap-edge"
+                          d={edgePath}
+                          style={edgeStyle}
+                        />
+                      )
+                    })}
+                  </g>
+                )
+              },
+            )}
             {props.nodes.map((node) => {
-              const width = node.width ?? DEFAULT_NODE_WIDTH
               const height = node.height ?? DEFAULT_NODE_HEIGHT
               const isEditing = editingNodeIds.has(node.id)
               const isActive = activeNodeIds.has(node.id)
 
               return (
                 <g key={node.id} transform={`translate(${node.x} ${node.y})`}>
-                  <rect
-                    className={buildMindmapNodeClassName({
-                      nodeId: node.id,
-                      activeNodeIds,
-                      editingNodeIds,
-                    })}
-                    rx={8}
-                    width={width}
-                    height={height}
-                    style={{
-                      ...nodeStyle,
-                      ...(isActive ? nodeActiveStyle : null),
-                      ...(isEditing ? nodeEditingStyle : null),
-                    }}
-                  />
                   <text
-                    x={12}
+                    ref={(element) => {
+                      if (element) {
+                        textRefById.current.set(node.id, element)
+                        return
+                      }
+                      textRefById.current.delete(node.id)
+                    }}
+                    x={NODE_TEXT_LEFT_PADDING}
                     y={height / 2 + 1}
-                    style={labelStyle}
+                    style={{
+                      ...labelStyle,
+                      ...(isEditing ? labelEditingStyle : null),
+                      ...(isActive ? labelActiveStyle : null),
+                    }}
                     dominantBaseline="middle"
                   >
                     {node.label}
@@ -292,34 +386,29 @@ const svgStyle: CSSProperties = {
 }
 
 const edgeStyle: CSSProperties = {
-  stroke: "rgba(35, 44, 50, 0.34)",
+  stroke: "rgba(116, 120, 124, 0.45)",
   strokeWidth: 1.5,
   vectorEffect: "non-scaling-stroke",
-}
-
-const nodeStyle: CSSProperties = {
-  fill: "rgba(255, 255, 255, 0.96)",
-  stroke: "rgba(35, 44, 50, 0.2)",
-  strokeWidth: 1,
-}
-
-const nodeActiveStyle: CSSProperties = {
-  stroke: "rgba(35, 44, 50, 0.52)",
-}
-
-const nodeEditingStyle: CSSProperties = {
-  fill: "rgba(246, 250, 247, 0.98)",
-  stroke: "rgba(40, 82, 55, 0.52)",
-  strokeWidth: 1.5,
+  fill: "none",
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
 }
 
 const labelStyle: CSSProperties = {
-  fill: "rgba(35, 44, 50, 0.94)",
-  fontSize: "14px",
-  fontWeight: 500,
-  letterSpacing: "0.01em",
-  fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif",
+  fill: "var(--fg)",
+  fontSize: "var(--text-main)",
+  fontWeight: 400,
+  fontFamily: 'var(--font-sans), "Segoe UI", sans-serif',
+  lineHeight: 1.4,
   pointerEvents: "none",
+}
+
+const labelActiveStyle: CSSProperties = {
+  fill: "var(--accent)",
+}
+
+const labelEditingStyle: CSSProperties = {
+  fill: "rgba(26, 61, 40, 0.98)",
 }
 
 const hudStyle: CSSProperties = {

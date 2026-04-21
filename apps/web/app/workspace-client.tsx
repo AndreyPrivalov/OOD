@@ -87,6 +87,7 @@ export function WorkspaceClient() {
                     void vm.handlers.deleteRow(rowId)
                   }}
                   onToggleRowCollapse={vm.handlers.toggleRowCollapse}
+                  onActivateRowForEditing={vm.handlers.activateRowForEditing}
                 />
               </>
             }

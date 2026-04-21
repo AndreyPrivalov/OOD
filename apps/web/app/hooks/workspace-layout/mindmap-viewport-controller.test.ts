@@ -70,20 +70,57 @@ describe("mindmap viewport controller helpers", () => {
     })
   })
 
-  it("computes auto-frame viewport without increasing user zoom", () => {
+  it("computes auto-frame viewport with adaptive focus zoom range", () => {
     const next = computeAutoFrameViewport({
       viewport: { x: 0, y: 0, zoom: 1.4 },
       frameSize: { width: 400, height: 240 },
       contextBounds: { minX: 0, minY: 0, maxX: 500, maxY: 180 },
+      focusBounds: { minX: 160, minY: 80, maxX: 260, maxY: 120 },
       contentBounds: { minX: -40, minY: 0, maxX: 700, maxY: 300 },
       minZoom: 0.4,
       maxZoom: 2.2,
       padding: 24,
     })
 
-    expect(next.zoom).toBeLessThanOrEqual(1.4)
+    expect(next.zoom).toBeGreaterThanOrEqual(0.6)
+    expect(next.zoom).toBeLessThanOrEqual(0.85)
     expect(Number.isFinite(next.x)).toBe(true)
     expect(Number.isFinite(next.y)).toBe(true)
+  })
+
+  it("caps adaptive focus zoom for compact context", () => {
+    const next = computeAutoFrameViewport({
+      viewport: { x: 0, y: 0, zoom: 1.1 },
+      frameSize: { width: 640, height: 360 },
+      contextBounds: { minX: 120, minY: 90, maxX: 240, maxY: 150 },
+      focusBounds: { minX: 140, minY: 100, maxX: 220, maxY: 140 },
+      contentBounds: { minX: 0, minY: 0, maxX: 800, maxY: 500 },
+      minZoom: 0.4,
+      maxZoom: 2.2,
+      padding: 24,
+    })
+
+    expect(next.zoom).toBe(0.85)
+  })
+
+  it("uses focus node vertical center for auto-frame target", () => {
+    const frameHeight = 240
+    const focusBounds = { minX: 160, minY: 100, maxX: 260, maxY: 140 }
+    const next = computeAutoFrameViewport({
+      viewport: { x: 10, y: 20, zoom: 1.2 },
+      frameSize: { width: 480, height: frameHeight },
+      contextBounds: { minX: 0, minY: 0, maxX: 600, maxY: 300 },
+      focusBounds,
+      contentBounds: { minX: -60, minY: 0, maxX: 700, maxY: 320 },
+      minZoom: 0.4,
+      maxZoom: 2.2,
+      padding: 24,
+    })
+
+    const focusCenterY = (focusBounds.minY + focusBounds.maxY) / 2
+    const focusScreenY = next.y + focusCenterY * next.zoom
+    expect(focusScreenY).toBeLessThanOrEqual(frameHeight / 2)
+    expect(focusScreenY).toBeGreaterThanOrEqual(frameHeight / 2 - 30)
   })
 
   it("centers content when it is smaller than the frame", () => {
@@ -101,12 +138,28 @@ describe("mindmap viewport controller helpers", () => {
     expect(next.zoom).toBe(1)
   })
 
+  it("keeps requested offset when content fits and centering is disabled", () => {
+    const next = clampViewportToBounds({
+      viewport: { x: 110, y: 90, zoom: 1 },
+      frameSize: { width: 400, height: 300 },
+      contentBounds: { minX: 0, minY: 0, maxX: 100, maxY: 50 },
+      minZoom: 0.4,
+      maxZoom: 2.2,
+      padding: 24,
+      centerWhenContentFits: false,
+    })
+
+    expect(next.x).toBe(110)
+    expect(next.y).toBe(90)
+  })
+
   it("keeps viewport unchanged when auto-frame runs with zero frame size", () => {
     const current = { x: 12, y: 18, zoom: 0.9 }
     const next = computeAutoFrameViewport({
       viewport: current,
       frameSize: { width: 0, height: 0 },
       contextBounds: { minX: 0, minY: 0, maxX: 100, maxY: 100 },
+      focusBounds: { minX: 0, minY: 0, maxX: 100, maxY: 100 },
       contentBounds: { minX: 0, minY: 0, maxX: 300, maxY: 300 },
       minZoom: 0.4,
       maxZoom: 2.2,

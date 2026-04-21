@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { isUndoRedoShortcut } from "../history/workspace-history"
 import { areSetsEqual, pruneCollapsedRowIds } from "../state/tree-visibility"
 import {
+  buildActiveNodeIds,
   buildEditingContextNodeIds,
   buildWorkspaceMindmapDiagram,
 } from "../state/workspace-mindmap-diagram"
@@ -18,12 +19,17 @@ import {
   deriveWorkspaceTreeProjection,
 } from "../state/workspace-tree-projection"
 import { useWorkspaceContext } from "../workspaces/use-workspace-context"
+import {
+  readWorkspaceViewMode,
+  writeWorkspaceViewMode,
+} from "../workspaces/workspace-session-state"
 import { WorkspaceSwitcher } from "../workspaces/workspace-switcher"
 import {
   useTableFrameConstants,
   useWorkspaceLayout,
 } from "./use-workspace-layout"
 import { readActiveFieldSnapshot } from "./workspace-client-composition/page-exit-save"
+import { buildRowUiRenderSignature } from "./workspace-client-composition/row-ui-signature"
 import { useWorkspaceDndOverlayComposition } from "./workspace-client-composition/use-dnd-overlay-composition"
 import {
   useWorkspaceEditingComposition,
@@ -99,7 +105,9 @@ export function useWorkspaceClientComposition() {
   const [pendingFocusRowId, setPendingFocusRowId] = useState<string | null>(
     null,
   )
-  const [viewMode, setViewMode] = useState<WorkspaceViewMode>("table-only")
+  const [viewModeByWorkspaceId, setViewModeByWorkspaceId] = useState<
+    Record<string, WorkspaceViewMode>
+  >({})
   const [escapeCancellableRowId, setEscapeCancellableRowId] = useState<
     string | null
   >(null)
@@ -150,6 +158,7 @@ export function useWorkspaceClientComposition() {
   })
 
   const editing = useWorkspaceEditingComposition({
+    createRowAtPosition: treeData.createRowAtPosition,
     deleteRow: treeData.deleteRow,
     escapeCancellableRowId,
     focusTitleInput: layout.focusTitleInput,
@@ -193,6 +202,56 @@ export function useWorkspaceClientComposition() {
     siblingsByParent: treeProjection.canonical.siblingsByParent,
     tableHeaderBottom: layout.tableHeaderBottom,
   })
+
+  useEffect(() => {
+    if (!currentWorkspaceId) {
+      return
+    }
+
+    const storedViewMode = readWorkspaceViewMode(currentWorkspaceId)
+    if (!storedViewMode) {
+      return
+    }
+
+    setViewModeByWorkspaceId((current) => {
+      if (current[currentWorkspaceId] === storedViewMode) {
+        return current
+      }
+
+      return {
+        ...current,
+        [currentWorkspaceId]: storedViewMode,
+      }
+    })
+  }, [currentWorkspaceId])
+
+  const viewMode = useMemo<WorkspaceViewMode>(() => {
+    if (!currentWorkspaceId) {
+      return "table-only"
+    }
+
+    return viewModeByWorkspaceId[currentWorkspaceId] ?? "table-only"
+  }, [currentWorkspaceId, viewModeByWorkspaceId])
+
+  const setViewMode = useCallback(
+    (nextViewMode: WorkspaceViewMode) => {
+      if (!currentWorkspaceId) {
+        return
+      }
+
+      setViewModeByWorkspaceId((current) => {
+        if (current[currentWorkspaceId] === nextViewMode) {
+          return current
+        }
+        return {
+          ...current,
+          [currentWorkspaceId]: nextViewMode,
+        }
+      })
+      writeWorkspaceViewMode(currentWorkspaceId, nextViewMode)
+    },
+    [currentWorkspaceId],
+  )
 
   useEffect(() => {
     if (viewMode !== "table-only" && viewMode !== "split") {
@@ -492,7 +551,9 @@ export function useWorkspaceClientComposition() {
             layout.registerTitleInputRef(rowId, node),
           onFocus: () => editing.handleFieldFocus(rowId),
           onBlur: (value) => {
-            editing.commitTextEdit(rowId, { title: value })
+            if (!editing.shouldSkipTitleCommitOnBlur(rowId)) {
+              editing.commitTextEdit(rowId, { title: value })
+            }
             editing.handleFieldBlur(rowId)
             editing.handleTitleBlur(rowId)
           },
@@ -560,23 +621,20 @@ export function useWorkspaceClientComposition() {
           row,
           onCommitEdit: (patch) => editing.commitEdit(rowId, patch),
         }),
-        renderSignature: [
-          edit.title,
-          edit.object,
-          edit.overcomplication,
-          edit.importance,
-          ...Object.entries(edit.metricValues)
-            .sort(([left], [right]) => left.localeCompare(right))
-            .map(([metricId, value]) => `${metricId}:${value}`),
-          edit.currentProblems,
-          edit.solutionVariants,
-          edit.possiblyRemovable ? "1" : "0",
-        ].join("::"),
+        renderSignature: buildRowUiRenderSignature(
+          edit,
+          currentWorkspace?.metrics ?? [],
+        ),
       }
     }
 
     return next
-  }, [editing, layout, treeProjection.canonical.rows])
+  }, [
+    currentWorkspace?.metrics,
+    editing,
+    layout,
+    treeProjection.canonical.rows,
+  ])
 
   const mindmapDiagram = useMemo(
     () => buildWorkspaceMindmapDiagram(treeProjection.mindmap.rows),
@@ -595,12 +653,28 @@ export function useWorkspaceClientComposition() {
       treeProjection.canonical.siblingsByParent,
     ],
   )
+  const activeMindmapNodeIds = useMemo(
+    () =>
+      buildActiveNodeIds({
+        activeRowId: editing.activeEditingRowId,
+        rowsById: treeProjection.canonical.rowsById,
+      }),
+    [editing.activeEditingRowId, treeProjection.canonical.rowsById],
+  )
 
   const mindmapViewportController = useMindmapViewportController({
     nodes: mindmapDiagram.nodes,
     editingNodeIds: editingContextNodeIds,
+    autoFrameKey: editing.focusRevision,
     initialViewport: INITIAL_MINDMAP_VIEWPORT,
   })
+  const activateRowForEditing = useCallback(
+    (rowId: string) => {
+      editing.handleFieldFocus(rowId)
+      layout.focusTitleInput(rowId)
+    },
+    [editing.handleFieldFocus, layout.focusTitleInput],
+  )
 
   return {
     viewMode,
@@ -620,9 +694,7 @@ export function useWorkspaceClientComposition() {
     mindmap: {
       tree: treeProjection.mindmap,
       diagram: mindmapDiagram,
-      activeNodeIds: editing.activeEditingRowId
-        ? [editing.activeEditingRowId]
-        : [],
+      activeNodeIds: activeMindmapNodeIds,
       editingNodeIds: editingContextNodeIds,
       viewport: mindmapViewportController.viewport,
       viewportFrameRef: mindmapViewportController.viewportFrameRef,
@@ -648,6 +720,7 @@ export function useWorkspaceClientComposition() {
       deleteRow: treeData.deleteRow,
       setViewMode,
       toggleRowCollapse,
+      activateRowForEditing,
       renderSwitcher,
     },
     workspaceRatingFieldConfigs: tableScoreHeaders,

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { buildNextRowSnapshot } from "./use-work-item-editing"
+import {
+  applyServerAckPatch,
+  buildNextRowSnapshot,
+} from "./use-work-item-editing"
 
 describe("buildNextRowSnapshot", () => {
   it("uses persisted id when draft is created on server", () => {
@@ -51,5 +54,27 @@ describe("buildNextRowSnapshot", () => {
     const result = buildNextRowSnapshot(currentRow, null, "row-1")
 
     expect(result).toEqual(currentRow)
+  })
+})
+
+describe("applyServerAckPatch", () => {
+  it("applies server patch to persisted id after draft id remap", () => {
+    const calls: Array<{ rowId: string; patch: Record<string, unknown> }> = []
+
+    applyServerAckPatch({
+      ackShouldApply: true,
+      activeRowId: "local-draft:1",
+      nextRowId: "server-1",
+      patchRow: (rowId, patch) => {
+        calls.push({ rowId, patch })
+      },
+      payload: { title: "Persisted" },
+      updated: { id: "server-1", title: "Persisted" },
+    })
+
+    expect(calls).toEqual([
+      { rowId: "local-draft:1", patch: { id: "server-1" } },
+      { rowId: "server-1", patch: { id: "server-1", title: "Persisted" } },
+    ])
   })
 })

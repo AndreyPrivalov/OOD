@@ -14,6 +14,8 @@ import {
   useWorkItemEditing,
 } from "../../work-item-editing"
 import type { WorkspaceMetricSummary } from "../../workspaces/types"
+import { isLocalDraftRowId } from "../workspace-tree-data/shared"
+import { resolveTitleHotkeyAction } from "./title-hotkeys"
 
 export type UseWorkspaceEditingStateCompositionResult = {
   getEditForRow: (row: FlatRow) => EditState
@@ -51,6 +53,7 @@ export function useWorkspaceEditingStateComposition(
 }
 
 type UseWorkspaceEditingCompositionOptions = {
+  createRowAtPosition: (parentId: string | null, targetIndex: number) => void
   deleteRow: (id: string) => Promise<void>
   escapeCancellableRowId: string | null
   focusTitleInput: (rowId: string) => boolean
@@ -120,6 +123,7 @@ export function useWorkspaceEditingComposition(
   options: UseWorkspaceEditingCompositionOptions,
 ) {
   const {
+    createRowAtPosition,
     deleteRow,
     escapeCancellableRowId,
     focusTitleInput,
@@ -144,12 +148,15 @@ export function useWorkspaceEditingComposition(
   const [activeEditingRowId, setActiveEditingRowId] = useState<string | null>(
     null,
   )
+  const [focusRevision, setFocusRevision] = useState(0)
+  const skipTitleCommitOnBlurRef = useRef<Set<string>>(new Set())
 
   const {
     edits,
     commitEdit,
     commitTextEdit,
     discardPendingSave,
+    resetEdit,
     flushPendingEdits,
     handleFieldBlur: handleFieldBlurBase,
     handleFieldFocus: handleFieldFocusBase,
@@ -209,6 +216,7 @@ export function useWorkspaceEditingComposition(
   const handleFieldFocus = useCallback(
     (rowId: string) => {
       handleFieldFocusBase(rowId)
+      setFocusRevision((current) => current + 1)
       setActiveEditingRowId((current) => (current === rowId ? current : rowId))
     },
     [handleFieldFocusBase],
@@ -232,6 +240,57 @@ export function useWorkspaceEditingComposition(
 
   const handleTitleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>, rowId: string) => {
+      const hotkeyAction = resolveTitleHotkeyAction({
+        key: event.key,
+        shiftKey: event.shiftKey,
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+      })
+
+      if (hotkeyAction === "create-child") {
+        event.preventDefault()
+        const row = rowsById.get(rowId)
+        if (!row) {
+          return
+        }
+        commitTextEdit(rowId, { title: event.currentTarget.value })
+        void createRowAtPosition(row.id, row.children.length)
+        return
+      }
+
+      if (hotkeyAction === "create-sibling") {
+        event.preventDefault()
+        const row = rowsById.get(rowId)
+        if (!row) {
+          return
+        }
+        commitTextEdit(rowId, { title: event.currentTarget.value })
+        void createRowAtPosition(row.parentId, row.siblingOrder + 1)
+        return
+      }
+
+      if (hotkeyAction === "blur") {
+        event.preventDefault()
+        event.currentTarget.blur()
+        return
+      }
+
+      if (hotkeyAction === "cancel") {
+        event.preventDefault()
+        event.stopPropagation()
+        if (isLocalDraftRowId(rowId)) {
+          discardPendingSave(rowId)
+          setEscapeCancellableRowId(null)
+          void deleteRow(rowId)
+          return
+        }
+        discardPendingSave(rowId)
+        resetEdit(rowId)
+        skipTitleCommitOnBlurRef.current.add(rowId)
+        event.currentTarget.blur()
+        return
+      }
+
       if (
         event.key === "Enter" &&
         !event.shiftKey &&
@@ -255,9 +314,13 @@ export function useWorkspaceEditingComposition(
       void deleteRow(rowId)
     },
     [
+      commitTextEdit,
+      createRowAtPosition,
       deleteRow,
       discardPendingSave,
       escapeCancellableRowId,
+      resetEdit,
+      rowsById,
       setEscapeCancellableRowId,
     ],
   )
@@ -340,6 +403,7 @@ export function useWorkspaceEditingComposition(
 
   return {
     activeEditingRowId,
+    focusRevision,
     rowEdits,
     commitEdit,
     commitTextEdit,
@@ -349,6 +413,13 @@ export function useWorkspaceEditingComposition(
     handleFieldFocus,
     handleTitleBlur,
     handleTitleKeyDown,
+    shouldSkipTitleCommitOnBlur: (rowId: string) => {
+      if (!skipTitleCommitOnBlurRef.current.has(rowId)) {
+        return false
+      }
+      skipTitleCommitOnBlurRef.current.delete(rowId)
+      return true
+    },
     renderRatingCells,
     patchLatenciesRef,
     inputToPaintRef,

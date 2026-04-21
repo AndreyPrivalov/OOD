@@ -16,7 +16,7 @@ const gentiumBookPlus = Gentium_Book_Plus({
 })
 
 export const metadata: Metadata = {
-  title: "Иерархия работ OOD",
+  title: "OOD",
   description: "MVP-приложение для управления иерархическим списком работ.",
 }
 
@@ -33,7 +33,7 @@ export default function RootLayout({
       <head>
         <link
           rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css"
+          href="https://cdn.jsdelivr.net/npm/remixicon@4.8.0/fonts/remixicon.css"
         />
       </head>
       <body>{children}</body>
