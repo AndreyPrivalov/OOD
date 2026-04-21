@@ -2,6 +2,8 @@ import { DomainErrorCode } from "@ood/domain"
 import { beforeEach, describe, expect, it } from "vitest"
 import {
   InMemoryWorkItemRepository,
+  InMemoryWorkspaceMetricRepository,
+  InMemoryWorkspaceRepository,
   __resetInMemoryStoreForTests,
 } from "./testing"
 
@@ -226,5 +228,50 @@ describe("InMemoryWorkItemRepository listTree score sums", () => {
     })
     expect(restoredTree.map((node) => node.id)).toEqual([keep.id, deleted.id])
     expect(findNode(restoredTree, deleted.id)?.children).toHaveLength(1)
+  })
+
+  it("does not partially apply row fields when metric patch contains unknown metric", async () => {
+    const workspaceRepo = new InMemoryWorkspaceRepository()
+    const metricRepo = new InMemoryWorkspaceMetricRepository()
+    const repo = new InMemoryWorkItemRepository()
+    const workspace = await workspaceRepo.create({ name: "Alpha" })
+    const item = await repo.create({
+      workspaceId: workspace.id,
+      title: "before",
+    })
+    const metric = await metricRepo.createMetric({
+      workspaceId: workspace.id,
+      shortName: "Risk",
+    })
+    await metricRepo.setWorkItemMetricValue({
+      workItemId: item.id,
+      metricId: metric.id,
+      value: "indirect",
+    })
+
+    await expect(
+      repo.update(item.id, {
+        title: "after",
+        metricValues: {
+          [metric.id]: "none",
+          "missing-metric": "direct",
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: DomainErrorCode.INVALID_MOVE_TARGET,
+    })
+
+    const tree = await repo.listTree(workspace.id)
+    const sameItem = findNode(tree, item.id)
+    const metricValues = await metricRepo.listWorkItemMetricValues(item.id)
+
+    expect(sameItem?.title).toBe("before")
+    expect(metricValues).toEqual([
+      {
+        workItemId: item.id,
+        metricId: metric.id,
+        value: "indirect",
+      },
+    ])
   })
 })

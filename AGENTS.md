@@ -22,13 +22,14 @@ Build and maintain only the cleaned core unless the spec is explicitly expanded:
 - one work tree per workspace;
 - root and child work-item creation;
 - inline work-item editing;
+- session-scoped undo/redo for canonical data actions, including internal restore mechanics for deleted branches and deleted metrics;
 - ratings, workspace metrics, and parent aggregate read values;
 - stable sibling ordering;
 - move among siblings;
 - move to another valid parent;
 - cascade deletion of a branch.
 
-Do not reintroduce import/export, auth, audit history, archive/restore, or advanced collaboration unless the spec is updated first.
+Do not reintroduce import/export, auth, durable audit history, standalone archive/restore flows outside undo/redo, or advanced collaboration unless the spec is updated first.
 
 ## Tech Stack & DB
 
@@ -77,6 +78,8 @@ Preserve these high-level qualities:
 - Refactor gradually; do not do a risky rewrite.
 - Break oversized files into smaller modules with clear ownership.
 - Separate rendering, tree interaction logic, edit-state handling, and API contract mapping.
+- Keep client orchestration boundaries explicit:
+  tree data/reconcile, optimistic structural actions, history engine, metric catalog actions, and edit/save orchestration must stay separable even when composed by one screen hook.
 - Prefer reliable end-of-edit persistence triggers like `blur` over aggressive continuous autosave systems.
 - Keep supported tree interactions limited to stable sibling ordering and moving under another valid parent.
 - Remove legacy response-shape compatibility once the canonical contract is in place.
@@ -96,6 +99,7 @@ Preserve these high-level qualities:
 - Parent rows expose aggregate rating read values in the primary tree view.
 - Parent rows expose aggregate metric read values in the primary tree view.
 - Editing business fields must not implicitly change tree structure.
+- The canonical row write contract is row-scoped `PATCH /api/work-items/[id]`; if one patch includes row fields and `metricValues`, it must execute as one transactional application use case.
 - Structural operations must be atomic from the user’s perspective.
 - Invalid moves must never partially apply.
 
@@ -103,7 +107,9 @@ Preserve these high-level qualities:
 
 - Converge to one canonical API response shape.
 - Converge to one naming scheme for fields.
+- Converge workspace rename/settings flows to one canonical workspace settings shape with metrics.
 - Remove non-test fallback persistence paths.
+- Phase out the large product-parity in-memory adapter in favor of thinner doubles, shared pure helpers, and Postgres integration coverage.
 - Remove duplicate documentation roots after migration is complete.
 - Do not add new compatibility aliases without an explicit migration note in docs.
 
@@ -121,6 +127,7 @@ Preserve these high-level qualities:
 - 0 errors required.
 - All changes must preserve or improve tests around touched behavior.
 - High-risk tree operations and persistence changes must include targeted tests.
+- Transactional persistence, restore behavior, and cross-table write invariants should be covered with Postgres integration tests rather than only in-memory doubles.
 
 ## Delivery Rules
 

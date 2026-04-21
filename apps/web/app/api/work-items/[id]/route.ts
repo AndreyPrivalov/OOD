@@ -33,29 +33,10 @@ export async function PATCH(
       return jsonInvalidPayload(parsed.error.flatten())
     }
     const patch = validateUpdateWorkItemInput(parsed.data)
-    const metricPatch = patch.metricValues
-    const patchWithoutMetrics = { ...patch }
-    patchWithoutMetrics.metricValues = undefined
     const repository = getRepository()
-    const updated = await repository.update(id, patchWithoutMetrics)
+    const updated = await repository.update(id, patch)
 
     const metricRepository = getWorkspaceMetricRepository()
-    if (metricPatch) {
-      await Promise.all(
-        (
-          Object.entries(metricPatch) as Array<
-            [string, "none" | "indirect" | "direct"]
-          >
-        ).map(([metricId, value]) =>
-          metricRepository.setWorkItemMetricValue({
-            workItemId: id,
-            metricId,
-            value,
-          }),
-        ),
-      )
-    }
-
     const metricEntries = await metricRepository.listWorkItemMetricValues(id)
     const metricValues = sanitizeMetricValues(
       Object.fromEntries(

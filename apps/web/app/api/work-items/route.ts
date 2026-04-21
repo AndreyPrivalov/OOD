@@ -1,5 +1,6 @@
 import {
   CreateWorkItemInputSchema,
+  type WorkItemMetricValueEntry,
   type WorkItemMetricValues,
   validateCreateWorkItemInput,
 } from "@ood/domain"
@@ -44,19 +45,9 @@ export async function GET(request: Request) {
     const metricIds = metrics.map((metric) => metric.id)
 
     const nodeIds = collectTreeIds(tree)
-    const entriesByItemId = new Map<string, WorkItemMetricValues>()
-    await Promise.all(
-      nodeIds.map(async (workItemId) => {
-        const entries =
-          await metricRepository.listWorkItemMetricValues(workItemId)
-        entriesByItemId.set(
-          workItemId,
-          Object.fromEntries(
-            entries.map((entry) => [entry.metricId, entry.value]),
-          ),
-        )
-      }),
-    )
+    const metricEntries =
+      await metricRepository.listWorkItemMetricValuesBatch(nodeIds)
+    const entriesByItemId = toMetricValuesByItemId(metricEntries)
 
     return jsonData(
       serializeWorkTree(tree, {
@@ -67,6 +58,21 @@ export async function GET(request: Request) {
   } catch (error) {
     return jsonError(error)
   }
+}
+
+function toMetricValuesByItemId(
+  entries: readonly WorkItemMetricValueEntry[],
+): Map<string, WorkItemMetricValues> {
+  const byItemId = new Map<string, WorkItemMetricValues>()
+  for (const entry of entries) {
+    const values = byItemId.get(entry.workItemId)
+    if (values) {
+      values[entry.metricId] = entry.value
+      continue
+    }
+    byItemId.set(entry.workItemId, { [entry.metricId]: entry.value })
+  }
+  return byItemId
 }
 
 export async function POST(request: Request) {

@@ -8,7 +8,7 @@ import {
   type WorkspaceMetricValue,
   validateUpsertWorkspaceMetricInput,
 } from "@ood/domain"
-import { and, asc, eq, sql } from "drizzle-orm"
+import { and, asc, eq, inArray, sql } from "drizzle-orm"
 import { getDb } from "./client"
 import { workItemMetricValues, workItems, workspaceMetrics } from "./schema"
 import { ensureWorkspace } from "./workspace-store"
@@ -74,6 +74,9 @@ export interface WorkspaceMetricRepository {
   setWorkItemMetricValue(input: SetWorkItemMetricValueInput): Promise<void>
   listWorkItemMetricValues(
     workItemId: string,
+  ): Promise<WorkItemMetricValueEntry[]>
+  listWorkItemMetricValuesBatch(
+    workItemIds: readonly string[],
   ): Promise<WorkItemMetricValueEntry[]>
 }
 
@@ -404,6 +407,29 @@ export class PostgresWorkspaceMetricRepository
       .from(workItemMetricValues)
       .where(eq(workItemMetricValues.workItemId, workItemId))
       .orderBy(asc(workItemMetricValues.metricId))
+
+    return rows.map((row) => ({
+      workItemId: row.workItemId,
+      metricId: row.metricId,
+      value: row.value as WorkspaceMetricValue,
+    }))
+  }
+
+  async listWorkItemMetricValuesBatch(
+    workItemIds: readonly string[],
+  ): Promise<WorkItemMetricValueEntry[]> {
+    if (workItemIds.length === 0) {
+      return []
+    }
+
+    const rows = await this.db
+      .select()
+      .from(workItemMetricValues)
+      .where(inArray(workItemMetricValues.workItemId, [...workItemIds]))
+      .orderBy(
+        asc(workItemMetricValues.workItemId),
+        asc(workItemMetricValues.metricId),
+      )
 
     return rows.map((row) => ({
       workItemId: row.workItemId,

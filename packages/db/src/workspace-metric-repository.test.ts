@@ -1,3 +1,4 @@
+import { DomainErrorCode } from "@ood/domain"
 import { describe, expect, it } from "vitest"
 import {
   InMemoryWorkItemRepository,
@@ -163,5 +164,101 @@ describe("InMemoryWorkspaceMetricRepository", () => {
         value: "indirect",
       },
     ])
+  })
+
+  it("lists metric values for multiple work items in one batch", async () => {
+    __resetInMemoryStoreForTests()
+    const workspaceRepo = new InMemoryWorkspaceRepository()
+    const itemRepo = new InMemoryWorkItemRepository()
+    const metricRepo = new InMemoryWorkspaceMetricRepository()
+    const workspace = await workspaceRepo.create({ name: "Alpha" })
+    const firstItem = await itemRepo.create({
+      workspaceId: workspace.id,
+      title: "A",
+    })
+    const secondItem = await itemRepo.create({
+      workspaceId: workspace.id,
+      title: "B",
+    })
+    const firstMetric = await metricRepo.createMetric({
+      workspaceId: workspace.id,
+      shortName: "Risk",
+    })
+    const secondMetric = await metricRepo.createMetric({
+      workspaceId: workspace.id,
+      shortName: "Impact",
+    })
+
+    await metricRepo.setWorkItemMetricValue({
+      workItemId: firstItem.id,
+      metricId: secondMetric.id,
+      value: "indirect",
+    })
+    await metricRepo.setWorkItemMetricValue({
+      workItemId: firstItem.id,
+      metricId: firstMetric.id,
+      value: "direct",
+    })
+    await metricRepo.setWorkItemMetricValue({
+      workItemId: secondItem.id,
+      metricId: firstMetric.id,
+      value: "indirect",
+    })
+
+    const values = await metricRepo.listWorkItemMetricValuesBatch([
+      secondItem.id,
+      firstItem.id,
+    ])
+
+    const expected = [
+      {
+        workItemId: firstItem.id,
+        metricId: firstMetric.id,
+        value: "direct",
+      },
+      {
+        workItemId: firstItem.id,
+        metricId: secondMetric.id,
+        value: "indirect",
+      },
+      {
+        workItemId: secondItem.id,
+        metricId: firstMetric.id,
+        value: "indirect",
+      },
+    ].sort(
+      (left, right) =>
+        left.workItemId.localeCompare(right.workItemId) ||
+        left.metricId.localeCompare(right.metricId),
+    )
+
+    expect(values).toEqual(expected)
+  })
+
+  it("rejects setting metric value when metric belongs to another workspace", async () => {
+    __resetInMemoryStoreForTests()
+    const workspaceRepo = new InMemoryWorkspaceRepository()
+    const itemRepo = new InMemoryWorkItemRepository()
+    const metricRepo = new InMemoryWorkspaceMetricRepository()
+    const firstWorkspace = await workspaceRepo.create({ name: "Alpha" })
+    const secondWorkspace = await workspaceRepo.create({ name: "Beta" })
+    const item = await itemRepo.create({
+      workspaceId: firstWorkspace.id,
+      title: "A",
+    })
+    const foreignMetric = await metricRepo.createMetric({
+      workspaceId: secondWorkspace.id,
+      shortName: "Risk",
+    })
+
+    await expect(
+      metricRepo.setWorkItemMetricValue({
+        workItemId: item.id,
+        metricId: foreignMetric.id,
+        value: "direct",
+      }),
+    ).rejects.toMatchObject({
+      code: DomainErrorCode.INVALID_MOVE_TARGET,
+    })
   })
 })

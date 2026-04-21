@@ -101,6 +101,29 @@ describe("PostgresWorkItemRepository", () => {
     expect(state.updateCalls).toBe(0)
   })
 
+  it("rejects mixed row+metric patch before row update when metric is outside workspace", async () => {
+    const state: DbStubState = {
+      selectQueue: [[row({ id: "item-1", workspaceId: "ws" })], []],
+      executeCalls: 0,
+      updateCalls: 0,
+    }
+    const repo = new PostgresWorkItemRepository(
+      createDbStub(state) as unknown as ConstructorParameters<
+        typeof PostgresWorkItemRepository
+      >[0],
+    )
+
+    await expect(
+      repo.update("item-1", {
+        title: "next",
+        metricValues: { "foreign-metric": "direct" },
+      }),
+    ).rejects.toMatchObject({
+      code: DomainErrorCode.INVALID_MOVE_TARGET,
+    })
+    expect(state.updateCalls).toBe(0)
+  })
+
   it("listTree returns mandatory top-level score sums for every node", async () => {
     const state: DbStubState = {
       selectQueue: [

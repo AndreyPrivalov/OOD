@@ -56,6 +56,60 @@ export type WorkspaceHistoryState = {
 
 const HISTORY_VERSION = 1
 const STORAGE_PREFIX = "ood:workspace-history:v1:"
+const LOCAL_DRAFT_ROW_ID_PREFIX = "local-draft:"
+
+function isLocalDraftId(id: string | null | undefined): boolean {
+  return !!id && id.startsWith(LOCAL_DRAFT_ROW_ID_PREFIX)
+}
+
+function hasLocalDraftInBranch(
+  nodes: Array<Pick<HistoryRowSnapshot, "id" | "children">>,
+): boolean {
+  const queue = [...nodes]
+  while (queue.length > 0) {
+    const current = queue.shift()
+    if (!current) {
+      continue
+    }
+    if (isLocalDraftId(current.id)) {
+      return true
+    }
+    queue.push(...current.children)
+  }
+  return false
+}
+
+function hasLocalDraftInEntry(entry: HistoryEntry): boolean {
+  if (entry.type === "patch") {
+    return hasLocalDraftInBranch([entry.before, entry.after])
+  }
+
+  if (entry.type === "move") {
+    return (
+      isLocalDraftId(entry.rowId) ||
+      isLocalDraftId(entry.fromParentId) ||
+      isLocalDraftId(entry.toParentId)
+    )
+  }
+
+  if (entry.type === "metricCatalogDelete") {
+    return entry.snapshot.removedValues.some((value) =>
+      isLocalDraftId(value.workItemId),
+    )
+  }
+
+  if (
+    entry.type === "metricCatalogCreate" ||
+    entry.type === "metricCatalogUpdate"
+  ) {
+    return false
+  }
+
+  return (
+    isLocalDraftId(entry.targetParentId) ||
+    hasLocalDraftInBranch([entry.branch])
+  )
+}
 
 function cloneBranch<T extends HistoryRowSnapshot | WorkTreeNode>(node: T): T {
   return {
@@ -440,6 +494,16 @@ export function loadWorkspaceHistory(
     ) {
       return null
     }
+
+    if (
+      hasLocalDraftInBranch(parsed.present) ||
+      parsed.past.some(hasLocalDraftInEntry) ||
+      parsed.future.some(hasLocalDraftInEntry)
+    ) {
+      window.sessionStorage.removeItem(`${STORAGE_PREFIX}${workspaceId}`)
+      return null
+    }
+
     return {
       version: HISTORY_VERSION,
       past: parsed.past.map(cloneHistoryEntry),

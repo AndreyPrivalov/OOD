@@ -20,6 +20,7 @@ import {
   withScoreSums,
 } from "@ood/domain"
 import type { WorkItemRepository } from "./repository"
+import { clampIndex, hasRatingUpdate } from "./work-item-repository-shared"
 import type {
   CreateWorkspaceMetricInput,
   DeletedWorkspaceMetricSnapshot,
@@ -48,16 +49,9 @@ const memoryStore: InMemoryStore = {
   metricsByWorkspace: new Map(),
   metricValuesByWorkItem: new Map(),
 }
-
-function clampIndex(index: number, maxLength: number): number {
-  if (index < 0) return 0
-  if (index > maxLength) return maxLength
-  return index
-}
-
-function hasRatingUpdate(patch: UpdateWorkItemInput): boolean {
-  return patch.overcomplication !== undefined || patch.importance !== undefined
-}
+const METRIC_WORKSPACE_MISMATCH_MESSAGE =
+  "Metric and work item should belong to the same workspace"
+type WorkItemMetricPatch = NonNullable<UpdateWorkItemInput["metricValues"]>
 
 function getWorkspaceItems(workspaceId: WorkspaceId): WorkItem[] {
   ensureWorkspace(workspaceId)
@@ -112,6 +106,100 @@ function getWorkspaceMetrics(workspaceId: WorkspaceId): WorkspaceMetric[] {
   const created: WorkspaceMetric[] = []
   memoryStore.metricsByWorkspace.set(workspaceId, created)
   return created
+}
+
+function metricIdsForWorkspace(workspaceId: WorkspaceId): Set<string> {
+  return new Set(
+    (memoryStore.metricsByWorkspace.get(workspaceId) ?? []).map(
+      (metric) => metric.id,
+    ),
+  )
+}
+
+function assertMetricIdsBelongToWorkspace(
+  workspaceId: WorkspaceId,
+  metricIds: Iterable<string>,
+): void {
+  const allowedMetricIds = metricIdsForWorkspace(workspaceId)
+  for (const metricId of metricIds) {
+    if (allowedMetricIds.has(metricId)) {
+      continue
+    }
+    throw new DomainError(
+      DomainErrorCode.INVALID_MOVE_TARGET,
+      METRIC_WORKSPACE_MISMATCH_MESSAGE,
+    )
+  }
+}
+
+function assertWorkItemAndMetricInSameWorkspace(
+  workItemId: string,
+  metricId: string,
+): WorkItem {
+  const item = findItemById(workItemId)
+  if (!item) {
+    throw new DomainError(
+      DomainErrorCode.INVALID_MOVE_TARGET,
+      METRIC_WORKSPACE_MISMATCH_MESSAGE,
+    )
+  }
+  assertMetricIdsBelongToWorkspace(item.workspaceId, [metricId])
+  return item
+}
+
+function getMetricValuesMap(
+  workItemId: string,
+): ReadonlyMap<string, WorkspaceMetricValue> {
+  return memoryStore.metricValuesByWorkItem.get(workItemId) ?? new Map()
+}
+
+function setMetricValuesMap(
+  workItemId: string,
+  values: ReadonlyMap<string, WorkspaceMetricValue>,
+): void {
+  if (values.size === 0) {
+    memoryStore.metricValuesByWorkItem.delete(workItemId)
+    return
+  }
+  memoryStore.metricValuesByWorkItem.set(workItemId, new Map(values))
+}
+
+function applyMetricValue(
+  values: ReadonlyMap<string, WorkspaceMetricValue>,
+  metricId: string,
+  value: WorkspaceMetricValue,
+): Map<string, WorkspaceMetricValue> {
+  const next = new Map(values)
+  if (value === "none") {
+    next.delete(metricId)
+  } else {
+    next.set(metricId, value)
+  }
+  return next
+}
+
+function applyMetricPatch(
+  values: ReadonlyMap<string, WorkspaceMetricValue>,
+  patch: WorkItemMetricPatch,
+): Map<string, WorkspaceMetricValue> {
+  let next = new Map(values)
+  for (const [metricId, value] of Object.entries(patch)) {
+    next = applyMetricValue(next, metricId, value)
+  }
+  return next
+}
+
+function mapMetricValuesToEntries(
+  workItemId: string,
+  values: ReadonlyMap<string, WorkspaceMetricValue>,
+): WorkItemMetricValueEntry[] {
+  return [...values.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([metricId, value]) => ({
+      workItemId,
+      metricId,
+      value,
+    }))
 }
 
 function descendantsFor(items: WorkItem[]): Map<string, Set<string>> {
@@ -232,6 +320,13 @@ export class InMemoryWorkItemRepository implements WorkItemRepository {
         )
       }
     }
+    const metricPatch = patch.metricValues
+    if (metricPatch) {
+      assertMetricIdsBelongToWorkspace(
+        item.workspaceId,
+        Object.keys(metricPatch),
+      )
+    }
     if (patch.title !== undefined) item.title = patch.title
     if (patch.object !== undefined) item.object = patch.object
     if (patch.possiblyRemovable !== undefined) {
@@ -248,6 +343,12 @@ export class InMemoryWorkItemRepository implements WorkItemRepository {
       item.currentProblems = patch.currentProblems
     if (patch.solutionVariants !== undefined)
       item.solutionVariants = patch.solutionVariants
+    if (metricPatch) {
+      setMetricValuesMap(
+        id,
+        applyMetricPatch(getMetricValuesMap(id), metricPatch),
+      )
+    }
     item.updatedAt = new Date()
     return { ...item }
   }
@@ -571,10 +672,14 @@ export class InMemoryWorkspaceMetricRepository
       if (!item || item.workspaceId !== workspaceId) {
         continue
       }
-      const values =
-        memoryStore.metricValuesByWorkItem.get(entry.workItemId) ?? new Map()
-      values.set(snapshot.id, entry.value)
-      memoryStore.metricValuesByWorkItem.set(entry.workItemId, values)
+      setMetricValuesMap(
+        entry.workItemId,
+        applyMetricValue(
+          getMetricValuesMap(entry.workItemId),
+          snapshot.id,
+          entry.value,
+        ),
+      )
     }
 
     return { ...restored }
@@ -583,51 +688,34 @@ export class InMemoryWorkspaceMetricRepository
   async setWorkItemMetricValue(
     input: SetWorkItemMetricValueInput,
   ): Promise<void> {
-    const item = findItemById(input.workItemId)
-    if (!item) {
-      throw new DomainError(
-        DomainErrorCode.INVALID_MOVE_TARGET,
-        "Metric and work item should belong to the same workspace",
-      )
-    }
-
-    const metrics = memoryStore.metricsByWorkspace.get(item.workspaceId) ?? []
-    const metric = metrics.find((candidate) => candidate.id === input.metricId)
-    if (!metric) {
-      throw new DomainError(
-        DomainErrorCode.INVALID_MOVE_TARGET,
-        "Metric and work item should belong to the same workspace",
-      )
-    }
-
-    const values =
-      memoryStore.metricValuesByWorkItem.get(input.workItemId) ?? new Map()
-    if (input.value === "none") {
-      values.delete(input.metricId)
-      if (values.size === 0) {
-        memoryStore.metricValuesByWorkItem.delete(input.workItemId)
-      } else {
-        memoryStore.metricValuesByWorkItem.set(input.workItemId, values)
-      }
-      return
-    }
-
-    values.set(input.metricId, input.value)
-    memoryStore.metricValuesByWorkItem.set(input.workItemId, values)
+    assertWorkItemAndMetricInSameWorkspace(input.workItemId, input.metricId)
+    setMetricValuesMap(
+      input.workItemId,
+      applyMetricValue(
+        getMetricValuesMap(input.workItemId),
+        input.metricId,
+        input.value,
+      ),
+    )
   }
 
   async listWorkItemMetricValues(
     workItemId: string,
   ): Promise<WorkItemMetricValueEntry[]> {
-    const values =
-      memoryStore.metricValuesByWorkItem.get(workItemId) ?? new Map()
-    return [...values.entries()]
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([metricId, value]) => ({
-        workItemId,
-        metricId,
-        value,
-      }))
+    return mapMetricValuesToEntries(workItemId, getMetricValuesMap(workItemId))
+  }
+
+  async listWorkItemMetricValuesBatch(
+    workItemIds: readonly string[],
+  ): Promise<WorkItemMetricValueEntry[]> {
+    return [...workItemIds]
+      .sort((left, right) => left.localeCompare(right))
+      .flatMap((workItemId) => {
+        return mapMetricValuesToEntries(
+          workItemId,
+          getMetricValuesMap(workItemId),
+        )
+      })
   }
 }
 

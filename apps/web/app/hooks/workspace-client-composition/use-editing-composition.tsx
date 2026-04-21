@@ -2,7 +2,7 @@
 
 import { WorkspaceRatingCell, type WorkspaceRatingFieldConfig } from "@ood/ui"
 import type { Dispatch, KeyboardEvent, SetStateAction } from "react"
-import { useCallback, useEffect, useMemo, useRef } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   type FlatRow,
   type WorkTreeNode,
@@ -92,11 +92,23 @@ const baseRatingFields: WorkspaceRatingFieldConfig[] = [
   },
 ]
 
+type WorkspaceMetricValue = "none" | "indirect" | "direct"
+
+function getMetricValueLabel(value: WorkspaceMetricValue): string {
+  if (value === "direct") {
+    return "Напрямую"
+  }
+  if (value === "indirect") {
+    return "Косвенно"
+  }
+  return ""
+}
+
 function getMetricValueForRow(
   row: FlatRow,
   metricId: string,
   isParentRow: boolean,
-) {
+): WorkspaceMetricValue {
   if (isParentRow) {
     return row.metricAggregates?.[metricId] ?? "none"
   }
@@ -129,6 +141,9 @@ export function useWorkspaceEditingComposition(
   } = options
   const patchLatenciesRef = useRef<number[]>([])
   const inputToPaintRef = useRef<number[]>([])
+  const [activeEditingRowId, setActiveEditingRowId] = useState<string | null>(
+    null,
+  )
 
   const {
     edits,
@@ -136,8 +151,8 @@ export function useWorkspaceEditingComposition(
     commitTextEdit,
     discardPendingSave,
     flushPendingEdits,
-    handleFieldBlur,
-    handleFieldFocus,
+    handleFieldBlur: handleFieldBlurBase,
+    handleFieldFocus: handleFieldFocusBase,
   } = useWorkItemEditing({
     isDev,
     rows,
@@ -177,9 +192,34 @@ export function useWorkspaceEditingComposition(
       return
     }
     if (focusTitleInput(pendingFocusRowId)) {
+      setActiveEditingRowId(pendingFocusRowId)
       setPendingFocusRowId(null)
     }
   }, [focusTitleInput, pendingFocusRowId, setPendingFocusRowId])
+
+  useEffect(() => {
+    if (!activeEditingRowId) {
+      return
+    }
+    if (!rowsById.has(activeEditingRowId)) {
+      setActiveEditingRowId(null)
+    }
+  }, [activeEditingRowId, rowsById])
+
+  const handleFieldFocus = useCallback(
+    (rowId: string) => {
+      handleFieldFocusBase(rowId)
+      setActiveEditingRowId((current) => (current === rowId ? current : rowId))
+    },
+    [handleFieldFocusBase],
+  )
+
+  const handleFieldBlur = useCallback(
+    (rowId: string) => {
+      handleFieldBlurBase(rowId)
+    },
+    [handleFieldBlurBase],
+  )
 
   const handleTitleBlur = useCallback(
     (rowId: string) => {
@@ -257,31 +297,39 @@ export function useWorkspaceEditingComposition(
           <td className="score-col workspace-metric-col" key={metric.id}>
             {isParentRow ? (
               <span className="score-summary">
-                {getMetricValueForRow(row, metric.id, true)}
+                {getMetricValueLabel(
+                  getMetricValueForRow(row, metric.id, true),
+                )}
               </span>
             ) : (
-              <select
-                className="metric-select"
-                value={edit.metricValues[metric.id] ?? "none"}
-                onFocus={() => handleFieldFocus(row.id)}
-                onBlur={() => handleFieldBlur(row.id)}
-                onChange={(event) =>
-                  onCommitEdit({
-                    metricValues: {
-                      ...edit.metricValues,
-                      [metric.id]: event.currentTarget.value as
-                        | "none"
-                        | "indirect"
-                        | "direct",
-                    },
-                  })
-                }
-                aria-label={`${metric.shortName} значение`}
-              >
-                <option value="none">none</option>
-                <option value="indirect">indirect</option>
-                <option value="direct">direct</option>
-              </select>
+              <span className="metric-select-wrap">
+                <select
+                  className="metric-select"
+                  value={edit.metricValues[metric.id] ?? "none"}
+                  onFocus={() => handleFieldFocus(row.id)}
+                  onBlur={() => handleFieldBlur(row.id)}
+                  onChange={(event) =>
+                    onCommitEdit({
+                      metricValues: {
+                        ...edit.metricValues,
+                        [metric.id]: event.currentTarget.value as
+                          | "none"
+                          | "indirect"
+                          | "direct",
+                      },
+                    })
+                  }
+                  aria-label={`${metric.shortName} значение`}
+                >
+                  <option value="none" />
+                  <option value="indirect">Косвенно</option>
+                  <option value="direct">Напрямую</option>
+                </select>
+                <i
+                  className="ri-arrow-down-s-line metric-select-icon"
+                  aria-hidden
+                />
+              </span>
             )}
           </td>
         ))}
@@ -291,6 +339,7 @@ export function useWorkspaceEditingComposition(
   )
 
   return {
+    activeEditingRowId,
     rowEdits,
     commitEdit,
     commitTextEdit,

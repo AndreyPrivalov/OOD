@@ -351,6 +351,7 @@ export type WorkspaceTreeTableProps = {
 }
 
 export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
+  const metricColumnWidth = "calc(10ch + 20px)"
   const ratingColumnWidthByKey: Record<string, string> = {
     overcomplication: props.tableColumnWidths.overcomplication,
     importance: props.tableColumnWidths.importance,
@@ -375,8 +376,7 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
               "--overcomplication-col-width":
                 props.tableColumnWidths.overcomplication,
               "--importance-col-width": props.tableColumnWidths.importance,
-              "--workspace-metric-col-width":
-                props.tableColumnWidths.importance,
+              "--workspace-metric-col-width": metricColumnWidth,
               "--problems-col-width": props.tableColumnWidths.currentProblems,
               "--solutions-col-width": props.tableColumnWidths.solutionVariants,
               "--removable-col-width": props.tableColumnWidths.removable,
@@ -402,7 +402,7 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
               <col
                 key={field.key}
                 style={{
-                  width: ratingColumnWidthByKey[field.key] ?? "15ch",
+                  width: ratingColumnWidthByKey[field.key] ?? metricColumnWidth,
                 }}
               />
             ))}

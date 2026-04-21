@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { WorkspaceMetricSummary, WorkspaceSummary } from "./types"
 import { parseWorkspaceSettings } from "./workspace-settings"
 
@@ -63,6 +63,31 @@ export function useWorkspaceContext() {
   const [isRenamingWorkspaceId, setIsRenamingWorkspaceId] = useState<
     string | null
   >(null)
+  const currentWorkspaceIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    currentWorkspaceIdRef.current = currentWorkspaceId
+  }, [currentWorkspaceId])
+
+  const loadWorkspaceMetrics = useCallback(async (workspaceId: string) => {
+    try {
+      const response = await fetch(
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/settings`,
+        { cache: "no-store" },
+      )
+      const json = await response.json()
+      if (!response.ok) {
+        return null
+      }
+      const parsed = parseWorkspaceSettings(json)
+      if (!parsed || parsed.workspace.id !== workspaceId) {
+        return null
+      }
+      return parsed.metrics
+    } catch {
+      return null
+    }
+  }, [])
 
   const refresh = useCallback(async () => {
     setIsLoading(true)
@@ -85,24 +110,31 @@ export function useWorkspaceContext() {
             )
         : []
 
+      const nextCurrentWorkspaceId =
+        currentWorkspaceIdRef.current &&
+        nextWorkspaces.some(
+          (workspace) => workspace.id === currentWorkspaceIdRef.current,
+        )
+          ? currentWorkspaceIdRef.current
+          : (nextWorkspaces[0]?.id ?? null)
+
+      const currentWorkspaceMetrics =
+        nextCurrentWorkspaceId === null
+          ? null
+          : await loadWorkspaceMetrics(nextCurrentWorkspaceId)
+
       setWorkspaceBases(nextWorkspaces)
       setMetricsByWorkspaceId((current) => {
         const next: Record<string, WorkspaceMetricSummary[]> = {}
         for (const workspace of nextWorkspaces) {
           next[workspace.id] = current[workspace.id] ?? []
         }
+        if (nextCurrentWorkspaceId && currentWorkspaceMetrics) {
+          next[nextCurrentWorkspaceId] = currentWorkspaceMetrics
+        }
         return next
       })
-      setCurrentWorkspaceId((current) => {
-        if (
-          current &&
-          nextWorkspaces.some((workspace) => workspace.id === current)
-        ) {
-          return current
-        }
-
-        return nextWorkspaces[0]?.id ?? null
-      })
+      setCurrentWorkspaceId(nextCurrentWorkspaceId)
       setErrorText("")
     } catch (error) {
       setErrorText(
@@ -113,7 +145,7 @@ export function useWorkspaceContext() {
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [loadWorkspaceMetrics])
 
   useEffect(() => {
     void refresh()
@@ -177,7 +209,7 @@ export function useWorkspaceContext() {
 
       try {
         const response = await fetch(
-          `/api/workspaces/${encodeURIComponent(workspaceId)}`,
+          `/api/workspaces/${encodeURIComponent(workspaceId)}/settings`,
           {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
@@ -190,18 +222,22 @@ export function useWorkspaceContext() {
           throw new Error(mapErrorMessage(json))
         }
 
-        const renamed = normalizeWorkspace(json?.data)
-        if (!renamed) {
+        const parsed = parseWorkspaceSettings(json)
+        if (!parsed) {
           throw new Error("Не удалось переименовать рабочее пространство.")
         }
 
         setWorkspaceBases((current) =>
           current.map((workspace) =>
-            workspace.id === renamed.id ? renamed : workspace,
+            workspace.id === parsed.workspace.id ? parsed.workspace : workspace,
           ),
         )
+        setMetricsByWorkspaceId((current) => ({
+          ...current,
+          [parsed.workspace.id]: parsed.metrics,
+        }))
         setErrorText("")
-        return renamed
+        return parsed.workspace
       } catch (error) {
         setErrorText(
           error instanceof Error
@@ -271,25 +307,13 @@ export function useWorkspaceContext() {
 
   const refreshWorkspaceMetrics = useCallback(
     async (workspaceId: string) => {
-      try {
-        const response = await fetch(
-          `/api/workspaces/${encodeURIComponent(workspaceId)}/settings`,
-          { cache: "no-store" },
-        )
-        const json = await response.json()
-        if (!response.ok) {
-          return
-        }
-        const parsed = parseWorkspaceSettings(json)
-        if (!parsed) {
-          return
-        }
-        updateWorkspaceMetrics(parsed.workspace.id, parsed.metrics)
-      } catch {
+      const metrics = await loadWorkspaceMetrics(workspaceId)
+      if (!metrics) {
         return
       }
+      updateWorkspaceMetrics(workspaceId, metrics)
     },
-    [updateWorkspaceMetrics],
+    [loadWorkspaceMetrics, updateWorkspaceMetrics],
   )
 
   useEffect(() => {

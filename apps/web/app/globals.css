@@ -116,7 +116,9 @@ button:focus-visible {
 
 .workspace {
   display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: var(--space-5);
+  min-height: calc(100dvh - (var(--space-6) * 2) - 24px);
 }
 
 .section {
@@ -136,6 +138,21 @@ button:focus-visible {
 .section-head {
   display: grid;
   gap: var(--space-2);
+}
+
+.workspace-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.workspace-title-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: max-content;
+  padding-top: 6px;
 }
 
 .section-head h1 {
@@ -202,6 +219,90 @@ button:focus-visible {
   margin: 0;
   font-size: var(--text-secondary);
   line-height: 1.35;
+}
+
+.workspace-view-layout {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.workspace-view-layout-table-only {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.workspace-view-layout-split {
+  grid-template-columns: minmax(0, 40vw) minmax(0, 1fr);
+  align-items: stretch;
+  min-height: 100%;
+}
+
+.workspace-view-primary,
+.workspace-view-secondary {
+  min-width: 0;
+}
+
+.workspace-view-secondary {
+  min-height: 0;
+  height: 100%;
+}
+
+.workspace-view-layout-split .workspace-view-secondary {
+  position: sticky;
+  top: 20px;
+  align-self: start;
+  height: calc(100dvh - 40px);
+}
+
+.workspace-view-secondary .workspace-mindmap {
+  height: 100%;
+}
+
+.workspace-view-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--line);
+  background: rgba(250, 246, 244, 0.72);
+  padding: 2px;
+  margin: 0;
+  min-width: 0;
+}
+
+.workspace-view-mode-button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: var(--text-secondary);
+  line-height: 1;
+  padding: 7px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.workspace-view-mode-button.is-active {
+  background: var(--text);
+  color: var(--surface);
+}
+
+.workspace-view-mode-button:hover,
+.workspace-view-mode-button:focus-visible {
+  color: var(--text);
+  background: rgba(19, 25, 32, 0.06);
+}
+
+.workspace-view-mode-button.is-active:hover,
+.workspace-view-mode-button.is-active:focus-visible {
+  color: var(--surface);
+  background: var(--text);
+}
+
+.workspace-view-mode-button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
 }
 
 .workspace-inline-switcher {
@@ -526,6 +627,20 @@ button:focus-visible {
 }
 
 @media (max-width: 1024px) {
+  .workspace-title-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .workspace-title-actions {
+    justify-content: flex-start;
+    padding-top: 0;
+  }
+
+  .workspace-view-layout-split {
+    grid-template-columns: minmax(0, 40vw) minmax(0, 1fr);
+  }
+
   .workspace-settings-popup {
     width: min(448px, calc(100vw - 56px));
   }
@@ -539,7 +654,7 @@ button:focus-visible {
 
 .work-table-wrap {
   width: max-content;
-  max-width: 100%;
+  min-width: 100%;
   padding-left: 0;
 }
 
@@ -649,9 +764,9 @@ button:focus-visible {
 }
 
 .work-table .workspace-metric-col {
-  width: var(--workspace-metric-col-width, 14ch);
-  min-width: var(--workspace-metric-col-width, 14ch);
-  max-width: var(--workspace-metric-col-width, 14ch);
+  width: var(--workspace-metric-col-width, calc(10ch + 20px));
+  min-width: var(--workspace-metric-col-width, calc(10ch + 20px));
+  max-width: var(--workspace-metric-col-width, calc(10ch + 20px));
 }
 
 .work-table .problems-col {
@@ -945,29 +1060,61 @@ button:focus-visible {
 .score-summary {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-start;
+  width: 100%;
   min-height: var(--table-control-height);
   margin-top: 2px;
   font-family: var(--font-sans), "Segoe UI", sans-serif;
   font-size: var(--text-main);
   font-weight: 400;
   color: var(--fg);
+  text-align: left;
+}
+
+.metric-select-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
 }
 
 .metric-select {
   width: 100%;
   min-height: var(--table-control-height);
-  border: 1px solid rgba(24, 34, 46, 0.14);
-  border-radius: var(--radius-sm);
-  background: var(--bg);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--fg);
-  padding: 0 8px;
+  padding: 0 22px 0 0;
   font-family: var(--font-sans), "Segoe UI", sans-serif;
   font-size: var(--text-main);
+  text-align: left;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
 .metric-select:focus-visible {
-  outline: 1px solid rgba(25, 108, 255, 0.55);
-  outline-offset: 0;
+  outline: none;
+}
+
+.metric-select-icon {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--fg);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease;
+}
+
+.work-table td.workspace-metric-col:hover .metric-select-icon,
+.work-table td.workspace-metric-col:focus-within .metric-select-icon {
+  opacity: 1;
+  visibility: visible;
 }
 
 .btn {

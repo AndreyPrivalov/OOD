@@ -11,6 +11,7 @@ const repository = {
 const workspaceMetricRepository = {
   listMetrics: vi.fn(),
   listWorkItemMetricValues: vi.fn(),
+  listWorkItemMetricValuesBatch: vi.fn(),
 }
 
 vi.mock("../../../lib/repository", () => ({
@@ -27,6 +28,9 @@ describe("GET /api/work-items contract", () => {
     vi.clearAllMocks()
     workspaceMetricRepository.listMetrics.mockResolvedValue([])
     workspaceMetricRepository.listWorkItemMetricValues.mockResolvedValue([])
+    workspaceMetricRepository.listWorkItemMetricValuesBatch.mockResolvedValue(
+      [],
+    )
   })
 
   it("returns mandatory top-level score sums for every node", async () => {
@@ -73,11 +77,9 @@ describe("GET /api/work-items contract", () => {
         ],
       },
     ])
-    workspaceMetricRepository.listWorkItemMetricValues
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
-        { workItemId: "leaf", metricId: "metric-1", value: "direct" },
-      ])
+    workspaceMetricRepository.listWorkItemMetricValuesBatch.mockResolvedValueOnce(
+      [{ workItemId: "leaf", metricId: "metric-1", value: "direct" }],
+    )
 
     const response = await GET(
       new Request("http://localhost/api/work-items?workspaceId=ws"),
@@ -96,6 +98,9 @@ describe("GET /api/work-items contract", () => {
       metricValues: { "metric-1": "direct" },
       metricAggregates: { "metric-1": "direct" },
     })
+    expect(
+      workspaceMetricRepository.listWorkItemMetricValuesBatch,
+    ).toHaveBeenCalledWith(["root", "leaf"])
   })
 
   it("accepts and returns possiblyRemovable for create contract", async () => {

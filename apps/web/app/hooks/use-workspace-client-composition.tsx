@@ -3,14 +3,20 @@
 import type {
   WorkspaceRatingFieldConfig,
   WorkspaceTreeRowUiModel,
+  WorkspaceViewMode,
 } from "@ood/ui"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { isUndoRedoShortcut } from "../history/workspace-history"
+import { areSetsEqual, pruneCollapsedRowIds } from "../state/tree-visibility"
 import {
-  areSetsEqual,
-  filterVisibleRows,
-  pruneCollapsedRowIds,
-} from "../state/tree-visibility"
+  buildEditingContextNodeIds,
+  buildWorkspaceMindmapDiagram,
+} from "../state/workspace-mindmap-diagram"
+import {
+  INITIAL_MINDMAP_VIEWPORT,
+  type WorkspaceTreeProjectionCache,
+  deriveWorkspaceTreeProjection,
+} from "../state/workspace-tree-projection"
 import { useWorkspaceContext } from "../workspaces/use-workspace-context"
 import { WorkspaceSwitcher } from "../workspaces/workspace-switcher"
 import {
@@ -24,6 +30,7 @@ import {
   useWorkspaceEditingStateComposition,
 } from "./workspace-client-composition/use-editing-composition"
 import { useWorkspaceTreeDataComposition } from "./workspace-client-composition/use-tree-data-composition"
+import { useMindmapViewportController } from "./workspace-layout/mindmap-viewport-controller"
 
 function getMedian(values: number[]): number | null {
   if (values.length === 0) {
@@ -92,6 +99,7 @@ export function useWorkspaceClientComposition() {
   const [pendingFocusRowId, setPendingFocusRowId] = useState<string | null>(
     null,
   )
+  const [viewMode, setViewMode] = useState<WorkspaceViewMode>("table-only")
   const [escapeCancellableRowId, setEscapeCancellableRowId] = useState<
     string | null
   >(null)
@@ -99,6 +107,7 @@ export function useWorkspaceClientComposition() {
     () => new Set(),
   )
   const discardPendingSaveRef = useRef<(id: string) => void>(() => {})
+  const projectionCacheRef = useRef<WorkspaceTreeProjectionCache | null>(null)
 
   const treeData = useWorkspaceTreeDataComposition({
     currentWorkspaceId,
@@ -119,11 +128,20 @@ export function useWorkspaceClientComposition() {
     workspaceMetrics: currentWorkspace?.metrics ?? [],
   })
 
-  const editingState = useWorkspaceEditingStateComposition(treeData.rows)
-  const rows = useMemo(
-    () => filterVisibleRows(treeData.rows, collapsedRowIds),
-    [collapsedRowIds, treeData.rows],
+  const treeProjection = useMemo(() => {
+    const cache = deriveWorkspaceTreeProjection({
+      tree: treeData.tree,
+      collapsedRowIds,
+      previousCache: projectionCacheRef.current,
+    })
+    projectionCacheRef.current = cache
+    return cache.snapshot
+  }, [collapsedRowIds, treeData.tree])
+
+  const editingState = useWorkspaceEditingStateComposition(
+    treeProjection.canonical.rows,
   )
+  const rows = treeProjection.table.rows
 
   const layout = useWorkspaceLayout({
     getEditForRow: editingState.getEditForRow,
@@ -139,8 +157,8 @@ export function useWorkspaceClientComposition() {
     onPersistedChange: treeData.recordPersistedChange,
     pendingFocusRowId,
     reportError: treeData.setErrorText,
-    rows: treeData.rows,
-    rowsById: treeData.rowsById,
+    rows: treeProjection.canonical.rows,
+    rowsById: treeProjection.canonical.rowsById,
     saveRow: treeData.saveRow,
     scheduleTextColumnWidthRecalc: layout.scheduleTextColumnWidthRecalc,
     setEscapeCancellableRowId,
@@ -169,12 +187,19 @@ export function useWorkspaceClientComposition() {
     moveRow: treeData.moveRow,
     rowAnchors: layout.rowAnchors,
     rows,
-    rowsById: treeData.rowsById,
+    rowsById: treeProjection.canonical.rowsById,
     rowTreeIndentPx: TREE_LEVEL_OFFSET_PX,
     scheduleOverlayRecalc: layout.scheduleOverlayRecalc,
-    siblingsByParent: treeData.siblingsByParent,
+    siblingsByParent: treeProjection.canonical.siblingsByParent,
     tableHeaderBottom: layout.tableHeaderBottom,
   })
+
+  useEffect(() => {
+    if (viewMode !== "table-only" && viewMode !== "split") {
+      return
+    }
+    layout.scheduleOverlayRecalc()
+  }, [layout.scheduleOverlayRecalc, viewMode])
 
   const readInputToPaintMedian = useCallback(
     () => getMedian(editing.inputToPaintRef.current),
@@ -220,17 +245,17 @@ export function useWorkspaceClientComposition() {
 
   useEffect(() => {
     setCollapsedRowIds((current) => {
-      const next = pruneCollapsedRowIds(treeData.rows, current)
+      const next = pruneCollapsedRowIds(treeProjection.canonical.rows, current)
       if (areSetsEqual(current, next)) {
         return current
       }
       return next
     })
-  }, [treeData.rows])
+  }, [treeProjection.canonical.rows])
 
   const toggleRowCollapse = useCallback(
     (rowId: string) => {
-      const row = treeData.rowsById.get(rowId)
+      const row = treeProjection.canonical.rowsById.get(rowId)
       if (!row || row.children.length === 0) {
         return
       }
@@ -244,7 +269,7 @@ export function useWorkspaceClientComposition() {
         return next
       })
     },
-    [treeData.rowsById],
+    [treeProjection.canonical.rowsById],
   )
 
   const handleOpenWorkspace = useCallback(
@@ -454,7 +479,7 @@ export function useWorkspaceClientComposition() {
   const rowUiById = useMemo<Record<string, WorkspaceTreeRowUiModel>>(() => {
     const next: Record<string, WorkspaceTreeRowUiModel> = {}
 
-    for (const row of treeData.rows) {
+    for (const row of treeProjection.canonical.rows) {
       const edit = editing.rowEdits[row.id]
       if (!edit) {
         continue
@@ -551,9 +576,34 @@ export function useWorkspaceClientComposition() {
     }
 
     return next
-  }, [editing, layout, treeData.rows])
+  }, [editing, layout, treeProjection.canonical.rows])
+
+  const mindmapDiagram = useMemo(
+    () => buildWorkspaceMindmapDiagram(treeProjection.mindmap.rows),
+    [treeProjection.mindmap.rows],
+  )
+  const editingContextNodeIds = useMemo(
+    () =>
+      buildEditingContextNodeIds({
+        editingContextRowId: editing.activeEditingRowId,
+        rowsById: treeProjection.canonical.rowsById,
+        siblingsByParent: treeProjection.canonical.siblingsByParent,
+      }),
+    [
+      editing.activeEditingRowId,
+      treeProjection.canonical.rowsById,
+      treeProjection.canonical.siblingsByParent,
+    ],
+  )
+
+  const mindmapViewportController = useMindmapViewportController({
+    nodes: mindmapDiagram.nodes,
+    editingNodeIds: editingContextNodeIds,
+    initialViewport: INITIAL_MINDMAP_VIEWPORT,
+  })
 
   return {
+    viewMode,
     currentWorkspaceId,
     isCreatingWorkspace,
     isDeletingWorkspaceId,
@@ -565,8 +615,19 @@ export function useWorkspaceClientComposition() {
     errorText: treeData.errorText,
     isLoading: treeData.isLoading,
     rows,
-    numberingById: treeData.numberingById,
-    collapsedRowIds,
+    numberingById: treeProjection.table.numberingById,
+    collapsedRowIds: treeProjection.table.collapsedRowIds,
+    mindmap: {
+      tree: treeProjection.mindmap,
+      diagram: mindmapDiagram,
+      activeNodeIds: editing.activeEditingRowId
+        ? [editing.activeEditingRowId]
+        : [],
+      editingNodeIds: editingContextNodeIds,
+      viewport: mindmapViewportController.viewport,
+      viewportFrameRef: mindmapViewportController.viewportFrameRef,
+      onViewportChange: mindmapViewportController.onViewportChange,
+    },
     rowUiById,
     dnd: dndOverlay.dnd,
     layout,
@@ -585,6 +646,7 @@ export function useWorkspaceClientComposition() {
     handlers: {
       createRowAtPosition: treeData.createRowAtPosition,
       deleteRow: treeData.deleteRow,
+      setViewMode,
       toggleRowCollapse,
       renderSwitcher,
     },

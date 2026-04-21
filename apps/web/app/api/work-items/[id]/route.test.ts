@@ -155,7 +155,7 @@ describe("PATCH /api/work-items/[id] contract", () => {
     })
   })
 
-  it("persists metric enum patch via workspace metric repository", async () => {
+  it("passes metric enum patch through canonical repository update", async () => {
     repository.update.mockResolvedValueOnce({
       id: "item-4",
       workspaceId: "ws",
@@ -190,13 +190,15 @@ describe("PATCH /api/work-items/[id] contract", () => {
     const payload = await response.json()
 
     expect(response.status).toBe(200)
+    expect(repository.update).toHaveBeenCalledWith(
+      "item-4",
+      expect.objectContaining({
+        metricValues: { "m-1": "direct" },
+      }),
+    )
     expect(
       workspaceMetricRepository.setWorkItemMetricValue,
-    ).toHaveBeenCalledWith({
-      workItemId: "item-4",
-      metricId: "m-1",
-      value: "direct",
-    })
+    ).not.toHaveBeenCalled()
     expect(payload.data).toMatchObject({
       metricValues: { "m-1": "direct" },
       metricAggregates: { "m-1": "direct" },

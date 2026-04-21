@@ -274,11 +274,15 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
           meta.hasUnackedChanges = false
         }
 
-        const nextRowSnapshot = {
-          ...currentRow,
-          ...updated,
-          id: activeRowId,
-        } as Row
+        const nextRowSnapshot = buildNextRowSnapshot(
+          currentRow,
+          updated,
+          nextRowId,
+        )
+
+        if (nextRowId !== activeRowId) {
+          patchRow(activeRowId, { id: nextRowId })
+        }
 
         if (!ackResult.stale && ackResult.shouldApply && updated) {
           const patch = buildRowPatchFromServer(updated)
@@ -292,7 +296,12 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
           activeRowId = nextRowId
         }
 
-        if (!ackResult.stale && ackResult.shouldApply && onPersistedChange) {
+        if (
+          !ackResult.stale &&
+          ackResult.shouldApply &&
+          updated &&
+          onPersistedChange
+        ) {
           onPersistedChange({
             kind: activeRowId === id ? "patch" : "create",
             before: currentRow,
@@ -547,4 +556,16 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
     handleFieldFocus,
     updateEdit,
   }
+}
+
+export function buildNextRowSnapshot<Row extends EditableWorkItemRow>(
+  currentRow: Row,
+  updated: Partial<Row> | null,
+  nextRowId: string,
+): Row {
+  return {
+    ...currentRow,
+    ...(updated ?? {}),
+    id: nextRowId,
+  } as Row
 }

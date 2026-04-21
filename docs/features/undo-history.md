@@ -6,6 +6,8 @@
 
 ## Rules
 
+- session-scoped undo/redo входит в cleaned-core scope;
+- restore branch и restore metric являются внутренними каноническими операциями поддержки undo/redo, а не отдельным archive/restore продуктовым потоком;
 - undo вызывается через `cmd/ctrl + z`;
 - redo вызывается через `cmd/ctrl + shift + z`;
 - история ведётся отдельно для каждого `workspace`;

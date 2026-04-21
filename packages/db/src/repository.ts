@@ -9,13 +9,15 @@ import {
   type WorkItem,
   type WorkTreeReadNode,
   type WorkspaceId,
+  type WorkspaceMetricValue,
   buildTree,
   validateCreateWorkItemInput,
   withScoreSums,
 } from "@ood/domain"
 import { and, asc, eq, inArray, isNull, ne, sql } from "drizzle-orm"
 import { getDb } from "./client"
-import { workItems } from "./schema"
+import { workItemMetricValues, workItems, workspaceMetrics } from "./schema"
+import { clampIndex, hasRatingUpdate } from "./work-item-repository-shared"
 import { ensureWorkspace } from "./workspace-store"
 
 export interface WorkItemRepository {
@@ -60,16 +62,6 @@ function toDomainWorkItem(row: WorkItemRow): WorkItem {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }
-}
-
-function clampIndex(index: number, maxLength: number): number {
-  if (index < 0) return 0
-  if (index > maxLength) return maxLength
-  return index
-}
-
-function hasRatingUpdate(patch: UpdateWorkItemInput): boolean {
-  return patch.overcomplication !== undefined || patch.importance !== undefined
 }
 
 function siblingFilter(workspaceId: string, parentId: string | null) {
@@ -211,58 +203,118 @@ export class PostgresWorkItemRepository implements WorkItemRepository {
   }
 
   async update(id: string, patch: UpdateWorkItemInput): Promise<WorkItem> {
-    const existing = await this.db
-      .select()
-      .from(workItems)
-      .where(eq(workItems.id, id))
-      .limit(1)
-    if (existing.length === 0) {
-      throw new DomainError(
-        DomainErrorCode.INVALID_MOVE_TARGET,
-        "Work item not found",
-      )
-    }
-
-    if (hasRatingUpdate(patch)) {
-      const childRows = await this.db
-        .select({ id: workItems.id })
+    return this.db.transaction(async (tx) => {
+      const existing = await tx
+        .select()
         .from(workItems)
-        .where(eq(workItems.parentId, id))
+        .where(eq(workItems.id, id))
         .limit(1)
-      if (childRows.length > 0) {
+      if (existing.length === 0) {
         throw new DomainError(
-          DomainErrorCode.PARENT_RATINGS_READ_ONLY,
-          "Ratings are read-only for items with child work items",
+          DomainErrorCode.INVALID_MOVE_TARGET,
+          "Work item not found",
         )
       }
-    }
+      const current = existing[0]
 
-    const updates: Partial<typeof workItems.$inferInsert> = {
-      updatedAt: new Date(),
-    }
-    if (patch.title !== undefined) updates.title = patch.title
-    if (patch.object !== undefined) updates.object = patch.object
-    if (patch.possiblyRemovable !== undefined) {
-      updates.possiblyRemovable = patch.possiblyRemovable
-    }
-    if (patch.overcomplication !== undefined) {
-      updates.overcomplication = patch.overcomplication
-    }
-    if (patch.importance !== undefined) updates.importance = patch.importance
-    if (patch.currentProblems !== undefined) {
-      updates.currentProblems = patch.currentProblems
-    }
-    if (patch.solutionVariants !== undefined) {
-      updates.solutionVariants = patch.solutionVariants
-    }
+      if (hasRatingUpdate(patch)) {
+        const childRows = await tx
+          .select({ id: workItems.id })
+          .from(workItems)
+          .where(eq(workItems.parentId, id))
+          .limit(1)
+        if (childRows.length > 0) {
+          throw new DomainError(
+            DomainErrorCode.PARENT_RATINGS_READ_ONLY,
+            "Ratings are read-only for items with child work items",
+          )
+        }
+      }
 
-    await this.db.update(workItems).set(updates).where(eq(workItems.id, id))
-    const updated = await this.db
-      .select()
-      .from(workItems)
-      .where(eq(workItems.id, id))
-      .limit(1)
-    return toDomainWorkItem(updated[0])
+      const metricPatch = patch.metricValues
+      if (metricPatch) {
+        const metricIds = Object.keys(metricPatch)
+        if (metricIds.length > 0) {
+          const metricRows = await tx
+            .select({ id: workspaceMetrics.id })
+            .from(workspaceMetrics)
+            .where(
+              and(
+                eq(workspaceMetrics.workspaceId, current.workspaceId),
+                inArray(workspaceMetrics.id, metricIds),
+              ),
+            )
+            .limit(metricIds.length)
+          if (metricRows.length !== metricIds.length) {
+            throw new DomainError(
+              DomainErrorCode.INVALID_MOVE_TARGET,
+              "Metric and work item should belong to the same workspace",
+            )
+          }
+        }
+      }
+
+      const updates: Partial<typeof workItems.$inferInsert> = {
+        updatedAt: new Date(),
+      }
+      if (patch.title !== undefined) updates.title = patch.title
+      if (patch.object !== undefined) updates.object = patch.object
+      if (patch.possiblyRemovable !== undefined) {
+        updates.possiblyRemovable = patch.possiblyRemovable
+      }
+      if (patch.overcomplication !== undefined) {
+        updates.overcomplication = patch.overcomplication
+      }
+      if (patch.importance !== undefined) updates.importance = patch.importance
+      if (patch.currentProblems !== undefined) {
+        updates.currentProblems = patch.currentProblems
+      }
+      if (patch.solutionVariants !== undefined) {
+        updates.solutionVariants = patch.solutionVariants
+      }
+
+      await tx.update(workItems).set(updates).where(eq(workItems.id, id))
+
+      if (metricPatch) {
+        for (const [metricId, value] of Object.entries(metricPatch) as Array<
+          [string, WorkspaceMetricValue]
+        >) {
+          if (value === "none") {
+            await tx
+              .delete(workItemMetricValues)
+              .where(
+                and(
+                  eq(workItemMetricValues.workItemId, id),
+                  eq(workItemMetricValues.metricId, metricId),
+                ),
+              )
+            continue
+          }
+
+          await tx
+            .insert(workItemMetricValues)
+            .values({
+              workItemId: id,
+              metricId,
+              value,
+            })
+            .onConflictDoUpdate({
+              target: [
+                workItemMetricValues.workItemId,
+                workItemMetricValues.metricId,
+              ],
+              set: { value, updatedAt: new Date() },
+            })
+        }
+      }
+
+      const updated = await tx
+        .select()
+        .from(workItems)
+        .where(eq(workItems.id, id))
+        .limit(1)
+      return toDomainWorkItem(updated[0])
+    })
   }
 
   async move(id: string, input: MoveWorkItemInput): Promise<void> {
