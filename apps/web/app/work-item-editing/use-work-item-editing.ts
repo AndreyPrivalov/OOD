@@ -279,17 +279,14 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
           updated,
           nextRowId,
         )
-
-        if (nextRowId !== activeRowId) {
-          patchRow(activeRowId, { id: nextRowId })
-        }
-
-        if (!ackResult.stale && ackResult.shouldApply && updated) {
-          const patch = buildRowPatchFromServer(updated)
-          if (shouldApplyConfirmedTreePatch(patch, payload)) {
-            patchRow(activeRowId, patch)
-          }
-        }
+        applyServerAckPatch({
+          ackShouldApply: !ackResult.stale && ackResult.shouldApply,
+          activeRowId,
+          nextRowId,
+          patchRow,
+          payload,
+          updated,
+        })
 
         if (nextRowId !== activeRowId) {
           remapRowState(activeRowId, nextRowId)
@@ -568,4 +565,34 @@ export function buildNextRowSnapshot<Row extends EditableWorkItemRow>(
     ...(updated ?? {}),
     id: nextRowId,
   } as Row
+}
+
+type ApplyServerAckPatchOptions<Row extends EditableWorkItemRow> = {
+  ackShouldApply: boolean
+  activeRowId: string
+  nextRowId: string
+  patchRow: (rowId: string, patch: EditableWorkItemPatch) => void
+  payload: Record<string, unknown>
+  updated: Partial<Row> | null
+}
+
+export function applyServerAckPatch<Row extends EditableWorkItemRow>(
+  options: ApplyServerAckPatchOptions<Row>,
+) {
+  const { ackShouldApply, activeRowId, nextRowId, patchRow, payload, updated } =
+    options
+
+  if (nextRowId !== activeRowId) {
+    patchRow(activeRowId, { id: nextRowId })
+  }
+
+  if (!ackShouldApply || !updated) {
+    return
+  }
+
+  const patch = buildRowPatchFromServer(updated)
+  if (!shouldApplyConfirmedTreePatch(patch, payload)) {
+    return
+  }
+  patchRow(nextRowId, patch)
 }

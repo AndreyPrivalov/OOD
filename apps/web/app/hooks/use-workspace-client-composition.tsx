@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { isUndoRedoShortcut } from "../history/workspace-history"
 import { areSetsEqual, pruneCollapsedRowIds } from "../state/tree-visibility"
 import {
+  buildActiveNodeIds,
   buildEditingContextNodeIds,
   buildWorkspaceMindmapDiagram,
 } from "../state/workspace-mindmap-diagram"
@@ -150,6 +151,7 @@ export function useWorkspaceClientComposition() {
   })
 
   const editing = useWorkspaceEditingComposition({
+    createRowAtPosition: treeData.createRowAtPosition,
     deleteRow: treeData.deleteRow,
     escapeCancellableRowId,
     focusTitleInput: layout.focusTitleInput,
@@ -595,6 +597,14 @@ export function useWorkspaceClientComposition() {
       treeProjection.canonical.siblingsByParent,
     ],
   )
+  const activeMindmapNodeIds = useMemo(
+    () =>
+      buildActiveNodeIds({
+        activeRowId: editing.activeEditingRowId,
+        rowsById: treeProjection.canonical.rowsById,
+      }),
+    [editing.activeEditingRowId, treeProjection.canonical.rowsById],
+  )
 
   const mindmapViewportController = useMindmapViewportController({
     nodes: mindmapDiagram.nodes,
@@ -620,9 +630,7 @@ export function useWorkspaceClientComposition() {
     mindmap: {
       tree: treeProjection.mindmap,
       diagram: mindmapDiagram,
-      activeNodeIds: editing.activeEditingRowId
-        ? [editing.activeEditingRowId]
-        : [],
+      activeNodeIds: activeMindmapNodeIds,
       editingNodeIds: editingContextNodeIds,
       viewport: mindmapViewportController.viewport,
       viewportFrameRef: mindmapViewportController.viewportFrameRef,

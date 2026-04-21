@@ -32,8 +32,8 @@ type UseMindmapViewportControllerOptions = {
   framePaddingPx?: number
 }
 
-const DEFAULT_NODE_WIDTH = 220
-const DEFAULT_NODE_HEIGHT = 44
+const DEFAULT_NODE_WIDTH = 96
+const DEFAULT_NODE_HEIGHT = 22
 const DEFAULT_MIN_ZOOM = 0.4
 const DEFAULT_MAX_ZOOM = 2.2
 const DEFAULT_FRAME_PADDING_PX = 24

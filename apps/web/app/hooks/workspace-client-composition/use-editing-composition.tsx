@@ -3,6 +3,7 @@
 import { WorkspaceRatingCell, type WorkspaceRatingFieldConfig } from "@ood/ui"
 import type { Dispatch, KeyboardEvent, SetStateAction } from "react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { isLocalDraftRowId } from "../workspace-tree-data/shared"
 import {
   type FlatRow,
   type WorkTreeNode,
@@ -51,6 +52,7 @@ export function useWorkspaceEditingStateComposition(
 }
 
 type UseWorkspaceEditingCompositionOptions = {
+  createRowAtPosition: (parentId: string | null, targetIndex: number) => void
   deleteRow: (id: string) => Promise<void>
   escapeCancellableRowId: string | null
   focusTitleInput: (rowId: string) => boolean
@@ -73,6 +75,38 @@ type UseWorkspaceEditingCompositionOptions = {
       | { kind: "patch"; before: FlatRow; after: FlatRow }
       | { kind: "create"; before: FlatRow; after: FlatRow },
   ) => void
+}
+
+type TitleHotkeyAction = "create-child" | "create-sibling" | "blur" | "cancel"
+
+type ResolveTitleHotkeyActionOptions = {
+  isDraftRow: boolean
+  key: string
+  shiftKey: boolean
+  metaKey: boolean
+  ctrlKey: boolean
+}
+
+export function resolveTitleHotkeyAction(
+  options: ResolveTitleHotkeyActionOptions,
+): TitleHotkeyAction | null {
+  const { ctrlKey, isDraftRow, key, metaKey, shiftKey } = options
+  if (!isDraftRow) {
+    return null
+  }
+  if (key === "Tab" && !shiftKey) {
+    return "create-child"
+  }
+  if (key === "Enter" && !metaKey && !ctrlKey) {
+    if (shiftKey) {
+      return "blur"
+    }
+    return "create-sibling"
+  }
+  if (key === "Escape") {
+    return "cancel"
+  }
+  return null
 }
 
 const baseRatingFields: WorkspaceRatingFieldConfig[] = [
@@ -120,6 +154,7 @@ export function useWorkspaceEditingComposition(
   options: UseWorkspaceEditingCompositionOptions,
 ) {
   const {
+    createRowAtPosition,
     deleteRow,
     escapeCancellableRowId,
     focusTitleInput,
@@ -232,6 +267,51 @@ export function useWorkspaceEditingComposition(
 
   const handleTitleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>, rowId: string) => {
+      const hotkeyAction = resolveTitleHotkeyAction({
+        isDraftRow: isLocalDraftRowId(rowId),
+        key: event.key,
+        shiftKey: event.shiftKey,
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+      })
+
+      if (hotkeyAction === "create-child") {
+        event.preventDefault()
+        const row = rowsById.get(rowId)
+        if (!row) {
+          return
+        }
+        commitTextEdit(rowId, { title: event.currentTarget.value })
+        void createRowAtPosition(row.id, row.children.length)
+        return
+      }
+
+      if (hotkeyAction === "create-sibling") {
+        event.preventDefault()
+        const row = rowsById.get(rowId)
+        if (!row) {
+          return
+        }
+        commitTextEdit(rowId, { title: event.currentTarget.value })
+        void createRowAtPosition(row.parentId, row.siblingOrder + 1)
+        return
+      }
+
+      if (hotkeyAction === "blur") {
+        event.preventDefault()
+        event.currentTarget.blur()
+        return
+      }
+
+      if (hotkeyAction === "cancel") {
+        event.preventDefault()
+        event.stopPropagation()
+        discardPendingSave(rowId)
+        setEscapeCancellableRowId(null)
+        void deleteRow(rowId)
+        return
+      }
+
       if (
         event.key === "Enter" &&
         !event.shiftKey &&
@@ -255,9 +335,12 @@ export function useWorkspaceEditingComposition(
       void deleteRow(rowId)
     },
     [
+      commitTextEdit,
+      createRowAtPosition,
       deleteRow,
       discardPendingSave,
       escapeCancellableRowId,
+      rowsById,
       setEscapeCancellableRowId,
     ],
   )
