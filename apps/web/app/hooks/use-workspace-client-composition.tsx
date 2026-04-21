@@ -29,6 +29,7 @@ import {
   useWorkspaceLayout,
 } from "./use-workspace-layout"
 import { readActiveFieldSnapshot } from "./workspace-client-composition/page-exit-save"
+import { buildRowUiRenderSignature } from "./workspace-client-composition/row-ui-signature"
 import { useWorkspaceDndOverlayComposition } from "./workspace-client-composition/use-dnd-overlay-composition"
 import {
   useWorkspaceEditingComposition,
@@ -620,23 +621,20 @@ export function useWorkspaceClientComposition() {
           row,
           onCommitEdit: (patch) => editing.commitEdit(rowId, patch),
         }),
-        renderSignature: [
-          edit.title,
-          edit.object,
-          edit.overcomplication,
-          edit.importance,
-          ...Object.entries(edit.metricValues)
-            .sort(([left], [right]) => left.localeCompare(right))
-            .map(([metricId, value]) => `${metricId}:${value}`),
-          edit.currentProblems,
-          edit.solutionVariants,
-          edit.possiblyRemovable ? "1" : "0",
-        ].join("::"),
+        renderSignature: buildRowUiRenderSignature(
+          edit,
+          currentWorkspace?.metrics ?? [],
+        ),
       }
     }
 
     return next
-  }, [editing, layout, treeProjection.canonical.rows])
+  }, [
+    currentWorkspace?.metrics,
+    editing,
+    layout,
+    treeProjection.canonical.rows,
+  ])
 
   const mindmapDiagram = useMemo(
     () => buildWorkspaceMindmapDiagram(treeProjection.mindmap.rows),
