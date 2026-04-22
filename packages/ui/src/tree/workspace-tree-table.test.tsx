@@ -175,4 +175,67 @@ describe("WorkspaceTreeTable", () => {
 
     expect(after).not.toBe(before)
   })
+
+  it("renders centered empty-state action when there are no rows", () => {
+    const rendered = WorkspaceTreeTable({
+      rows: [],
+      collapsedRowIds: new Set<string>(),
+      rowUiById: {},
+      numberingById: new Map(),
+      draggedRowId: null,
+      dropIntent: null,
+      tableColumnWidths: {
+        work: "320px",
+        object: "180px",
+        overcomplication: "120px",
+        importance: "120px",
+        currentProblems: "220px",
+        solutionVariants: "220px",
+        removable: "140px",
+      },
+      ratingHeaders: [
+        {
+          key: "overcomplication",
+          headerLabel: "Сложно",
+          columnClassName: "overcomplication-col",
+        },
+      ],
+      rowTreeIndentPx: 24,
+      workContentIndentPx: 12,
+      contentStartXPx: 80,
+      frameXPx: 16,
+      leftGutterWidthPx: 24,
+      cellInlinePadPx: 8,
+      structureLineWidthPx: 1,
+      overlayHeight: 240,
+      overlayAddIndicators: [
+        {
+          kind: "add",
+          laneId: "empty-lane",
+          y: 20,
+          contentStartXPx: 80,
+          parentId: null,
+          targetIndex: 0,
+          showPlus: true,
+        },
+      ],
+      overlayDropY: null,
+      overlayNestTarget: null,
+      dragPreview: null,
+      listScrollRef: { current: null },
+      tableWrapRef: { current: null },
+      tableRef: { current: null },
+      registerRowElementRef: () => {},
+      onHandlePointerDown: () => {},
+      onHandlePointerMove: () => {},
+      onHandlePointerUp: () => {},
+      onHandlePointerCancel: () => {},
+      onCreateAtPosition: () => {},
+      onDeleteRow: () => {},
+      onToggleRowCollapse: () => {},
+    })
+
+    const text = collectText(rendered).join(" ")
+    expect(text).toContain("Добавить работу")
+  })
 })

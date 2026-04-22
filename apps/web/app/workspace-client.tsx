@@ -38,9 +38,6 @@ export function WorkspaceClient() {
             primary={
               <>
                 {vm.isLoading ? <p className="list-loading">Загрузка</p> : null}
-                {!vm.isLoading && vm.rows.length === 0 ? (
-                  <p className="list-empty">Пусто</p>
-                ) : null}
                 <WorkspaceTreeTable
                   rows={vm.rows}
                   collapsedRowIds={vm.collapsedRowIds}
