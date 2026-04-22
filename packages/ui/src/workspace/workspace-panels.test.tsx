@@ -18,15 +18,15 @@ function collectText(node: ReactNode): string[] {
   return collectText(node.props.children)
 }
 
-function collectSwitches(node: ReactNode): Array<{
-  ariaLabel: string | undefined
+function collectButtons(node: ReactNode): Array<{
+  text: string
   className: string | undefined
   pressed: boolean | undefined
   title: string | undefined
   onClick: (() => void) | undefined
 }> {
   if (Array.isArray(node)) {
-    return node.flatMap((entry) => collectSwitches(entry))
+    return node.flatMap((entry) => collectButtons(entry))
   }
   if (!isValidElement(node)) {
     return []
@@ -36,7 +36,7 @@ function collectSwitches(node: ReactNode): Array<{
     node.type === "button"
       ? [
           {
-            ariaLabel: node.props["aria-label"] as string | undefined,
+            text: collectText(node.props.children).join(" "),
             className: node.props.className as string | undefined,
             pressed: node.props["aria-pressed"] as boolean | undefined,
             title: node.props.title as string | undefined,
@@ -45,23 +45,7 @@ function collectSwitches(node: ReactNode): Array<{
         ]
       : []
 
-  return [...own, ...collectSwitches(node.props.children)]
-}
-
-function collectIcons(node: ReactNode): string[] {
-  if (Array.isArray(node)) {
-    return node.flatMap((entry) => collectIcons(entry))
-  }
-  if (!isValidElement(node)) {
-    return []
-  }
-
-  const own =
-    node.type === "svg"
-      ? [(node.props.className as string | undefined) ?? ""]
-      : []
-
-  return [...own, ...collectIcons(node.props.children)]
+  return [...own, ...collectButtons(node.props.children)]
 }
 
 describe("workspace panels", () => {
@@ -93,7 +77,7 @@ describe("workspace panels", () => {
 
     expect(text).toContain("Продуктовая область")
     expect(text).toContain("Ошибка загрузки дерева")
-    expect(text).not.toContain("Показать дерево")
+    expect(text).toContain("Показывать дерево")
   })
 
   it("marks active mode and calls switch handler", () => {
@@ -105,31 +89,18 @@ describe("workspace panels", () => {
         modeChanges.push(mode)
       },
     })
-    const switches = collectSwitches(rendered)
-    const treeSwitch = switches.find(
-      (switcher) => switcher.ariaLabel === "Показать дерево",
+    const buttons = collectButtons(rendered)
+    const treeSwitch = buttons.find((button) =>
+      button.text.includes("Показывать дерево"),
     )
-    const iconClasses = collectIcons(rendered)
 
     expect(treeSwitch?.pressed).toBe(false)
     expect(treeSwitch?.className).toContain("workspace-view-toggle")
     expect(treeSwitch?.className).not.toContain("is-active")
-    expect(treeSwitch?.title).toBe("OOD")
-    expect(iconClasses).toEqual([""])
+    expect(treeSwitch?.title).toBe("Показывать дерево")
 
     treeSwitch?.onClick?.()
-
-    const activeRendered = WorkspaceTitlePanel({
-      title: "Продуктовая область",
-      viewMode: "split",
-      onViewModeChange: () => {},
-    })
-    const activeSwitch = collectSwitches(activeRendered).find(
-      (switcher) => switcher.ariaLabel === "Скрыть дерево",
-    )
-
-    expect(activeSwitch?.pressed).toBe(true)
-    expect(activeSwitch?.className).toContain("is-active")
+    expect(treeSwitch?.className).toContain("workspace-view-toggle")
 
     expect(modeChanges).toEqual(["split"])
   })

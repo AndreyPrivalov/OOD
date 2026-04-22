@@ -368,6 +368,8 @@ export type WorkspaceTreeTableProps = {
 
 export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
   const metricColumnWidth = "calc(10ch + 20px)"
+  const hasRows = props.rows.length > 0
+  const totalColumns = props.ratingHeaders.length + 5
   const ratingColumnWidthByKey: Record<string, string> = {
     overcomplication: props.tableColumnWidths.overcomplication,
     importance: props.tableColumnWidths.importance,
@@ -444,163 +446,185 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
             </tr>
           </thead>
           <tbody>
-            {props.rows.map((row) => {
-              const rowUi = props.rowUiById[row.id]
-              if (!rowUi) {
-                return null
-              }
-              const hasMultilineField =
-                rowUi.title.value.includes("\n") ||
-                rowUi.currentProblems.value.includes("\n") ||
-                rowUi.solutionVariants.value.includes("\n")
-              const rowClassName = [
-                props.draggedRowId === row.id ? "drag-source" : "",
-                props.collapsedRowIds.has(row.id) ? "is-collapsed" : "",
-                props.dropIntent?.type === "between" &&
-                props.dropIntent.rowId === row.id
-                  ? `drop-between-target-${props.dropIntent.position}`
-                  : "",
-                props.dropIntent?.type === "nest" &&
-                props.dropIntent.targetId === row.id
-                  ? "drop-nest-target"
-                  : "",
-              ]
-                .filter(Boolean)
-                .join(" ")
-              const rowRenderSignature = buildRowRenderSignature(row)
-              const editRenderSignature = rowUi.renderSignature
-              const isCollapsible = row.children.length > 0
-              const isCollapsed = props.collapsedRowIds.has(row.id)
-              return (
-                <MemoWorkRow
-                  key={row.id}
-                  rowId={row.id}
-                  parentId={row.parentId}
-                  depth={row.depth}
-                  hasMultilineField={hasMultilineField}
-                  className={rowClassName}
-                  rowRenderSignature={rowRenderSignature}
-                  editRenderSignature={editRenderSignature}
-                  registerRowElementRef={props.registerRowElementRef}
-                  onActivateRowForEditing={props.onActivateRowForEditing}
-                >
-                  <td className="work-col">
-                    <div
-                      className="cell-tree"
-                      style={{ "--row-depth": row.depth } as CSSProperties}
-                    >
-                      <span className="work-number" aria-hidden>
-                        {props.numberingById.get(row.id) ?? ""}
-                      </span>
-                      <button
-                        type="button"
-                        className="drag-handle"
-                        aria-label="Перетащить задачу"
-                        title="Перетащить задачу"
-                        onPointerDown={(event) =>
-                          props.onHandlePointerDown(event, row.id)
-                        }
-                        onPointerMove={props.onHandlePointerMove}
-                        onPointerUp={props.onHandlePointerUp}
-                        onPointerCancel={props.onHandlePointerCancel}
+            {hasRows ? (
+              props.rows.map((row) => {
+                const rowUi = props.rowUiById[row.id]
+                if (!rowUi) {
+                  return null
+                }
+                const hasMultilineField =
+                  rowUi.title.value.includes("\n") ||
+                  rowUi.currentProblems.value.includes("\n") ||
+                  rowUi.solutionVariants.value.includes("\n")
+                const rowClassName = [
+                  props.draggedRowId === row.id ? "drag-source" : "",
+                  props.collapsedRowIds.has(row.id) ? "is-collapsed" : "",
+                  props.dropIntent?.type === "between" &&
+                  props.dropIntent.rowId === row.id
+                    ? `drop-between-target-${props.dropIntent.position}`
+                    : "",
+                  props.dropIntent?.type === "nest" &&
+                  props.dropIntent.targetId === row.id
+                    ? "drop-nest-target"
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")
+                const rowRenderSignature = buildRowRenderSignature(row)
+                const editRenderSignature = rowUi.renderSignature
+                const isCollapsible = row.children.length > 0
+                const isCollapsed = props.collapsedRowIds.has(row.id)
+                return (
+                  <MemoWorkRow
+                    key={row.id}
+                    rowId={row.id}
+                    parentId={row.parentId}
+                    depth={row.depth}
+                    hasMultilineField={hasMultilineField}
+                    className={rowClassName}
+                    rowRenderSignature={rowRenderSignature}
+                    editRenderSignature={editRenderSignature}
+                    registerRowElementRef={props.registerRowElementRef}
+                    onActivateRowForEditing={props.onActivateRowForEditing}
+                  >
+                    <td className="work-col">
+                      <div
+                        className="cell-tree"
+                        style={{ "--row-depth": row.depth } as CSSProperties}
                       >
-                        <i className="ri-draggable" aria-hidden />
-                      </button>
-                      <EditableTitleField
-                        control={rowUi.title}
-                        rowDepth={row.depth}
-                        rowTreeIndentPx={props.rowTreeIndentPx}
-                        workContentIndentPx={props.workContentIndentPx}
-                      />
-                      <div className="work-col-actions">
-                        {isCollapsible ? (
-                          <button
-                            type="button"
-                            className={[
-                              "btn btn-secondary btn-icon collapse-handle",
-                              isCollapsed ? "is-collapsed" : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" ")}
-                            onClick={() => props.onToggleRowCollapse(row.id)}
-                            aria-label={
-                              isCollapsed
-                                ? "Показать вложенные работы"
-                                : "Скрыть вложенные работы"
-                            }
-                            title={
-                              isCollapsed
-                                ? "Показать вложенные работы"
-                                : "Скрыть вложенные работы"
-                            }
-                          >
-                            <i
-                              className={
-                                isCollapsed
-                                  ? "ri-arrow-right-s-line"
-                                  : "ri-arrow-down-s-line"
-                              }
-                              aria-hidden
-                            />
-                          </button>
-                        ) : null}
+                        <span className="work-number" aria-hidden>
+                          {props.numberingById.get(row.id) ?? ""}
+                        </span>
                         <button
                           type="button"
-                          className="btn btn-secondary btn-icon delete-handle"
-                          onClick={() => props.onDeleteRow(row.id)}
-                          aria-label="Удалить"
-                          title="Удалить"
+                          className="drag-handle"
+                          aria-label="Перетащить задачу"
+                          title="Перетащить задачу"
+                          onPointerDown={(event) =>
+                            props.onHandlePointerDown(event, row.id)
+                          }
+                          onPointerMove={props.onHandlePointerMove}
+                          onPointerUp={props.onHandlePointerUp}
+                          onPointerCancel={props.onHandlePointerCancel}
                         >
-                          <i className="ri-delete-bin-line" aria-hidden />
+                          <i className="ri-draggable" aria-hidden />
                         </button>
+                        <EditableTitleField
+                          control={rowUi.title}
+                          rowDepth={row.depth}
+                          rowTreeIndentPx={props.rowTreeIndentPx}
+                          workContentIndentPx={props.workContentIndentPx}
+                        />
+                        <div className="work-col-actions">
+                          {isCollapsible ? (
+                            <button
+                              type="button"
+                              className={[
+                                "btn btn-secondary btn-icon collapse-handle",
+                                isCollapsed ? "is-collapsed" : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" ")}
+                              onClick={() => props.onToggleRowCollapse(row.id)}
+                              aria-label={
+                                isCollapsed
+                                  ? "Показать вложенные работы"
+                                  : "Скрыть вложенные работы"
+                              }
+                              title={
+                                isCollapsed
+                                  ? "Показать вложенные работы"
+                                  : "Скрыть вложенные работы"
+                              }
+                            >
+                              <i
+                                className={
+                                  isCollapsed
+                                    ? "ri-arrow-right-s-line"
+                                    : "ri-arrow-down-s-line"
+                                }
+                                aria-hidden
+                              />
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-icon delete-handle"
+                            onClick={() => props.onDeleteRow(row.id)}
+                            aria-label="Удалить"
+                            title="Удалить"
+                          >
+                            <i className="ri-delete-bin-line" aria-hidden />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="object-col">
-                    <EditableInputField
-                      className="input-object"
-                      dataRowField="object"
-                      control={rowUi.object}
-                      placeholder="Объект"
-                      ariaLabel="Объект"
-                    />
-                  </td>
-                  {rowUi.ratingCells}
-                  <td className="problems-col">
-                    <EditableTextareaField
-                      className="textarea-list"
-                      dataRowField="currentProblems"
-                      control={rowUi.currentProblems}
-                      placeholder="Проблемы"
-                      ariaLabel="Проблемы по строкам"
-                    />
-                  </td>
-                  <td className="solutions-col">
-                    <EditableTextareaField
-                      className="textarea-list"
-                      dataRowField="solutionVariants"
-                      control={rowUi.solutionVariants}
-                      placeholder="Решения"
-                      ariaLabel="Решения по строкам"
-                    />
-                  </td>
-                  <td className="removable-col">
-                    <label className="possibly-removable-control">
-                      <input
-                        type="checkbox"
-                        checked={rowUi.possiblyRemovable.checked}
-                        aria-label="Возможно убрать"
-                        onChange={(event) =>
-                          rowUi.possiblyRemovable.onChange(event.target.checked)
-                        }
-                        onFocus={rowUi.possiblyRemovable.onFocus}
-                        onBlur={rowUi.possiblyRemovable.onBlur}
+                    </td>
+                    <td className="object-col">
+                      <EditableInputField
+                        className="input-object"
+                        dataRowField="object"
+                        control={rowUi.object}
+                        placeholder="Объект"
+                        ariaLabel="Объект"
                       />
-                    </label>
-                  </td>
-                </MemoWorkRow>
-              )
-            })}
+                    </td>
+                    {rowUi.ratingCells}
+                    <td className="problems-col">
+                      <EditableTextareaField
+                        className="textarea-list"
+                        dataRowField="currentProblems"
+                        control={rowUi.currentProblems}
+                        placeholder="Проблемы"
+                        ariaLabel="Проблемы по строкам"
+                      />
+                    </td>
+                    <td className="solutions-col">
+                      <EditableTextareaField
+                        className="textarea-list"
+                        dataRowField="solutionVariants"
+                        control={rowUi.solutionVariants}
+                        placeholder="Решения"
+                        ariaLabel="Решения по строкам"
+                      />
+                    </td>
+                    <td className="removable-col">
+                      <label className="possibly-removable-control">
+                        <input
+                          type="checkbox"
+                          checked={rowUi.possiblyRemovable.checked}
+                          aria-label="Возможно убрать"
+                          onChange={(event) =>
+                            rowUi.possiblyRemovable.onChange(
+                              event.target.checked,
+                            )
+                          }
+                          onFocus={rowUi.possiblyRemovable.onFocus}
+                          onBlur={rowUi.possiblyRemovable.onBlur}
+                        />
+                      </label>
+                    </td>
+                  </MemoWorkRow>
+                )
+              })
+            ) : (
+              <tr className="work-table-empty-row">
+                <td
+                  className="work-table-empty-cell"
+                  colSpan={Math.max(totalColumns - 1, 1)}
+                >
+                  <button
+                    type="button"
+                    className="btn btn-secondary work-table-empty-action"
+                    onClick={() => props.onCreateAtPosition(null, 0)}
+                  >
+                    Добавить работу
+                  </button>
+                </td>
+                {totalColumns > 1 ? (
+                  <td className="removable-col work-table-empty-tail" />
+                ) : null}
+              </tr>
+            )}
           </tbody>
         </table>
         <div
@@ -613,39 +637,41 @@ export function WorkspaceTreeTable(props: WorkspaceTreeTableProps) {
             } as CSSProperties
           }
         >
-          {props.overlayAddIndicators.map((indicator) => (
-            <div
-              key={indicator.laneId}
-              className="overlay-add-lane"
-              style={
-                {
-                  top: `${indicator.y}px`,
-                  "--lane-content-start-x": `${indicator.contentStartXPx}px`,
-                } as CSSProperties
-              }
-            >
-              <div className="overlay-add-hotspot" aria-hidden>
-                <button
-                  type="button"
-                  className="overlay-add-plus"
-                  aria-label="Добавить работу между строками"
-                  title="Добавить работу"
-                  onPointerDown={(event) => {
-                    event.preventDefault()
-                  }}
-                  onClick={() =>
-                    props.onCreateAtPosition(
-                      indicator.parentId,
-                      indicator.targetIndex,
-                    )
+          {hasRows
+            ? props.overlayAddIndicators.map((indicator) => (
+                <div
+                  key={indicator.laneId}
+                  className="overlay-add-lane"
+                  style={
+                    {
+                      top: `${indicator.y}px`,
+                      "--lane-content-start-x": `${indicator.contentStartXPx}px`,
+                    } as CSSProperties
                   }
                 >
-                  <i className="ri-add-line" aria-hidden />
-                </button>
-              </div>
-              <span className="overlay-add-line" aria-hidden />
-            </div>
-          ))}
+                  <div className="overlay-add-hotspot" aria-hidden>
+                    <button
+                      type="button"
+                      className="overlay-add-plus"
+                      aria-label="Добавить работу между строками"
+                      title="Добавить работу"
+                      onPointerDown={(event) => {
+                        event.preventDefault()
+                      }}
+                      onClick={() =>
+                        props.onCreateAtPosition(
+                          indicator.parentId,
+                          indicator.targetIndex,
+                        )
+                      }
+                    >
+                      <i className="ri-add-line" aria-hidden />
+                    </button>
+                  </div>
+                  <span className="overlay-add-line" aria-hidden />
+                </div>
+              ))
+            : null}
           {props.overlayDropY !== null ? (
             <div
               className="overlay-drop-line"
