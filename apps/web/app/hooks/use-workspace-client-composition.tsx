@@ -28,7 +28,10 @@ import {
   useTableFrameConstants,
   useWorkspaceLayout,
 } from "./use-workspace-layout"
-import { readActiveFieldSnapshot } from "./workspace-client-composition/page-exit-save"
+import {
+  applyBeforeUnloadProtection,
+  readActiveFieldSnapshot,
+} from "./workspace-client-composition/page-exit-save"
 import { buildRowUiRenderSignature } from "./workspace-client-composition/row-ui-signature"
 import { useWorkspaceDndOverlayComposition } from "./workspace-client-composition/use-dnd-overlay-composition"
 import {
@@ -345,47 +348,82 @@ export function useWorkspaceClientComposition() {
   )
 
   const handleOpenWorkspace = useCallback(
-    (workspaceId: string) => {
+    async (workspaceId: string) => {
       if (workspaceId === currentWorkspaceId) {
         return
       }
-      editing.flushPendingEdits()
-      treeData.setErrorText("")
-      openWorkspace(workspaceId)
+      try {
+        await editing.flushPendingEdits()
+        treeData.setErrorText("")
+        openWorkspace(workspaceId)
+      } catch (error) {
+        treeData.setErrorText(treeData.toErrorText(error))
+      }
     },
     [
       currentWorkspaceId,
       editing.flushPendingEdits,
       openWorkspace,
       treeData.setErrorText,
+      treeData.toErrorText,
     ],
   )
 
   const handleCreateWorkspace = useCallback(
     async (name: string) => {
-      editing.flushPendingEdits()
-      treeData.setErrorText("")
-      await createWorkspace(name)
+      try {
+        await editing.flushPendingEdits()
+        treeData.setErrorText("")
+        await createWorkspace(name)
+      } catch (error) {
+        treeData.setErrorText(treeData.toErrorText(error))
+        throw error
+      }
     },
-    [createWorkspace, editing.flushPendingEdits, treeData.setErrorText],
+    [
+      createWorkspace,
+      editing.flushPendingEdits,
+      treeData.setErrorText,
+      treeData.toErrorText,
+    ],
   )
 
   const handleRenameWorkspace = useCallback(
     async (workspaceId: string, name: string) => {
-      editing.flushPendingEdits()
-      treeData.setErrorText("")
-      await renameWorkspace(workspaceId, name)
+      try {
+        await editing.flushPendingEdits()
+        treeData.setErrorText("")
+        await renameWorkspace(workspaceId, name)
+      } catch (error) {
+        treeData.setErrorText(treeData.toErrorText(error))
+        throw error
+      }
     },
-    [editing.flushPendingEdits, renameWorkspace, treeData.setErrorText],
+    [
+      editing.flushPendingEdits,
+      renameWorkspace,
+      treeData.setErrorText,
+      treeData.toErrorText,
+    ],
   )
 
   const handleDeleteWorkspace = useCallback(
     async (workspaceId: string) => {
-      editing.flushPendingEdits()
-      treeData.setErrorText("")
-      await deleteWorkspace(workspaceId)
+      try {
+        await editing.flushPendingEdits()
+        treeData.setErrorText("")
+        await deleteWorkspace(workspaceId)
+      } catch (error) {
+        treeData.setErrorText(treeData.toErrorText(error))
+        throw error
+      }
     },
-    [deleteWorkspace, editing.flushPendingEdits, treeData.setErrorText],
+    [
+      deleteWorkspace,
+      editing.flushPendingEdits,
+      treeData.setErrorText,
+      treeData.toErrorText,
+    ],
   )
 
   const commitActiveFieldBeforeLeave = useCallback(() => {
@@ -421,19 +459,29 @@ export function useWorkspaceClientComposition() {
       return
     }
 
-    const handlePageExit = () => {
+    const handlePageHide = () => {
       commitActiveFieldBeforeLeave()
-      editing.flushPendingEdits()
+      void editing.flushPendingEdits()
     }
 
-    window.addEventListener("pagehide", handlePageExit)
-    window.addEventListener("beforeunload", handlePageExit)
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      commitActiveFieldBeforeLeave()
+      const hasUnsavedChanges = readRefreshProtected()
+      applyBeforeUnloadProtection(event, hasUnsavedChanges)
+    }
+
+    window.addEventListener("pagehide", handlePageHide)
+    window.addEventListener("beforeunload", handleBeforeUnload)
 
     return () => {
-      window.removeEventListener("pagehide", handlePageExit)
-      window.removeEventListener("beforeunload", handlePageExit)
+      window.removeEventListener("pagehide", handlePageHide)
+      window.removeEventListener("beforeunload", handleBeforeUnload)
     }
-  }, [commitActiveFieldBeforeLeave, editing.flushPendingEdits])
+  }, [
+    commitActiveFieldBeforeLeave,
+    editing.flushPendingEdits,
+    readRefreshProtected,
+  ])
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -510,9 +558,19 @@ export function useWorkspaceClientComposition() {
         onCreateMetric={(workspaceId, payload) =>
           treeData.createMetricInCurrentWorkspace(payload, workspaceId)
         }
-        onDeleteMetric={(workspaceId, metricId) =>
-          treeData.deleteMetricInCurrentWorkspace(metricId, workspaceId)
-        }
+        onDeleteMetric={async (workspaceId, metricId) => {
+          try {
+            await editing.flushPendingEdits()
+            treeData.setErrorText("")
+            return treeData.deleteMetricInCurrentWorkspace(
+              metricId,
+              workspaceId,
+            )
+          } catch (error) {
+            treeData.setErrorText(treeData.toErrorText(error))
+            throw error
+          }
+        }}
         onWorkspaceMetricsChange={updateWorkspaceMetrics}
         onOpenWorkspace={handleOpenWorkspace}
         onRenameWorkspace={handleRenameWorkspace}
@@ -533,6 +591,7 @@ export function useWorkspaceClientComposition() {
       />
     ),
     [
+      editing.flushPendingEdits,
       handleCreateWorkspace,
       handleDeleteWorkspace,
       handleOpenWorkspace,
@@ -541,6 +600,8 @@ export function useWorkspaceClientComposition() {
       isRenamingWorkspaceId,
       treeData.createMetricInCurrentWorkspace,
       treeData.deleteMetricInCurrentWorkspace,
+      treeData.setErrorText,
+      treeData.toErrorText,
       treeData.updateMetricInCurrentWorkspace,
       updateWorkspaceMetrics,
       workspaces,
@@ -730,7 +791,16 @@ export function useWorkspaceClientComposition() {
     },
     handlers: {
       createRowAtPosition: treeData.createRowAtPosition,
-      deleteRow: treeData.deleteRow,
+      deleteRow: async (rowId: string) => {
+        try {
+          await editing.flushPendingEdits()
+          treeData.setErrorText("")
+          await treeData.deleteRow(rowId)
+        } catch (error) {
+          treeData.setErrorText(treeData.toErrorText(error))
+          throw error
+        }
+      },
       setViewMode,
       toggleRowCollapse,
       activateRowForEditing,

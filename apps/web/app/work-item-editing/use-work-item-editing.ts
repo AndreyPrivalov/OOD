@@ -9,7 +9,10 @@ import {
 } from "./reconciliation"
 import { buildPatchPayload } from "./save-payload"
 import { LocalFirstRowQueue, type RevisionedValue } from "./save-queue"
-import { readSaveRowDeferredError } from "./save-result"
+import {
+  isCreateLineageOrphaned,
+  readSaveRowDeferredError,
+} from "./save-result"
 import type {
   EditState,
   EditableWorkItemPatch,
@@ -340,6 +343,7 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
       try {
         const saveResult = await saveRow(activeRowId, payload)
         const deferredSaveError = readSaveRowDeferredError(saveResult)
+        const createLineageOrphaned = isCreateLineageOrphaned(saveResult)
         const updated =
           saveResult && typeof saveResult === "object"
             ? (saveResult as Partial<Row>)
@@ -349,7 +353,9 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
             ? updated.id
             : undefined
         const nextRowId =
-          typeof updatedId === "string" && updatedId.length > 0
+          !createLineageOrphaned &&
+          typeof updatedId === "string" &&
+          updatedId.length > 0
             ? updatedId
             : activeRowId
 
@@ -370,7 +376,8 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
           nextRowId,
         )
         applyServerAckPatch({
-          ackShouldApply: !ackResult.stale && ackResult.shouldApply,
+          ackShouldApply:
+            !createLineageOrphaned && !ackResult.stale && ackResult.shouldApply,
           activeRowId,
           nextRowId,
           patchRow,
@@ -384,6 +391,7 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
         }
 
         if (
+          !createLineageOrphaned &&
           !ackResult.stale &&
           ackResult.shouldApply &&
           updated &&
@@ -476,14 +484,43 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
     [persistRowEdit],
   )
 
-  const flushPendingEdits = useCallback(() => {
+  const flushPendingEdits = useCallback(async () => {
+    const barrierQueues = new Set<LocalFirstRowQueue<EditState>>()
+
+    for (const queue of rowQueuesRef.current.values()) {
+      if (queue.hasPending()) {
+        barrierQueues.add(queue)
+      }
+    }
+
     for (const [rowId, meta] of rowMetaRef.current.entries()) {
       const queue = rowQueuesRef.current.get(rowId)
       if (meta.isDirty && !(queue?.hasPending() ?? false)) {
         persistCurrentEdit(rowId)
+        barrierQueues.add(getRowQueue(rowId))
       }
     }
-  }, [persistCurrentEdit])
+
+    if (barrierQueues.size === 0) {
+      return
+    }
+
+    await Promise.all(
+      Array.from(barrierQueues, (queue) => queue.waitUntilIdle()),
+    )
+
+    for (const [rowId, meta] of rowMetaRef.current.entries()) {
+      if (!barrierQueues.has(getRowQueue(rowId))) {
+        continue
+      }
+      if (!meta.hasUnackedChanges) {
+        continue
+      }
+      throw new Error(
+        "Не удалось сохранить все изменения. Проверьте сеть и попробуйте снова.",
+      )
+    }
+  }, [getRowQueue, persistCurrentEdit])
 
   const updateEdit = useCallback(
     (

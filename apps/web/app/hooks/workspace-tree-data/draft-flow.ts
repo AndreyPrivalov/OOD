@@ -1,12 +1,11 @@
 import { useCallback } from "react"
 import type { WorkTreeNode } from "../../state/workspace-tree-state"
 import { applyOptimisticCreate } from "../../state/workspace-tree-state"
+import { createWorkItem, patchWorkItem } from "../../work-item-client"
 import {
-  createWorkItem,
-  deleteWorkItem,
-  patchWorkItem,
-} from "../../work-item-client"
-import { attachSaveRowDeferredError } from "../../work-item-editing/save-result"
+  attachCreateLineageOrphaned,
+  attachSaveRowDeferredError,
+} from "../../work-item-editing/save-result"
 import {
   LOCAL_DRAFT_ROW_ID_PREFIX,
   findRow,
@@ -77,16 +76,15 @@ export async function rollbackCreatedItemIfDraftRemoved(
   draftId: string,
   persisted: unknown,
   treeRef: { current: WorkTreeNode[] },
-  deleteById: (id: string) => Promise<unknown>,
-): Promise<void> {
+): Promise<boolean> {
   if (findRow(treeRef.current, draftId)) {
-    return
+    return false
   }
   const persistedId = readPersistedId(persisted)
   if (!persistedId) {
-    return
+    return false
   }
-  await deleteById(persistedId)
+  return true
 }
 
 export function useWorkspaceDraftFlow(options: UseWorkspaceDraftFlowOptions) {
@@ -184,14 +182,13 @@ export function useWorkspaceDraftFlow(options: UseWorkspaceDraftFlowOptions) {
         patchWorkItem,
       )
 
-      await rollbackCreatedItemIfDraftRemoved(
+      const orphaned = await rollbackCreatedItemIfDraftRemoved(
         id,
         finalized,
         treeRef,
-        deleteWorkItem,
       )
-      if (!findRow(treeRef.current, id)) {
-        return null
+      if (orphaned && isObjectLike(finalized)) {
+        return attachCreateLineageOrphaned(finalized)
       }
       return finalized
     },

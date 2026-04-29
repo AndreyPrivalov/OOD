@@ -75,6 +75,10 @@ describe("shouldDeferWorkspaceRefresh", () => {
     expect(shouldDeferWorkspaceRefresh(() => true)).toBe(true)
   })
 
+  it("returns false when pending save lineage is already settled", () => {
+    expect(shouldDeferWorkspaceRefresh(() => false)).toBe(false)
+  })
+
   it("returns false when there is no protection callback", () => {
     expect(shouldDeferWorkspaceRefresh(undefined)).toBe(false)
   })

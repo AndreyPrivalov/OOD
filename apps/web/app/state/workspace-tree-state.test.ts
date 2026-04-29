@@ -90,7 +90,7 @@ describe("normalizeTreeData", () => {
     expect(normalizeTreeData(payload)).toEqual(payload)
   })
 
-  it("drops legacy flat payload", () => {
+  it("fails closed for legacy flat payload", () => {
     const legacyPayload = [
       {
         id: "root",
@@ -124,7 +124,21 @@ describe("normalizeTreeData", () => {
       },
     ]
 
-    expect(normalizeTreeData(legacyPayload)).toEqual([])
+    expect(() => normalizeTreeData(legacyPayload)).toThrow(
+      "Не удалось загрузить дерево: сервер вернул некорректный формат данных.",
+    )
+  })
+
+  it("fails closed for malformed GET envelope shape without tree array", () => {
+    const malformedPayload = {
+      data: {
+        rows: [],
+      },
+    }
+
+    expect(() => normalizeTreeData(malformedPayload)).toThrow(
+      "Не удалось загрузить дерево: сервер вернул некорректный формат данных.",
+    )
   })
 })
 
