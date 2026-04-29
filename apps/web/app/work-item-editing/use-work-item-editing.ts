@@ -35,6 +35,23 @@ type UseWorkItemEditingOptions<Row extends EditableWorkItemRow> = {
   recordInputToPaint: (durationMs: number) => void
   recordPatchLatency?: (durationMs: number) => void
   scheduleTextColumnWidthRecalc: () => void
+  onRefreshProtectionChange?: (hasProtectedRows: boolean) => void
+}
+
+export function resolveLogicalRowId(
+  logicalRowIds: ReadonlyMap<string, string>,
+  rowId: string,
+): string {
+  let current = rowId
+  const seen = new Set<string>()
+  while (true) {
+    const mapped = logicalRowIds.get(current)
+    if (!mapped || mapped === current || seen.has(current)) {
+      return current
+    }
+    seen.add(current)
+    current = mapped
+  }
 }
 
 export function buildOptimisticRatingPatch<Row extends EditableWorkItemRow>(
@@ -122,12 +139,14 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
     recordInputToPaint,
     recordPatchLatency,
     scheduleTextColumnWidthRecalc,
+    onRefreshProtectionChange,
   } = options
   const [edits, setEdits] = useState<Record<string, EditState>>({})
   const rowQueuesRef = useRef<Map<string, LocalFirstRowQueue<EditState>>>(
     new Map(),
   )
   const rowMetaRef = useRef<Map<string, RowEditMeta>>(new Map())
+  const logicalRowIdsRef = useRef<Map<string, string>>(new Map())
   const editsRef = useRef<Record<string, EditState>>({})
   const rowsByIdRef = useRef(rowsById)
   rowsByIdRef.current = rowsById
@@ -136,34 +155,50 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
     editsRef.current = edits
   }, [edits])
 
-  const getRowQueue = useCallback((rowId: string) => {
-    const existing = rowQueuesRef.current.get(rowId)
-    if (existing) {
-      return existing
-    }
-    const created = new LocalFirstRowQueue<EditState>()
-    rowQueuesRef.current.set(rowId, created)
-    return created
-  }, [])
+  const resolveLogicalRowIdRef = useCallback(
+    (rowId: string) => resolveLogicalRowId(logicalRowIdsRef.current, rowId),
+    [],
+  )
 
-  const getRowMeta = useCallback((rowId: string) => {
-    const existing = rowMetaRef.current.get(rowId)
-    if (existing) {
-      return existing
-    }
-    const created: RowEditMeta = {
-      isDirty: false,
-      isFocused: false,
-      hasUnackedChanges: false,
-    }
-    rowMetaRef.current.set(rowId, created)
-    return created
-  }, [])
+  const getRowQueue = useCallback(
+    (rowId: string) => {
+      const logicalRowId = resolveLogicalRowIdRef(rowId)
+      const existing = rowQueuesRef.current.get(logicalRowId)
+      if (existing) {
+        return existing
+      }
+      const created = new LocalFirstRowQueue<EditState>()
+      rowQueuesRef.current.set(logicalRowId, created)
+      return created
+    },
+    [resolveLogicalRowIdRef],
+  )
 
-  const discardPendingSave = useCallback((id: string) => {
-    const queue = rowQueuesRef.current.get(id)
-    queue?.clearQueued()
-  }, [])
+  const getRowMeta = useCallback(
+    (rowId: string) => {
+      const logicalRowId = resolveLogicalRowIdRef(rowId)
+      const existing = rowMetaRef.current.get(logicalRowId)
+      if (existing) {
+        return existing
+      }
+      const created: RowEditMeta = {
+        isDirty: false,
+        isFocused: false,
+        hasUnackedChanges: false,
+      }
+      rowMetaRef.current.set(logicalRowId, created)
+      return created
+    },
+    [resolveLogicalRowIdRef],
+  )
+
+  const discardPendingSave = useCallback(
+    (id: string) => {
+      const queue = rowQueuesRef.current.get(resolveLogicalRowIdRef(id))
+      queue?.clearQueued()
+    },
+    [resolveLogicalRowIdRef],
+  )
 
   const resetEdit = useCallback(
     (id: string) => {
@@ -172,7 +207,7 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
         return
       }
 
-      rowQueuesRef.current.get(id)?.clearQueued()
+      rowQueuesRef.current.get(resolveLogicalRowIdRef(id))?.clearQueued()
       const meta = getRowMeta(id)
       meta.isDirty = false
       meta.hasUnackedChanges = false
@@ -186,51 +221,80 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
         return { ...current, [id]: nextEdit }
       })
     },
-    [getRowMeta],
+    [getRowMeta, resolveLogicalRowIdRef],
   )
 
-  const remapRowState = useCallback((fromRowId: string, toRowId: string) => {
-    if (fromRowId === toRowId) {
-      return
-    }
-
-    const queue = rowQueuesRef.current.get(fromRowId)
-    if (queue) {
-      rowQueuesRef.current.delete(fromRowId)
-      rowQueuesRef.current.set(toRowId, queue)
-    }
-
-    const meta = rowMetaRef.current.get(fromRowId)
-    if (meta) {
-      rowMetaRef.current.delete(fromRowId)
-      rowMetaRef.current.set(toRowId, meta)
-    }
-
-    setEdits((current) => {
-      if (!(fromRowId in current)) {
-        return current
+  const remapRowState = useCallback(
+    (fromRowId: string, toRowId: string) => {
+      if (fromRowId === toRowId) {
+        return
       }
-      const fromEdit = current[fromRowId]
-      const next = { ...current }
-      delete next[fromRowId]
-      if (!(toRowId in next)) {
-        next[toRowId] = fromEdit
+
+      const logicalFrom = resolveLogicalRowIdRef(fromRowId)
+      const logicalTo = resolveLogicalRowIdRef(toRowId)
+      logicalRowIdsRef.current.set(fromRowId, logicalTo)
+      logicalRowIdsRef.current.set(logicalFrom, logicalTo)
+      logicalRowIdsRef.current.set(toRowId, logicalTo)
+
+      const queue = rowQueuesRef.current.get(logicalFrom)
+      if (queue) {
+        rowQueuesRef.current.delete(logicalFrom)
+        rowQueuesRef.current.set(logicalTo, queue)
       }
-      return next
-    })
-  }, [])
+
+      const meta = rowMetaRef.current.get(logicalFrom)
+      if (meta) {
+        rowMetaRef.current.delete(logicalFrom)
+        rowMetaRef.current.set(logicalTo, meta)
+      }
+
+      setEdits((current) => {
+        if (!(fromRowId in current)) {
+          return current
+        }
+        const fromEdit = current[fromRowId]
+        const next = { ...current }
+        delete next[fromRowId]
+        if (!(toRowId in next)) {
+          next[toRowId] = fromEdit
+        }
+        return next
+      })
+    },
+    [resolveLogicalRowIdRef],
+  )
 
   const markRowCleanIfSettled = useCallback(
     (id: string) => {
-      const queue = rowQueuesRef.current.get(id)
+      const queue = rowQueuesRef.current.get(resolveLogicalRowIdRef(id))
       const meta = getRowMeta(id)
       const hasPending = queue?.hasPending() ?? false
       if (!hasPending && !meta.isFocused && !meta.hasUnackedChanges) {
         meta.isDirty = false
       }
     },
-    [getRowMeta],
+    [getRowMeta, resolveLogicalRowIdRef],
   )
+
+  const notifyRefreshProtection = useCallback(() => {
+    if (!onRefreshProtectionChange) {
+      return
+    }
+    for (const [rowId, meta] of rowMetaRef.current.entries()) {
+      const queue = rowQueuesRef.current.get(rowId)
+      const hasPending = queue?.hasPending() ?? false
+      if (
+        hasPending ||
+        meta.isDirty ||
+        meta.isFocused ||
+        meta.hasUnackedChanges
+      ) {
+        onRefreshProtectionChange(true)
+        return
+      }
+    }
+    onRefreshProtectionChange(false)
+  }, [onRefreshProtectionChange])
 
   const runRowSaveRequest = useCallback(
     async (
@@ -251,6 +315,7 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
           void runRowSaveRequest(activeRowId, ackResult.nextRequest)
         }
         markRowCleanIfSettled(activeRowId)
+        notifyRefreshProtection()
         return
       }
 
@@ -265,6 +330,7 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
           void runRowSaveRequest(activeRowId, ackResult.nextRequest, currentRow)
         }
         markRowCleanIfSettled(activeRowId)
+        notifyRefreshProtection()
         return
       }
 
@@ -343,6 +409,7 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
           reportError("")
         }
         markRowCleanIfSettled(activeRowId)
+        notifyRefreshProtection()
       } catch (error) {
         const nextRequest = queue.fail(request.revision)
         if (!nextRequest) {
@@ -352,6 +419,7 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
           void runRowSaveRequest(activeRowId, nextRequest, currentRow)
         }
         reportError(toErrorText(error))
+        notifyRefreshProtection()
       }
     },
     [
@@ -366,6 +434,7 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
       remapRowState,
       saveRow,
       toErrorText,
+      notifyRefreshProtection,
     ],
   )
 
@@ -390,8 +459,9 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
       meta.isDirty = true
       meta.hasUnackedChanges = true
       startQueuedSave(id)
+      notifyRefreshProtection()
     },
-    [getRowMeta, getRowQueue, startQueuedSave],
+    [getRowMeta, getRowQueue, notifyRefreshProtection, startQueuedSave],
   )
 
   const persistCurrentEdit = useCallback(
@@ -510,8 +580,9 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
     (rowId: string) => {
       const meta = getRowMeta(rowId)
       meta.isFocused = true
+      notifyRefreshProtection()
     },
-    [getRowMeta],
+    [getRowMeta, notifyRefreshProtection],
   )
 
   const handleFieldBlur = useCallback(
@@ -519,8 +590,9 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
       const meta = getRowMeta(rowId)
       meta.isFocused = false
       markRowCleanIfSettled(rowId)
+      notifyRefreshProtection()
     },
-    [getRowMeta, markRowCleanIfSettled],
+    [getRowMeta, markRowCleanIfSettled, notifyRefreshProtection],
   )
 
   useEffect(() => {
@@ -533,7 +605,7 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
         const serverEdit = buildEditState(row)
         const currentEdit = current[row.id]
         const meta = getRowMeta(row.id)
-        const queue = rowQueuesRef.current.get(row.id)
+        const queue = getRowQueue(row.id)
         const hasPending = queue?.hasPending() ?? false
         const protectDraft =
           meta.isDirty &&
@@ -558,14 +630,22 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
           continue
         }
         delete next[rowId]
-        rowMetaRef.current.delete(rowId)
-        rowQueuesRef.current.delete(rowId)
+        cleanupDetachedRowState(
+          rowId,
+          rowMetaRef.current,
+          rowQueuesRef.current,
+          logicalRowIdsRef.current,
+        )
         changed = true
       }
 
       return changed ? next : current
     })
-  }, [getRowMeta, rows])
+  }, [getRowMeta, getRowQueue, rows])
+
+  useEffect(() => {
+    notifyRefreshProtection()
+  }, [notifyRefreshProtection])
 
   return {
     edits,
@@ -620,4 +700,15 @@ export function applyServerAckPatch<Row extends EditableWorkItemRow>(
     return
   }
   patchRow(nextRowId, patch)
+}
+
+export function cleanupDetachedRowState(
+  rowId: string,
+  rowMeta: Map<string, RowEditMeta>,
+  rowQueues: Map<string, LocalFirstRowQueue<EditState>>,
+  logicalRowIds: Map<string, string>,
+) {
+  rowMeta.delete(rowId)
+  rowQueues.delete(rowId)
+  logicalRowIds.delete(rowId)
 }

@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest"
 import { readSaveRowDeferredError } from "../work-item-editing/save-result"
-import { finalizeCreatedDraftRow } from "./use-workspace-tree-data"
+import {
+  finalizeCreatedDraftRow,
+  shouldDeferWorkspaceRefresh,
+} from "./use-workspace-tree-data"
 
 describe("finalizeCreatedDraftRow", () => {
   it("returns created row when payload has only create fields", async () => {
@@ -64,5 +67,15 @@ describe("finalizeCreatedDraftRow", () => {
 
     expect((result as { id: string }).id).toBe("server-1")
     expect(readSaveRowDeferredError(result)).toBe(patchError)
+  })
+})
+
+describe("shouldDeferWorkspaceRefresh", () => {
+  it("returns true when refresh is protected by pending save lineage", () => {
+    expect(shouldDeferWorkspaceRefresh(() => true)).toBe(true)
+  })
+
+  it("returns false when there is no protection callback", () => {
+    expect(shouldDeferWorkspaceRefresh(undefined)).toBe(false)
   })
 })

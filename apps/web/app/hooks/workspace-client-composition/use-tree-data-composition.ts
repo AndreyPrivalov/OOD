@@ -14,6 +14,7 @@ type UseWorkspaceTreeDataCompositionOptions = {
   onCreateFocusRow: (rowId: string) => void
   onDeleteRow: (rowId: string) => void
   workspaceMetrics: WorkspaceMetricSummary[]
+  isRefreshProtected?: () => boolean
 }
 
 export function useWorkspaceTreeDataComposition(

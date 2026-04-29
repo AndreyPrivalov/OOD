@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest"
+import { LocalFirstRowQueue } from "./save-queue"
+import type { EditState } from "./types"
 import {
   applyServerAckPatch,
   buildNextRowSnapshot,
+  cleanupDetachedRowState,
+  resolveLogicalRowId,
 } from "./use-work-item-editing"
 
 describe("buildNextRowSnapshot", () => {
@@ -76,5 +80,41 @@ describe("applyServerAckPatch", () => {
       { rowId: "local-draft:1", patch: { id: "server-1" } },
       { rowId: "server-1", patch: { id: "server-1", title: "Persisted" } },
     ])
+  })
+})
+
+describe("resolveLogicalRowId", () => {
+  it("keeps one logical lineage for draft and persisted row ids", () => {
+    const map = new Map<string, string>([
+      ["local-draft:1", "server-1"],
+      ["server-1", "server-1"],
+    ])
+
+    expect(resolveLogicalRowId(map, "local-draft:1")).toBe("server-1")
+    expect(resolveLogicalRowId(map, "server-1")).toBe("server-1")
+  })
+})
+
+describe("cleanupDetachedRowState", () => {
+  it("does not remove persisted lineage state when stale draft edit key is cleaned", () => {
+    const rowMeta = new Map([
+      [
+        "server-1",
+        { isDirty: true, isFocused: false, hasUnackedChanges: true },
+      ],
+    ])
+    const rowQueues = new Map<string, LocalFirstRowQueue<EditState>>([
+      ["server-1", new LocalFirstRowQueue<EditState>()],
+    ])
+    const logicalRowIds = new Map<string, string>([
+      ["local-draft:1", "server-1"],
+      ["server-1", "server-1"],
+    ])
+
+    cleanupDetachedRowState("local-draft:1", rowMeta, rowQueues, logicalRowIds)
+
+    expect(rowMeta.has("server-1")).toBe(true)
+    expect(rowQueues.has("server-1")).toBe(true)
+    expect(logicalRowIds.has("local-draft:1")).toBe(false)
   })
 })
