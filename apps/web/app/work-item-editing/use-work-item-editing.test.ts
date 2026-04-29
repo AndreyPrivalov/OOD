@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   applyServerAckPatch,
   buildNextRowSnapshot,
+  resolveLogicalRowId,
 } from "./use-work-item-editing"
 
 describe("buildNextRowSnapshot", () => {
@@ -76,5 +77,17 @@ describe("applyServerAckPatch", () => {
       { rowId: "local-draft:1", patch: { id: "server-1" } },
       { rowId: "server-1", patch: { id: "server-1", title: "Persisted" } },
     ])
+  })
+})
+
+describe("resolveLogicalRowId", () => {
+  it("keeps one logical lineage for draft and persisted row ids", () => {
+    const map = new Map<string, string>([
+      ["local-draft:1", "server-1"],
+      ["server-1", "server-1"],
+    ])
+
+    expect(resolveLogicalRowId(map, "local-draft:1")).toBe("server-1")
+    expect(resolveLogicalRowId(map, "server-1")).toBe("server-1")
   })
 })

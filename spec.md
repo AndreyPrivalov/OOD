@@ -155,6 +155,9 @@ Required or supported fields:
 - `currentProblems` and `solutionVariants` are ordered text lists;
 - `PATCH /api/work-items/[id]` remains the canonical row-scoped write contract for row business fields and `metricValues`;
 - if one row patch includes both row fields and `metricValues`, the server must treat it as one transactional application use case and must not commit only a subset of that requested change;
+- one logical row edit session must survive local draft creation, persisted id remap after `create`, and any immediate follow-up patching without splitting into competing save identities;
+- later confirmations or refreshes must never revert a newer locally confirmed row state for the same logical row;
+- switching focus from one row to another after `blur` must not cause the earlier row to reset, even if network responses resolve out of order;
 - editing fields must not implicitly change tree structure.
 
 ### Rating Rules
@@ -227,6 +230,10 @@ The system should avoid aggressive continuous autosave queues when a simpler end
 
 The system must not persist placeholder rows with an empty saved `title` just to support focus or creation flow. If the UI needs a temporary draft row, that draft must remain local until it can be saved with a valid non-empty `title`.
 
+The create flow for a new draft row and the first persisted patches of that same row must behave as one logical save lineage. The client must not allow a later create acknowledgement, patch acknowledgement, or background reconcile to reintroduce an older snapshot of that row after the user has already continued editing elsewhere.
+
+Routine inline text saves must be monotonic from the user perspective: once a newer row value has been confirmed locally for the current workspace session, older acknowledgements and older full-tree snapshots must not overwrite it. If a full refresh is needed for reconciliation, the client must either defer destructive replacement until all affected row save lineages are settled or merge server truth in a way that preserves unresolved newer local row state.
+
 For leaf rating edits, the client must apply the confirmed row patch locally and immediately recompute aggregate sums for all affected ancestors in client state. One successful interaction must therefore update both the edited leaf value and the visible parent sums.
 
 Workspace metric configuration must not be edited inline in the tree header. Metric creation, rename, and deletion belong to the workspace settings popup rather than to table-column affordances.
@@ -258,6 +265,11 @@ The cleaned core must support session-scoped undo and redo for canonical tree da
 The frontend must be refactored gradually into smaller modules with clear ownership.
 
 The target shape is:
+
+- tree data/reconcile owns fetch, normalization, and server-truth adoption, but it must not blindly replace rows that still belong to unresolved local save lineages;
+- edit/save orchestration owns logical row identity across local draft ids and persisted ids, per-row revision ordering, and the rule that create-plus-first-patch for a draft is one save lineage;
+- shared tree projection owns field-level application of confirmed row patches and derived aggregates without requiring routine whole-tree replacement;
+- background reconciliation may refresh settled rows, but focused rows, dirty rows, rows with unacknowledged changes, and rows participating in unresolved draft remap must remain protected from destructive overwrite.
 
 - page-level composition kept small;
 - tree interaction logic extracted from rendering;

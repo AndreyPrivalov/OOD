@@ -115,6 +115,7 @@ export function useWorkspaceClientComposition() {
     () => new Set(),
   )
   const discardPendingSaveRef = useRef<(id: string) => void>(() => {})
+  const isRefreshProtectedRef = useRef(false)
   const projectionCacheRef = useRef<WorkspaceTreeProjectionCache | null>(null)
 
   const treeData = useWorkspaceTreeDataComposition({
@@ -134,6 +135,7 @@ export function useWorkspaceClientComposition() {
       )
     },
     workspaceMetrics: currentWorkspace?.metrics ?? [],
+    isRefreshProtected: () => isRefreshProtectedRef.current,
   })
 
   const treeProjection = useMemo(() => {
@@ -178,6 +180,9 @@ export function useWorkspaceClientComposition() {
     workspaceMetrics: currentWorkspace?.metrics ?? [],
     onDiscardPendingSaveReady: (handler) => {
       discardPendingSaveRef.current = handler
+    },
+    onRefreshProtectionChange: (hasProtectedRows) => {
+      isRefreshProtectedRef.current = hasProtectedRows
     },
   })
 

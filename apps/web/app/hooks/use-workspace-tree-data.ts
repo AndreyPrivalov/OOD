@@ -53,6 +53,13 @@ type UseWorkspaceTreeDataOptions = {
   onCreateFocusRow: (rowId: string) => void
   onDeleteRow: (rowId: string) => void
   workspaceMetrics: WorkspaceMetricSummary[]
+  isRefreshProtected?: () => boolean
+}
+
+export function shouldDeferWorkspaceRefresh(
+  isRefreshProtected: (() => boolean) | undefined,
+) {
+  return isRefreshProtected?.() ?? false
 }
 
 export async function finalizeCreatedDraftRow(
@@ -75,6 +82,7 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
     onCreateFocusRow,
     onDeleteRow,
     workspaceMetrics,
+    isRefreshProtected,
   } = options
   const [tree, setTree] = useState<WorkTreeNode[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -87,6 +95,7 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
   const treeRef = useRef(tree)
   const historyRef = useRef<WorkspaceHistoryState | null>(historyState)
   const workspaceMetricsRef = useRef(workspaceMetrics)
+  const hasDeferredRefreshRef = useRef(false)
 
   useEffect(() => {
     treeRef.current = tree
@@ -166,6 +175,10 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
 
       try {
         const data = normalizeTreeData(await fetchWorkItems(currentWorkspaceId))
+        if (shouldDeferWorkspaceRefresh(isRefreshProtected)) {
+          hasDeferredRefreshRef.current = true
+          return
+        }
         const existingHistory = historyRef.current
 
         if (opts?.reconcileHistory && existingHistory) {
@@ -193,8 +206,26 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
         }
       }
     },
-    [commitHistory, commitTree, currentWorkspaceId, isDev, toErrorText],
+    [
+      commitHistory,
+      commitTree,
+      currentWorkspaceId,
+      isDev,
+      isRefreshProtected,
+      toErrorText,
+    ],
   )
+
+  const flushDeferredRefresh = useCallback(() => {
+    if (
+      !hasDeferredRefreshRef.current ||
+      shouldDeferWorkspaceRefresh(isRefreshProtected)
+    ) {
+      return
+    }
+    hasDeferredRefreshRef.current = false
+    void refreshTree({ silent: true, reconcileHistory: true })
+  }, [isRefreshProtected, refreshTree])
 
   useEffect(() => {
     if (!currentWorkspaceId) {
@@ -218,6 +249,10 @@ export function useWorkspaceTreeData(options: UseWorkspaceTreeDataOptions) {
     commitHistory(makeEmptyHistory([]))
     void refreshTree()
   }, [commitHistory, commitTree, currentWorkspaceId, refreshTree])
+
+  useEffect(() => {
+    flushDeferredRefresh()
+  }, [flushDeferredRefresh])
 
   const { createRowAtPosition, saveRow } = useWorkspaceDraftFlow({
     currentWorkspaceId,

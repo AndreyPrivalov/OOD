@@ -71,6 +71,7 @@ type UseWorkspaceEditingCompositionOptions = {
   toErrorText: (error: unknown) => string
   workspaceMetrics: WorkspaceMetricSummary[]
   onDiscardPendingSaveReady: (handler: (id: string) => void) => void
+  onRefreshProtectionChange?: (hasProtectedRows: boolean) => void
   onPersistedChange?: (
     change:
       | { kind: "patch"; before: FlatRow; after: FlatRow }
@@ -141,6 +142,7 @@ export function useWorkspaceEditingComposition(
     toErrorText,
     workspaceMetrics,
     onDiscardPendingSaveReady,
+    onRefreshProtectionChange,
     onPersistedChange,
   } = options
   const patchLatenciesRef = useRef<number[]>([])
@@ -184,6 +186,7 @@ export function useWorkspaceEditingComposition(
       }
     },
     scheduleTextColumnWidthRecalc,
+    onRefreshProtectionChange,
   })
 
   useEffect(() => {
