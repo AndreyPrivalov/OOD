@@ -266,14 +266,14 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
 
   const markRowCleanIfSettled = useCallback(
     (id: string) => {
-      const queue = rowQueuesRef.current.get(id)
+      const queue = rowQueuesRef.current.get(resolveLogicalRowIdRef(id))
       const meta = getRowMeta(id)
       const hasPending = queue?.hasPending() ?? false
       if (!hasPending && !meta.isFocused && !meta.hasUnackedChanges) {
         meta.isDirty = false
       }
     },
-    [getRowMeta],
+    [getRowMeta, resolveLogicalRowIdRef],
   )
 
   const notifyRefreshProtection = useCallback(() => {
@@ -630,16 +630,18 @@ export function useWorkItemEditing<Row extends EditableWorkItemRow>(
           continue
         }
         delete next[rowId]
-        const logicalRowId = resolveLogicalRowIdRef(rowId)
-        rowMetaRef.current.delete(logicalRowId)
-        rowQueuesRef.current.delete(logicalRowId)
-        logicalRowIdsRef.current.delete(rowId)
+        cleanupDetachedRowState(
+          rowId,
+          rowMetaRef.current,
+          rowQueuesRef.current,
+          logicalRowIdsRef.current,
+        )
         changed = true
       }
 
       return changed ? next : current
     })
-  }, [getRowMeta, getRowQueue, resolveLogicalRowIdRef, rows])
+  }, [getRowMeta, getRowQueue, rows])
 
   useEffect(() => {
     notifyRefreshProtection()
@@ -698,4 +700,15 @@ export function applyServerAckPatch<Row extends EditableWorkItemRow>(
     return
   }
   patchRow(nextRowId, patch)
+}
+
+export function cleanupDetachedRowState(
+  rowId: string,
+  rowMeta: Map<string, RowEditMeta>,
+  rowQueues: Map<string, LocalFirstRowQueue<EditState>>,
+  logicalRowIds: Map<string, string>,
+) {
+  rowMeta.delete(rowId)
+  rowQueues.delete(rowId)
+  logicalRowIds.delete(rowId)
 }
