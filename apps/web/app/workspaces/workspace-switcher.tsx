@@ -31,7 +31,7 @@ type WorkspaceSwitcherProps = {
     workspaceId: string,
     metrics: WorkspaceMetricSettingsView[],
   ) => void
-  onOpenWorkspace: (workspaceId: string) => void
+  onOpenWorkspace: (workspaceId: string) => Promise<void>
   onRenameWorkspace: (workspaceId: string, name: string) => Promise<void>
   onSaveMetric: (
     workspaceId: string,
@@ -437,7 +437,9 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
                 ]
                   .filter(Boolean)
                   .join(" ")}
-                onClick={() => props.onOpenWorkspace(workspace.id)}
+                onClick={() => {
+                  void props.onOpenWorkspace(workspace.id)
+                }}
                 role="tab"
                 type="button"
               >

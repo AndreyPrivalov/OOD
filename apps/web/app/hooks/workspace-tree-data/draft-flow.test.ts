@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it } from "vitest"
 import type { WorkTreeNode } from "../../state/workspace-tree-state"
 import { rollbackCreatedItemIfDraftRemoved } from "./draft-flow"
 
@@ -22,45 +22,39 @@ function makeNode(id: string): WorkTreeNode {
 }
 
 describe("rollbackCreatedItemIfDraftRemoved", () => {
-  it("does not rollback when draft is still present", async () => {
-    const deleteById = vi.fn()
+  it("does not mark orphaned when draft is still present", async () => {
     const treeRef = { current: [makeNode("local-draft:1")] }
 
-    await rollbackCreatedItemIfDraftRemoved(
+    const orphaned = await rollbackCreatedItemIfDraftRemoved(
       "local-draft:1",
       { id: "persisted-1" },
       treeRef,
-      deleteById,
     )
 
-    expect(deleteById).not.toHaveBeenCalled()
+    expect(orphaned).toBe(false)
   })
 
-  it("rolls back persisted row when draft was removed", async () => {
-    const deleteById = vi.fn().mockResolvedValue(undefined)
+  it("marks lineage orphaned when draft was removed before ack", async () => {
     const treeRef = { current: [makeNode("other-row")] }
 
-    await rollbackCreatedItemIfDraftRemoved(
+    const orphaned = await rollbackCreatedItemIfDraftRemoved(
       "local-draft:1",
       { id: "persisted-1" },
       treeRef,
-      deleteById,
     )
 
-    expect(deleteById).toHaveBeenCalledWith("persisted-1")
+    expect(orphaned).toBe(true)
   })
 
   it("ignores rollback when persisted payload has no id", async () => {
-    const deleteById = vi.fn()
     const treeRef = { current: [] as WorkTreeNode[] }
 
-    await rollbackCreatedItemIfDraftRemoved(
+    const orphaned = await rollbackCreatedItemIfDraftRemoved(
       "local-draft:1",
       { mode: "cascade" },
       treeRef,
-      deleteById,
     )
 
-    expect(deleteById).not.toHaveBeenCalled()
+    expect(orphaned).toBe(false)
   })
 })

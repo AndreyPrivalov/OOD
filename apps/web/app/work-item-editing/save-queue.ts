@@ -15,6 +15,7 @@ export class LocalFirstRowQueue<T> {
   private latestRevision = 0
   private inFlight: RevisionedValue<T> | null = null
   private queued: RevisionedValue<T> | null = null
+  private idleWaiters: Set<() => void> = new Set()
 
   enqueue(value: T): RevisionedValue<T> {
     const revisioned = {
@@ -48,12 +49,14 @@ export class LocalFirstRowQueue<T> {
     this.inFlight = null
     const nextRequest = this.startNext()
 
-    return {
+    const result = {
       stale: false,
       acknowledged: true,
       shouldApply: revision === this.latestRevision,
       nextRequest,
     }
+    this.notifyIdleIfSettled()
+    return result
   }
 
   fail(revision: number): RevisionedValue<T> | null {
@@ -61,11 +64,14 @@ export class LocalFirstRowQueue<T> {
       return null
     }
     this.inFlight = null
-    return this.startNext()
+    const nextRequest = this.startNext()
+    this.notifyIdleIfSettled()
+    return nextRequest
   }
 
   clearQueued() {
     this.queued = null
+    this.notifyIdleIfSettled()
   }
 
   hasInFlight() {
@@ -78,5 +84,25 @@ export class LocalFirstRowQueue<T> {
 
   hasPending() {
     return this.hasInFlight() || this.hasQueued()
+  }
+
+  waitUntilIdle(): Promise<void> {
+    if (!this.hasPending()) {
+      return Promise.resolve()
+    }
+
+    return new Promise<void>((resolve) => {
+      this.idleWaiters.add(resolve)
+    })
+  }
+
+  private notifyIdleIfSettled() {
+    if (this.hasPending() || this.idleWaiters.size === 0) {
+      return
+    }
+    for (const resolve of this.idleWaiters) {
+      resolve()
+    }
+    this.idleWaiters.clear()
   }
 }

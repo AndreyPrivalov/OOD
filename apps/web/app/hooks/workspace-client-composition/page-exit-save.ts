@@ -10,6 +10,11 @@ export type ActiveFieldSnapshot = {
   value: string
 }
 
+type BeforeUnloadEventLike = {
+  preventDefault: () => void
+  returnValue: string
+}
+
 type ClosestRowElementLike = {
   getAttribute: (name: string) => string | null
 }
@@ -53,4 +58,17 @@ export function readActiveFieldSnapshot(
     field: field as EditableFieldKey,
     value: activeElement.value,
   }
+}
+
+export function applyBeforeUnloadProtection(
+  event: BeforeUnloadEventLike,
+  hasUnsavedChanges: boolean,
+): boolean {
+  if (!hasUnsavedChanges) {
+    return false
+  }
+
+  event.preventDefault()
+  event.returnValue = ""
+  return true
 }

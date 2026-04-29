@@ -52,4 +52,44 @@ describe("local-first autosave queue", () => {
     expect(firstAck.nextRequest).toBeNull()
     expect(queue.hasPending()).toBe(false)
   })
+
+  it("waits until queue becomes idle", async () => {
+    const queue = new LocalFirstRowQueue<string>()
+    queue.enqueue("v1")
+    const first = queue.startNext()
+    expect(first?.revision).toBe(1)
+
+    let settled = false
+    const waitPromise = queue.waitUntilIdle().then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+
+    queue.acknowledge(1)
+    await waitPromise
+    expect(settled).toBe(true)
+  })
+
+  it("keeps flush barrier pending until chained create->patch lineage settles", async () => {
+    const queue = new LocalFirstRowQueue<string>()
+    queue.enqueue("create-draft")
+    expect(queue.startNext()?.revision).toBe(1)
+    queue.enqueue("post-create-patch")
+
+    let settled = false
+    const barrier = queue.waitUntilIdle().then(() => {
+      settled = true
+    })
+
+    queue.acknowledge(1)
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    expect(queue.hasInFlight()).toBe(true)
+
+    queue.acknowledge(2)
+    await barrier
+    expect(settled).toBe(true)
+    expect(queue.hasPending()).toBe(false)
+  })
 })

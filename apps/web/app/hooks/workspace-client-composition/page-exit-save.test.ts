@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { readActiveFieldSnapshot } from "./page-exit-save"
+import {
+  applyBeforeUnloadProtection,
+  readActiveFieldSnapshot,
+} from "./page-exit-save"
 
 describe("readActiveFieldSnapshot", () => {
   it("reads row id, field and value from active text input", () => {
@@ -29,5 +32,39 @@ describe("readActiveFieldSnapshot", () => {
         closest: () => ({ getAttribute: () => "row-1" }),
       }),
     ).toBeNull()
+  })
+})
+
+describe("applyBeforeUnloadProtection", () => {
+  it("blocks unload when there are unsaved changes", () => {
+    let prevented = false
+    const event = {
+      returnValue: "keep",
+      preventDefault: () => {
+        prevented = true
+      },
+    }
+
+    const blocked = applyBeforeUnloadProtection(event, true)
+
+    expect(blocked).toBe(true)
+    expect(prevented).toBe(true)
+    expect(event.returnValue).toBe("")
+  })
+
+  it("does not block unload when there are no unsaved changes", () => {
+    let prevented = false
+    const event = {
+      returnValue: "keep",
+      preventDefault: () => {
+        prevented = true
+      },
+    }
+
+    const blocked = applyBeforeUnloadProtection(event, false)
+
+    expect(blocked).toBe(false)
+    expect(prevented).toBe(false)
+    expect(event.returnValue).toBe("keep")
   })
 })

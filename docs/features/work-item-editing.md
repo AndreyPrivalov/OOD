@@ -17,9 +17,11 @@
 - если один row patch содержит и поля строки, и `metricValues`, сервер обязан применить их как один transactional use case и не фиксировать частичный результат;
 - если `createWorkItem` для draft успешно завершился, но последующий `patchWorkItem` вернул ошибку, клиент обязан remap'нуть локальный draft id на server id и показать ошибку без повторного `create`;
 - create draft, remap id и первый post-create `PATCH` образуют одну logical save lineage с единым порядком ревизий;
+- если локальный draft был удалён до `create` ack, клиент не делает автоматический server-side delete созданной строки; вместо этого lineage помечается как orphaned и обрабатывается через безопасный reconcile без silent data loss;
 - более поздний пользовательский commit той же строки всегда имеет приоритет над более ранним ack, даже если более ранний запрос завершился позже;
 - сохранение строки A по `blur`, затем быстрый переход к строке B и её сохранение, не должно откатывать строку A или любую другую уже локально подтверждённую строку;
 - несколько подряд сохранённых строк в одной сессии не должны терять данные из-за workspace-level refresh, если хотя бы одна из этих строк ещё имеет незавершённую save lineage;
+- перед `openWorkspace`, `createWorkspace`, `renameWorkspace`, destructive actions (включая удаление workspace, метрики и branch) клиент обязан выполнить awaitable `flushPendingEdits()` как barrier: сначала стартовать недостающие row save, затем дождаться idle всех затронутых row queues;
 - неудачное сохранение должно оставлять состояние recoverable и понятным пользователю.
 
 ## Reconcile Rules

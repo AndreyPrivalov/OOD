@@ -23,6 +23,8 @@ export type WorkTreeNode = {
 export type FlatRow = WorkTreeNode & { depth: number }
 
 const DEFAULT_WORKSPACE_ID = "default-workspace"
+const INVALID_TREE_PAYLOAD_ERROR_TEXT =
+  "Не удалось загрузить дерево: сервер вернул некорректный формат данных."
 
 const ERROR_TEXT_BY_CODE: Record<string, string> = {
   INVALID_PAYLOAD: "Некорректные данные в запросе.",
@@ -143,10 +145,10 @@ function isWorkTreeNode(input: unknown): input is WorkTreeNode {
 
 export function normalizeTreeData(input: unknown): WorkTreeNode[] {
   if (!Array.isArray(input)) {
-    return []
+    throw new Error(INVALID_TREE_PAYLOAD_ERROR_TEXT)
   }
   if (!input.every(isWorkTreeNode)) {
-    return []
+    throw new Error(INVALID_TREE_PAYLOAD_ERROR_TEXT)
   }
   return input.map(normalizeNodeMetrics)
 }
